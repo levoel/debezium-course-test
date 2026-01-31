@@ -1,0 +1,412 @@
+---
+title: "Aurora Failover и Replication Slots"
+description: "Поведение replication slots при failover, потенциальная потеря данных, конфигурация heartbeat и стратегии митигации"
+order: 5
+difficulty: "advanced"
+estimatedTime: 30
+topics: ["aurora-failover", "heartbeat", "replication-slots", "high-availability"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Aurora Failover и Replication Slots
+
+## Критическая проблема: Slots не синхронизируются
+
+Amazon Aurora PostgreSQL обеспечивает высокую доступность через автоматический failover. Когда Writer Instance выходит из строя, один из Reader Instances автоматически становится новым Writer.
+
+Однако в PostgreSQL версий **до 17** есть **критическая особенность**: **replication slots не синхронизируются между Writer и Reader инстансами.**
+
+> **Warning:** При failover Aurora PostgreSQL (версии до 17) все логические replication slots **теряются**. Это может привести к потере CDC-событий для транзакций, произошедших между последним подтвержденным событием и моментом failover.
+
+## Механика Aurora Failover
+
+<Mermaid chart={`
+sequenceDiagram
+    participant App as Приложение
+    participant W as Writer Instance
+    participant R as Reader Instance
+    participant Slot as Replication Slot
+    participant Deb as Debezium
+    participant K as Kafka
+
+    Note over W,Slot: Нормальная работа
+    App->>W: INSERT INTO orders (id=100)
+    W->>Slot: Записать LSN позицию
+    Deb->>Slot: Читать изменения
+    Slot-->>Deb: Change event (id=100)
+    Deb->>K: Отправить в Kafka
+    K-->>Deb: ACK
+    Deb->>Slot: Confirm flush LSN
+
+    Note over W: Writer Instance CRASH!
+
+    rect rgb(127, 29, 29)
+        Note over W,Slot: FAILOVER WINDOW - потенциальная потеря данных
+        App->>W: INSERT INTO orders (id=101)
+        W->>Slot: Записать LSN (не успевает sync)
+    end
+
+    Note over R: Promotion to Writer
+    R->>R: Становится новым Writer
+    Note over R: Replication slot НЕ существует!
+
+    Deb->>R: Попытка подключения
+    R-->>Deb: Slot not found
+    Deb->>R: CREATE replication slot
+    Note over Deb: Слот создается с ТЕКУЩЕЙ позиции
+
+    rect rgb(127, 29, 29)
+        Note over Deb,K: id=101 ПОТЕРЯН - был записан до создания нового слота
+    end
+
+    App->>R: INSERT INTO orders (id=102)
+    Deb->>R: Читать изменения
+    R-->>Deb: Change event (id=102)
+`} client:visible />
+
+### Временная шкала потери данных
+
+| Время | Событие | Данные |
+|-------|---------|--------|
+| T0 | Debezium подтверждает LSN=100 | id=100 в Kafka |
+| T1 | Writer записывает id=101 | LSN=101 в WAL |
+| T2 | **Writer падает** | id=101 не подтвержден Debezium |
+| T3 | Reader становится Writer | Слот потерян |
+| T4 | Debezium пересоздает слот | Начинает с LSN=102 |
+| T5+ | Нормальная работа | id=101 **потерян навсегда** |
+
+## Heartbeat: детектирование пропусков
+
+Heartbeat не **предотвращает** потерю данных, но позволяет **обнаружить** её. Debezium может периодически обновлять специальную таблицу, создавая "маркеры времени" в потоке событий.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph DEBEZIUM["Debezium Connector"]
+        HB["Heartbeat<br/>каждые 10 сек"]
+    end
+
+    subgraph DB["PostgreSQL"]
+        HBT["heartbeat table<br/>id=1, ts=NOW()"]
+    end
+
+    subgraph KAFKA["Kafka Topics"]
+        CDCTopic["inventory.public.orders"]
+        HBTopic["__debezium-heartbeat.inventory"]
+    end
+
+    subgraph MONITOR["Monitoring"]
+        ALERT["Alert on gap > 30s"]
+    end
+
+    HB -->|"UPDATE heartbeat SET ts=NOW()"| HBT
+    HBT -->|"CDC событие"| CDCTopic
+    HB -->|"Heartbeat event"| HBTopic
+    HBTopic --> MONITOR
+    CDCTopic --> MONITOR
+
+    style HB fill:#f59e0b
+    style HBT fill:#3b82f6
+    style ALERT fill:#ef4444
+`} client:visible />
+
+### Создание heartbeat таблицы
+
+```sql
+-- Создание таблицы для heartbeat
+CREATE TABLE public.heartbeat (
+    id INTEGER PRIMARY KEY,
+    ts TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    writer_instance VARCHAR(100)
+);
+
+-- Вставка начальной записи
+INSERT INTO public.heartbeat (id, ts, writer_instance)
+VALUES (1, NOW(), current_setting('aurora.server_id'));
+
+-- Права для пользователя Debezium
+GRANT SELECT, UPDATE ON public.heartbeat TO debezium_user;
+```
+
+### Конфигурация коннектора с heartbeat
+
+```json
+{
+  "name": "inventory-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "aurora-cluster.xxxxx.region.rds.amazonaws.com",
+    "database.port": "5432",
+    "database.user": "debezium_user",
+    "database.password": "${file:/secrets/db-password.txt}",
+    "database.dbname": "inventory",
+    "topic.prefix": "inventory",
+    "table.include.list": "public.orders,public.customers",
+    "plugin.name": "pgoutput",
+
+    "heartbeat.interval.ms": "10000",
+    "heartbeat.action.query": "UPDATE public.heartbeat SET ts = NOW(), writer_instance = current_setting('aurora.server_id') WHERE id = 1"
+  }
+}
+```
+
+### Параметры heartbeat
+
+| Параметр | Значение | Описание |
+|----------|----------|----------|
+| `heartbeat.interval.ms` | `10000` | Интервал между heartbeat (10 сек рекомендуется) |
+| `heartbeat.action.query` | SQL UPDATE | Запрос для обновления heartbeat таблицы |
+| `heartbeat.topics.prefix` | `__debezium-heartbeat` | Префикс Kafka topic для heartbeat |
+
+## Мониторинг heartbeat
+
+### SQL запрос для проверки последнего heartbeat
+
+```sql
+-- Проверка времени последнего heartbeat
+SELECT
+    ts AS last_heartbeat,
+    writer_instance,
+    EXTRACT(EPOCH FROM (NOW() - ts))::INTEGER AS seconds_ago,
+    CASE
+        WHEN EXTRACT(EPOCH FROM (NOW() - ts)) > 30 THEN 'ALERT: Gap detected!'
+        WHEN EXTRACT(EPOCH FROM (NOW() - ts)) > 15 THEN 'WARNING: Delayed'
+        ELSE 'OK'
+    END AS status
+FROM public.heartbeat
+WHERE id = 1;
+```
+
+### Детектирование failover через writer_instance
+
+```sql
+-- История изменений writer_instance показывает failover
+-- (требует включение heartbeat в table.include.list или отдельный мониторинг)
+
+-- Если writer_instance изменился - был failover
+SELECT
+    ts,
+    writer_instance,
+    LAG(writer_instance) OVER (ORDER BY ts) AS previous_writer
+FROM public.heartbeat_history  -- таблица с историей, если ведется
+WHERE writer_instance != LAG(writer_instance) OVER (ORDER BY ts);
+```
+
+## Стратегии митигации потери данных
+
+### Стратегия 1: Принять риск (для некритичных данных)
+
+Для аналитических систем или данных, где единичная потеря события допустима:
+
+- Настроить heartbeat для детектирования
+- Документировать возможные пропуски
+- Периодически сверять с исходной БД
+
+```sql
+-- Пример сверки: найти расхождения за последний час
+SELECT o.id, o.created_at
+FROM orders o
+LEFT JOIN kafka_orders_sink k ON o.id = k.order_id
+WHERE o.created_at > NOW() - INTERVAL '1 hour'
+  AND k.order_id IS NULL;
+```
+
+### Стратегия 2: Incremental Snapshot после failover
+
+После обнаружения failover запустить incremental snapshot для "пропущенного" временного окна:
+
+```sql
+-- Таблица сигналов для запуска snapshot
+CREATE TABLE IF NOT EXISTS public.debezium_signal (
+    id VARCHAR(100) PRIMARY KEY,
+    type VARCHAR(50) NOT NULL,
+    data TEXT NOT NULL
+);
+
+-- После детектирования failover - запустить snapshot
+INSERT INTO public.debezium_signal (id, type, data)
+VALUES (
+    'failover-recovery-' || NOW()::TEXT,
+    'execute-snapshot',
+    '{
+        "data-collections": ["public.orders"],
+        "type": "incremental",
+        "additional-conditions": [{
+            "data-collection": "public.orders",
+            "filter": "updated_at > (NOW() - INTERVAL ''1 hour'')"
+        }]
+    }'
+);
+```
+
+### Стратегия 3: Aurora Global Database
+
+Для критически важных данных используйте Aurora Global Database с отдельными CDC-потоками:
+
+<Mermaid chart={`
+flowchart TB
+    subgraph PRIMARY["Primary Region (us-east-1)"]
+        W1[Writer Instance]
+        D1[Debezium #1]
+        K1[Kafka Cluster #1]
+    end
+
+    subgraph SECONDARY["Secondary Region (eu-west-1)"]
+        W2[Writer Instance]
+        D2[Debezium #2]
+        K2[Kafka Cluster #2]
+    end
+
+    W1 -->|"Aurora Replication"| W2
+    W1 --> D1
+    D1 --> K1
+
+    W2 --> D2
+    D2 --> K2
+
+    K1 -->|"Cross-region merge"| CONSUMER[Consumer Service]
+    K2 --> CONSUMER
+
+    style PRIMARY fill:#14532d
+    style SECONDARY fill:#1e3a5f
+`} client:visible />
+
+**Преимущества:**
+- CDC в двух регионах
+- При failover в primary регионе - secondary продолжает работать
+- Можно мержить потоки с дедупликацией
+
+**Недостатки:**
+- Увеличенная стоимость
+- Сложность инфраструктуры
+- Необходима дедупликация при merge
+
+### Стратегия 4: Dual-write с outbox pattern
+
+Вместо CDC использовать outbox pattern с гарантированной доставкой:
+
+```sql
+-- Outbox таблица
+CREATE TABLE public.outbox (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    aggregate_type VARCHAR(100) NOT NULL,
+    aggregate_id VARCHAR(100) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Приложение пишет в outbox в той же транзакции
+BEGIN;
+    INSERT INTO orders (id, customer_id, total) VALUES (101, 'cust-1', 99.99);
+    INSERT INTO outbox (aggregate_type, aggregate_id, event_type, payload)
+    VALUES ('Order', '101', 'OrderCreated', '{"id": 101, "total": 99.99}');
+COMMIT;
+```
+
+Debezium читает outbox таблицу - события гарантированно в базе.
+
+## PostgreSQL 17: Failover Slots
+
+PostgreSQL 17 (выпущен сентябрь 2024) добавляет функцию **failover slots** - автоматическую синхронизацию логических replication slots между primary и standby.
+
+```sql
+-- PostgreSQL 17+: создание failover slot
+SELECT pg_create_logical_replication_slot(
+    'debezium_slot',
+    'pgoutput',
+    false,  -- temporary
+    true    -- failover = TRUE (новый параметр PG17)
+);
+```
+
+### Ожидаемое поведение в Aurora PostgreSQL 17
+
+Когда Aurora PostgreSQL 17 станет доступен:
+
+1. Создание слота с `failover = true`
+2. Слот автоматически реплицируется на read replicas
+3. При failover новый writer имеет актуальный слот
+4. **Потеря данных устранена**
+
+> **Note:** На момент написания курса (февраль 2026) Aurora PostgreSQL 17 еще не доступен в general availability. AWS обычно отстает на 6-12 месяцев от community релизов PostgreSQL.
+
+## Мониторинг с Prometheus/Grafana
+
+### Метрики для отслеживания failover риска
+
+```yaml
+# prometheus/rules/aurora-cdc.yml
+groups:
+  - name: aurora-cdc-alerts
+    rules:
+      - alert: HeartbeatGap
+        expr: |
+          time() - max(debezium_heartbeat_timestamp) > 30
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Debezium heartbeat gap detected"
+          description: "No heartbeat for {{ $value }} seconds"
+
+      - alert: ReplicationSlotLag
+        expr: |
+          pg_replication_slot_lag_bytes > 1073741824
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Replication slot lag exceeds 1GB"
+          description: "Slot {{ $labels.slot_name }} has {{ $value | humanize }}B lag"
+```
+
+### Grafana dashboard queries
+
+```sql
+-- InfluxDB / TimescaleDB query для визуализации heartbeat
+SELECT
+    time_bucket('1 minute', ts) AS bucket,
+    COUNT(*) AS heartbeats,
+    MAX(EXTRACT(EPOCH FROM (ts - LAG(ts) OVER (ORDER BY ts)))) AS max_gap
+FROM heartbeat_events
+WHERE ts > NOW() - INTERVAL '1 hour'
+GROUP BY bucket
+ORDER BY bucket;
+```
+
+## Чеклист для production Aurora CDC
+
+### Перед развертыванием
+
+- [ ] Heartbeat таблица создана и включена в мониторинг
+- [ ] `heartbeat.interval.ms` настроен (10-30 секунд)
+- [ ] Алерты на heartbeat gap настроены
+- [ ] Документирована процедура recovery после failover
+
+### При failover
+
+- [ ] Проверить heartbeat timestamp - определить время простоя
+- [ ] Проверить `writer_instance` - подтвердить смену инстанса
+- [ ] Запустить incremental snapshot если нужна полнота данных
+- [ ] Проверить consumer lag в Kafka
+
+### Долгосрочно
+
+- [ ] Отслеживать доступность Aurora PostgreSQL 17
+- [ ] Планировать миграцию на failover slots
+- [ ] Рассмотреть Aurora Global Database для критичных workloads
+
+## Ключевые выводы
+
+1. **Replication slots не переживают failover** в Aurora PostgreSQL версий до 17
+2. **Heartbeat обнаруживает**, но не предотвращает потерю данных
+3. **Incremental snapshot** - способ восстановления после failover
+4. **PostgreSQL 17 failover slots** решат проблему, когда появятся в Aurora
+5. Для критичных данных рассмотрите **Aurora Global Database** или **outbox pattern**
+
+> **Главный инсайт:** Aurora failover - это не баг, а архитектурное ограничение PostgreSQL версий до 17. Планируйте митигации заранее, а не после первого инцидента.
+
+## Что дальше?
+
+Теперь вы понимаете production-особенности Aurora PostgreSQL для CDC. В следующих уроках мы рассмотрим стратегии snapshot'ов: когда использовать initial snapshot, а когда incremental, и как настроить signaling table для управления snapshot'ами по требованию.
