@@ -1,0 +1,14 @@
+# Grafana Dashboard Provisioning
+# Auto-loads dashboards from /var/lib/grafana/dashboards directory
+
+apiVersion: 1
+
+providers:
+  - name: 'debezium'
+    orgId: 1
+    folder: 'Debezium'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
