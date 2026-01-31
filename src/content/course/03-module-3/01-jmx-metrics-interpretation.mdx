@@ -1,0 +1,427 @@
+---
+title: "JMX Метрики Debezium: Интерпретация и мониторинг"
+description: "Понимание JMX метрик Debezium, интерпретация lag/staleness/queue metrics, диагностика проблем CDC pipeline"
+order: 1
+difficulty: "intermediate"
+estimatedTime: 30
+topics: ["jmx", "metrics", "monitoring", "observability"]
+prerequisites: ["module-2/03-incremental-snapshots"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# JMX Метрики Debezium: Интерпретация и мониторинг
+
+Вы настроили Debezium коннектор, данные потекли в Kafka. Но как понять, что pipeline работает правильно? Как обнаружить отставание до того, как оно станет критическим? **Метрики** — это ваши глаза в production CDC.
+
+В этом уроке мы изучим язык observability Debezium — какие метрики существуют, что они означают, и как использовать их для диагностики проблем.
+
+## Почему метрики критически важны для CDC
+
+CDC pipeline — это real-time система. В отличие от batch jobs, где можно дождаться результата, CDC требует непрерывного мониторинга:
+
+- **Lag (отставание)** — насколько потребители отстают от источника
+- **Staleness (устаревание)** — когда последний раз приходили события
+- **Throughput (пропускная способность)** — сколько событий обрабатывается
+
+> **Production истина:** Если вы не мониторите CDC — вы не знаете, работает ли он. Проблема может накапливаться часами, прежде чем станет заметной downstream.
+
+## Архитектура JMX метрик
+
+Debezium экспортирует метрики через **JMX (Java Management Extensions)**. JMX — стандартный механизм мониторинга Java-приложений.
+
+<Mermaid chart={`
+flowchart LR
+    subgraph CONNECT["Kafka Connect JVM"]
+        DBZ["Debezium Connector"]
+        JMX["JMX MBeans"]
+        EXPORTER["JMX Exporter<br/>Java Agent"]
+        DBZ -->|"Регистрирует метрики"| JMX
+        JMX -->|"Expose HTTP :9404"| EXPORTER
+    end
+
+    EXPORTER -->|"/metrics<br/>Prometheus format"| PROM["Prometheus"]
+    PROM -->|"PromQL queries"| GRAFANA["Grafana"]
+    PROM -->|"Alert rules"| ALERT["Alertmanager"]
+
+    style DBZ fill:#8b5cf6
+    style JMX fill:#3b82f6
+    style EXPORTER fill:#f59e0b
+    style PROM fill:#e11d48
+    style GRAFANA fill:#10b981
+`} client:visible />
+
+**Поток метрик:**
+1. Debezium регистрирует метрики как JMX MBeans
+2. JMX Exporter (Java agent) конвертирует JMX → Prometheus формат
+3. Prometheus скрапит HTTP endpoint `:9404`
+4. Grafana визуализирует и алертит
+
+В нашем lab-окружении эта архитектура уже развернута:
+- **connect:9404** — JMX Exporter endpoint
+- **localhost:9090** — Prometheus UI
+- **localhost:3000** — Grafana dashboards
+
+## Категории JMX метрик
+
+Debezium организует метрики по **контекстам** (contexts), отражающим стадии работы коннектора.
+
+### 1. Streaming Metrics (debezium.streaming)
+
+Основные метрики во время нормальной работы — чтение WAL и публикация событий.
+
+| Метрика | Описание | Единица | Значимость |
+|---------|----------|---------|------------|
+| **MilliSecondsBehindSource** | Отставание от источника | ms | PRIMARY alert metric |
+| **MilliSecondsSinceLastEvent** | Время с последнего события | ms | Staleness indicator |
+| **QueueTotalCapacity** | Размер внутренней очереди | events | Capacity baseline |
+| **QueueRemainingCapacity** | Свободное место в очереди | events | Backpressure indicator |
+| **TotalNumberOfEventsSeen** | Всего обработано событий | count | Throughput tracking |
+| **NumberOfCommittedTransactions** | Зафиксированных транзакций | count | Transaction rate |
+| **Connected** | Соединение с БД | boolean | Health check |
+
+### 2. Snapshot Metrics (debezium.snapshot)
+
+Метрики во время initial или incremental snapshot.
+
+| Метрика | Описание | Единица |
+|---------|----------|---------|
+| **RowsScanned** | Обработано строк | count |
+| **TotalTableCount** | Всего таблиц для snapshot | count |
+| **RemainingTableCount** | Осталось таблиц | count |
+| **SnapshotCompleted** | Snapshot завершен | boolean |
+| **SnapshotDurationInSeconds** | Длительность snapshot | seconds |
+
+### 3. Kafka Connect Worker Metrics
+
+Метрики уровня Kafka Connect (не специфичные для Debezium).
+
+| Метрика | Описание |
+|---------|----------|
+| **source-record-poll-rate** | Скорость чтения записей |
+| **source-record-write-rate** | Скорость записи в Kafka |
+| **task-batch-size-avg** | Средний размер батча |
+
+## Три ключевые метрики для CDC
+
+Из всех метрик есть три, которые **критически важны** для понимания здоровья pipeline.
+
+### 1. MilliSecondsBehindSource — Primary Lag Metric
+
+**Что измеряет:** Разница между временем создания события в БД и временем его обработки Debezium.
+
+```
+MilliSecondsBehindSource = current_time - event_timestamp_in_db
+```
+
+<Mermaid chart={`
+flowchart LR
+    subgraph DB["PostgreSQL"]
+        TX["Transaction<br/>timestamp: 10:00:00.000"]
+    end
+
+    subgraph DEBEZIUM["Debezium"]
+        PROC["Обработка<br/>time: 10:00:00.150"]
+        LAG["MilliSecondsBehindSource<br/>= 150ms"]
+    end
+
+    TX -->|"WAL event"| PROC
+    PROC --> LAG
+
+    style LAG fill:#f59e0b
+`} client:visible />
+
+**Интерпретация:**
+- **0-500ms** — нормально (processing overhead)
+- **500ms-5s** — следить, возможна нагрузка
+- **>5s** — warning, расследовать причину
+- **>30s** — critical, SLO breach
+
+> **Важно:** MilliSecondsBehindSource НИКОГДА не равен нулю. Всегда есть задержка на обработку. Если видите 0 — метрика не обновляется.
+
+**PromQL запрос:**
+```promql
+debezium_metrics_MilliSecondsBehindSource{connector="inventory-connector"}
+```
+
+### 2. MilliSecondsSinceLastEvent — Staleness Detector
+
+**Что измеряет:** Время с момента получения последнего события.
+
+**Зачем нужна:** MilliSecondsBehindSource обновляется только при получении событий. Если событий нет — метрика "замирает".
+
+<Mermaid chart={`
+flowchart TB
+    subgraph SCENARIO1["Сценарий: Нормальная работа"]
+        direction LR
+        A1["Events поступают"] --> B1["MilliSecondsBehindSource: 100ms"]
+        B1 --> C1["MilliSecondsSinceLastEvent: 50ms"]
+    end
+
+    subgraph SCENARIO2["Сценарий: Нет активности в БД"]
+        direction LR
+        A2["Нет новых транзакций"] --> B2["MilliSecondsBehindSource: 100ms<br/>(не обновляется!)"]
+        B2 --> C2["MilliSecondsSinceLastEvent: 5 минут"]
+    end
+
+    subgraph SCENARIO3["Сценарий: Коннектор застрял"]
+        direction LR
+        A3["Ошибка чтения WAL"] --> B3["MilliSecondsBehindSource: 100ms<br/>(замер)"]
+        B3 --> C3["MilliSecondsSinceLastEvent: 10 минут"]
+    end
+
+    style SCENARIO1 fill:#14532d
+    style SCENARIO2 fill:#1e3a5f
+    style SCENARIO3 fill:#7f1d1d
+`} client:visible />
+
+**Интерпретация:**
+- **До 30s** — нормально
+- **30s-5min** — возможно нет активности в БД (OK) или проблема (проверить)
+- **Более 5min** — расследовать: heartbeat настроен?
+
+**PromQL запрос:**
+```promql
+debezium_metrics_MilliSecondsSinceLastEvent{connector="inventory-connector"}
+```
+
+### 3. QueueRemainingCapacity — Backpressure Indicator
+
+**Что измеряет:** Свободное место во внутренней очереди между WAL reader и Kafka writer.
+
+**Почему важно:** Если Kafka недоступен или медленный, очередь заполняется. Когда очередь полна — Debezium перестает читать WAL.
+
+```
+Queue utilization % = 100 * (1 - QueueRemainingCapacity / QueueTotalCapacity)
+```
+
+**Интерпретация:**
+- **Utilization до 50%** — нормально
+- **Utilization 50-80%** — нагрузка высокая
+- **Utilization 80-95%** — warning, Kafka медленный
+- **Utilization более 95%** — critical, backpressure
+
+**PromQL запрос:**
+```promql
+100 * (1 - (
+  debezium_metrics_QueueRemainingCapacity{connector="inventory-connector"} /
+  debezium_metrics_QueueTotalCapacity{connector="inventory-connector"}
+))
+```
+
+## Framework интерпретации метрик
+
+Когда возникает проблема — используйте этот decision tree.
+
+<Mermaid chart={`
+flowchart TD
+    START["Проблема с CDC pipeline"] --> Q1{"MilliSecondsBehindSource<br/>растет?"}
+
+    Q1 -->|"Да"| Q2{"Queue utilization<br/>>80%?"}
+    Q1 -->|"Нет, стабильно"| Q3{"MilliSecondsSinceLastEvent<br/>>30s?"}
+
+    Q2 -->|"Да"| KAFKA["Kafka write bottleneck<br/>- Проверить Kafka broker<br/>- Проверить producer latency<br/>- Увеличить max.batch.size"]
+    Q2 -->|"Нет"| WAL["WAL processing slow<br/>- Большие транзакции?<br/>- Много обновлений?<br/>- LOB columns?"]
+
+    Q3 -->|"Да"| Q4{"Connected = true?"}
+    Q3 -->|"Нет"| OK["Pipeline здоров"]
+
+    Q4 -->|"Нет"| CONN["Потеря соединения<br/>- Проверить БД<br/>- Проверить credentials<br/>- Network issues?"]
+    Q4 -->|"Да"| STALE["Нет активности или застрял<br/>- БД idle? (OK)<br/>- Heartbeat настроен?<br/>- Slot wal_status?"]
+
+    style KAFKA fill:#f59e0b
+    style WAL fill:#3b82f6
+    style CONN fill:#ef4444
+    style STALE fill:#8b5cf6
+    style OK fill:#10b981
+`} client:visible />
+
+### Сценарий 1: "Коннектор отстает" (Lag growing)
+
+**Симптомы:**
+- MilliSecondsBehindSource растет со временем
+- TotalNumberOfEventsSeen увеличивается (события обрабатываются)
+
+**Диагностика:**
+
+1. Проверить Queue utilization:
+   ```promql
+   100 * (1 - debezium_metrics_QueueRemainingCapacity / debezium_metrics_QueueTotalCapacity)
+   ```
+
+2. Если Queue >80% — проблема в Kafka:
+   - Producer latency высокий?
+   - Broker throttling?
+   - Network между Connect и Kafka?
+
+3. Если Queue нормальный — проблема в WAL processing:
+   - Большие транзакции (много строк)?
+   - LOB колонки (BYTEA, TEXT)?
+   - Сложные transforms?
+
+### Сценарий 2: "Коннектор застрял" (Stale connector)
+
+**Симптомы:**
+- MilliSecondsSinceLastEvent > 30 секунд
+- MilliSecondsBehindSource не меняется
+
+**Диагностика:**
+
+1. Проверить Connected:
+   ```promql
+   debezium_metrics_Connected{connector="inventory-connector"}
+   ```
+
+2. Если Connected = false — соединение потеряно:
+   - PostgreSQL доступен?
+   - Credentials валидны?
+   - Replication slot существует?
+
+3. Если Connected = true — возможно:
+   - Нет новых транзакций в БД (нормально)
+   - Heartbeat не настроен (slot не продвигается)
+   - Slot wal_status = 'lost' (WAL удален)
+
+### Сценарий 3: "Backpressure к Kafka" (Queue saturation)
+
+**Симптомы:**
+- QueueRemainingCapacity близок к 0
+- MilliSecondsBehindSource резко растет
+- Kafka producer errors в логах
+
+**Диагностика:**
+
+1. Проверить Kafka broker:
+   - Достаточно ли места на диске?
+   - ISR (In-Sync Replicas) полный?
+   - Throttling активен?
+
+2. Проверить network:
+   - Latency между Connect и Kafka?
+   - Packet loss?
+
+3. Решение:
+   - Увеличить `max.batch.size` (default 2048)
+   - Увеличить `max.queue.size` (default 8192)
+   - Оптимизировать Kafka producer settings
+
+## Таблица рекомендуемых порогов алертов
+
+| Метрика | Warning | Critical | Duration |
+|---------|---------|----------|----------|
+| MilliSecondsBehindSource | >5,000 ms | >30,000 ms | 2-5 min |
+| MilliSecondsSinceLastEvent | >60,000 ms | >300,000 ms | 5 min |
+| Queue utilization | >80% | >95% | 5 min |
+| Connected | - | = 0 | 1 min |
+
+> **Примечание:** Эти пороги — отправная точка. Настраивайте под ваш SLO. Для финансовых систем порог lag может быть 1 секунда, для аналитики — 5 минут.
+
+## Особенности метрик в Debezium 2.5.4
+
+Наша lab-среда использует Debezium 2.5.4 (project standard). Важные ограничения:
+
+**Отсутствуют per-table метрики.** Метрики агрегированы на уровне коннектора. Вы не можете увидеть lag отдельно для таблицы `orders` vs `customers`.
+
+**Per-table метрики появились в Debezium 3.0+:**
+- `debezium_metrics_TotalNumberOfCreateEventsSeen{table="orders"}`
+- `debezium_metrics_TotalNumberOfUpdateEventsSeen{table="orders"}`
+
+Для Debezium 2.x, если нужна per-table granularity — используйте отдельные коннекторы для разных наборов таблиц.
+
+## Lab: Просмотр метрик через JMX Exporter
+
+Давайте посмотрим реальные метрики в вашей lab-среде.
+
+### Шаг 1: Убедитесь, что lab запущен
+
+```bash
+cd labs
+docker-compose up -d
+```
+
+### Шаг 2: Проверьте JMX endpoint напрямую
+
+```bash
+# Получить все доступные метрики
+curl http://localhost:9404/metrics | grep debezium
+
+# Пример вывода:
+# debezium_metrics_MilliSecondsBehindSource{context="streaming",plugin="postgres",server="inventory",...} 150.0
+# debezium_metrics_QueueRemainingCapacity{...} 8190.0
+# debezium_metrics_TotalNumberOfEventsSeen{...} 42.0
+```
+
+### Шаг 3: Откройте Prometheus UI
+
+1. Перейдите на http://localhost:9090
+2. В поле Expression введите:
+   ```
+   debezium_metrics_MilliSecondsBehindSource
+   ```
+3. Нажмите Execute
+4. Переключитесь на вкладку Graph для визуализации
+
+### Шаг 4: Исследуйте другие метрики
+
+Попробуйте запросы:
+
+```promql
+# Все метрики Debezium
+{__name__=~"debezium_metrics_.*"}
+
+# События в секунду (rate)
+rate(debezium_metrics_TotalNumberOfEventsSeen[5m])
+
+# Utilization очереди
+100 * (1 - debezium_metrics_QueueRemainingCapacity / debezium_metrics_QueueTotalCapacity)
+```
+
+## Важные нюансы метрик
+
+### MilliSecondsBehindSource никогда не равен нулю
+
+Даже при идеальной работе есть processing delay. Типичные значения:
+- 50-200ms — отличный результат
+- 200-500ms — нормально для нагруженных систем
+
+### Метрики обновляются только при событиях
+
+Если в БД нет транзакций — метрики "замирают". Используйте `MilliSecondsSinceLastEvent` для обнаружения staleness.
+
+### Heartbeat продвигает метрики
+
+Настройка `heartbeat.interval.ms` генерирует synthetic events, которые:
+1. Продвигают replication slot (предотвращают WAL bloat)
+2. Обновляют метрики (не даем им устареть)
+
+```json
+{
+  "heartbeat.interval.ms": "10000",
+  "heartbeat.action.query": "SELECT pg_logical_emit_message(false, 'heartbeat', now()::varchar)"
+}
+```
+
+### Queue metrics при отсутствии активности
+
+Когда нет событий:
+- `QueueRemainingCapacity = QueueTotalCapacity` (очередь пуста)
+- `Queue utilization = 0%`
+
+Это нормально — система idle.
+
+## Что дальше?
+
+Теперь вы понимаете, что означают JMX метрики Debezium. Следующий шаг — научиться **собирать эти метрики в Prometheus** и писать PromQL запросы для alerting.
+
+В следующем уроке мы настроим JMX Exporter, изучим конфигурацию Prometheus scraping и напишем production-ready PromQL queries.
+
+## Ключевые выводы
+
+1. **MilliSecondsBehindSource** — PRIMARY metric для lag мониторинга
+2. **MilliSecondsSinceLastEvent** — детектор "застрявшего" коннектора
+3. **QueueRemainingCapacity** — индикатор backpressure к Kafka
+4. **Connected** — базовый health check соединения с БД
+5. Метрики обновляются только при получении событий — используйте heartbeat
+6. Debezium 2.5.4 не имеет per-table метрик (появились в 3.0+)
+7. Нормальный lag 50-500ms, alert при sustained >5s
+8. Алерты с duration (not instantaneous) предотвращают ложные срабатывания
