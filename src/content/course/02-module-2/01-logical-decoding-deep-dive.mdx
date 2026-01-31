@@ -1,0 +1,365 @@
+---
+title: "Logical Decoding: Глубокое погружение"
+description: "PostgreSQL logical decoding, pgoutput plugin, анатомия WAL для CDC, REPLICA IDENTITY и Publications"
+order: 1
+difficulty: "intermediate"
+estimatedTime: 25
+topics: ["logical-decoding", "pgoutput", "wal", "publications"]
+prerequisites: ["module-1/02-debezium-architecture"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Logical Decoding: Глубокое погружение
+
+В предыдущем модуле мы узнали, что Debezium читает transaction log (WAL) PostgreSQL. Но как именно это происходит? В этом уроке мы погрузимся в механизм **logical decoding** — технологию, которая превращает бинарный WAL в понятный поток изменений.
+
+## Физическая vs Логическая репликация
+
+PostgreSQL поддерживает два типа репликации. Понимание разницы критически важно для настройки CDC.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph PHYSICAL["Физическая репликация"]
+        direction LR
+        PRIMARY1[(Primary)] -->|"Бинарные WAL сегменты"| STANDBY1[(Standby)]
+        Note1["Побайтовая копия данных<br/>Только PostgreSQL → PostgreSQL<br/>Вся база целиком"]
+    end
+
+    subgraph LOGICAL["Логическая репликация (CDC)"]
+        direction LR
+        PRIMARY2[(Primary)] -->|"pgoutput plugin"| DECODER[Logical Decoding]
+        DECODER -->|"Структурированные изменения"| CONSUMER[Любой потребитель]
+        Note2["INSERT/UPDATE/DELETE события<br/>Выборочные таблицы<br/>Разные версии PostgreSQL"]
+    end
+
+    style PHYSICAL fill:#1e3a5f,stroke:#3b82f6
+    style LOGICAL fill:#14532d,stroke:#22c55e
+    style DECODER fill:#f59e0b
+`} client:visible />
+
+| Характеристика | Физическая | Логическая |
+|----------------|------------|------------|
+| **Формат данных** | Бинарные блоки | Структурированные изменения |
+| **Гранулярность** | Вся база | Отдельные таблицы |
+| **Потребители** | Только PostgreSQL | Любая система |
+| **Use case** | High Availability | CDC, интеграции |
+
+**Для CDC нам нужна логическая репликация**, потому что мы хотим получать понятные события об изменениях, а не бинарные данные.
+
+## Что такое Logical Decoding?
+
+**Logical Decoding** — это механизм PostgreSQL, который преобразует записи WAL в логический формат. Каждая транзакция декодируется в последовательность операций `INSERT`, `UPDATE`, `DELETE` с данными строк.
+
+### Компоненты Logical Decoding
+
+<Mermaid chart={`
+flowchart LR
+    subgraph PostgreSQL
+        WAL[WAL<br/>Transaction Log] --> SLOT[Replication Slot]
+        SLOT --> DECODER[Logical Decoder]
+        DECODER --> PLUGIN[Output Plugin<br/>pgoutput]
+    end
+
+    PLUGIN --> DEBEZIUM[Debezium Connector]
+    DEBEZIUM --> KAFKA[Kafka Topic]
+
+    style WAL fill:#3b82f6
+    style SLOT fill:#f59e0b
+    style PLUGIN fill:#10b981
+    style DEBEZIUM fill:#8b5cf6
+`} client:visible />
+
+**WAL (Write-Ahead Log)** — журнал транзакций, куда PostgreSQL записывает каждое изменение ДО применения к таблицам. Гарантирует durability.
+
+**Replication Slot** — закладка в WAL. PostgreSQL не удаляет WAL сегменты, пока слот их не прочитал. Критически важно для надежности CDC.
+
+**Logical Decoder** — компонент PostgreSQL, который интерпретирует WAL записи в контексте транзакций.
+
+**Output Plugin** — форматирует декодированные изменения. pgoutput — стандартный плагин PostgreSQL 10+.
+
+## pgoutput: Стандартный плагин
+
+**pgoutput** — это встроенный output plugin PostgreSQL для логической репликации. Именно его использует Debezium.
+
+### Почему pgoutput — стандарт для Debezium?
+
+| Плагин | Статус | Особенности |
+|--------|--------|-------------|
+| **pgoutput** | Встроенный (PG 10+) | Не требует установки, работает на Aurora/RDS |
+| wal2json | Сторонний | JSON формат, требует установки, больше overhead |
+| decoderbufs | Сторонний | Protobuf формат, недоступен на Aurora |
+
+**Рекомендация:** Всегда используйте pgoutput. Это единственный плагин, который:
+- Не требует установки дополнительного ПО
+- Работает на всех managed PostgreSQL (Aurora, RDS, Cloud SQL)
+- Поддерживается командой PostgreSQL
+
+```json
+{
+  "name": "postgres-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "plugin.name": "pgoutput",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.dbname": "inventory"
+  }
+}
+```
+
+## Анатомия WAL для Logical Decoding
+
+Когда вы выполняете транзакцию, PostgreSQL записывает её в WAL. При `wal_level=logical` добавляется дополнительная информация для декодирования.
+
+### Что содержит WAL запись при logical decoding?
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    WAL Record                        │
+├─────────────────────────────────────────────────────┤
+│ LSN (Log Sequence Number): 0/1A3B4C0                │
+│ Transaction ID: 12345                                │
+│ Timestamp: 2026-02-01 10:30:00.123                  │
+│ Operation: UPDATE                                    │
+│ Relation: public.customers (OID: 16384)             │
+│ Old tuple key: {id: 1}                              │
+│ New tuple: {id: 1, name: 'Alice', email: '...'}     │
+└─────────────────────────────────────────────────────┘
+```
+
+**LSN (Log Sequence Number)** — уникальный идентификатор позиции в WAL. Debezium использует LSN для отслеживания прогресса.
+
+**Transaction ID** — группирует изменения одной транзакции. Debezium публикует события с одним transaction ID атомарно.
+
+**Old/New tuple** — старые и новые значения строки. Доступность старых значений зависит от `REPLICA IDENTITY`.
+
+## Publications: Контроль над тем, что реплицируется
+
+**Publication** — это набор таблиц, изменения которых будут доступны для логической репликации. Debezium использует publications для фильтрации таблиц.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph DB["База данных inventory"]
+        T1[customers]
+        T2[orders]
+        T3[products]
+        T4[audit_logs]
+    end
+
+    subgraph PUB1["Publication: dbz_publication<br/>FOR ALL TABLES"]
+        direction LR
+        ALL["Все таблицы"]
+    end
+
+    subgraph PUB2["Publication: orders_pub<br/>FOR TABLE orders, customers"]
+        direction LR
+        SELECTED["Только orders + customers"]
+    end
+
+    DB --> PUB1
+    DB --> PUB2
+
+    style PUB1 fill:#14532d,stroke:#22c55e
+    style PUB2 fill:#1e3a5f,stroke:#3b82f6
+`} client:visible />
+
+### Создание Publication
+
+```sql
+-- Публикация для всех таблиц (рекомендуется для начала)
+CREATE PUBLICATION dbz_publication FOR ALL TABLES;
+
+-- Публикация только для конкретных таблиц
+CREATE PUBLICATION orders_publication
+FOR TABLE public.orders, public.customers;
+
+-- Публикация с фильтрацией операций
+CREATE PUBLICATION inserts_only
+FOR TABLE public.events
+WITH (publish = 'insert');  -- Только INSERT, без UPDATE/DELETE
+```
+
+### Проверка существующих Publications
+
+```sql
+-- Список всех publications
+SELECT * FROM pg_publication;
+
+-- Таблицы в publication
+SELECT * FROM pg_publication_tables
+WHERE pubname = 'dbz_publication';
+```
+
+### Как Debezium использует Publications
+
+В конфигурации коннектора указывается имя publication:
+
+```json
+{
+  "name": "inventory-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "plugin.name": "pgoutput",
+    "publication.name": "dbz_publication",
+    "publication.autocreate.mode": "filtered"
+  }
+}
+```
+
+**publication.autocreate.mode:**
+- `all_tables` — создать для всех таблиц (по умолчанию)
+- `filtered` — создать только для таблиц из `table.include.list`
+- `disabled` — использовать существующую publication
+
+## REPLICA IDENTITY: Что попадает в before/after
+
+**REPLICA IDENTITY** определяет, какие данные PostgreSQL включает в WAL при UPDATE и DELETE. Это критически влияет на содержимое CDC событий.
+
+### Четыре режима REPLICA IDENTITY
+
+| Режим | UPDATE before | DELETE before | Overhead |
+|-------|---------------|---------------|----------|
+| **DEFAULT** | Только PK | Только PK | Минимальный |
+| **USING INDEX** | Колонки индекса | Колонки индекса | Низкий |
+| **FULL** | Вся строка | Вся строка | Высокий |
+| **NOTHING** | Пусто | Пусто | Нулевой |
+
+### Пример события при разных REPLICA IDENTITY
+
+**REPLICA IDENTITY DEFAULT (Primary Key):**
+
+```json
+{
+  "op": "u",
+  "before": {
+    "id": 1
+  },
+  "after": {
+    "id": 1,
+    "name": "Alice Updated",
+    "email": "alice@example.com"
+  }
+}
+```
+
+**REPLICA IDENTITY FULL:**
+
+```json
+{
+  "op": "u",
+  "before": {
+    "id": 1,
+    "name": "Alice",
+    "email": "alice@old.com"
+  },
+  "after": {
+    "id": 1,
+    "name": "Alice Updated",
+    "email": "alice@example.com"
+  }
+}
+```
+
+### Когда использовать FULL?
+
+Используйте `REPLICA IDENTITY FULL` когда:
+
+1. **Нужно знать, что именно изменилось** — сравнение before/after
+2. **Потребителю нужны все поля до изменения** — аудит, compliance
+3. **Логика обработки зависит от старых значений**
+
+```sql
+-- Включить FULL для конкретной таблицы
+ALTER TABLE public.customers REPLICA IDENTITY FULL;
+
+-- Проверить текущую настройку
+SELECT relname, relreplident
+FROM pg_class
+WHERE relname = 'customers';
+-- relreplident: 'd' = DEFAULT, 'f' = FULL, 'i' = INDEX, 'n' = NOTHING
+```
+
+### Предупреждение о производительности
+
+> **REPLICA IDENTITY FULL увеличивает объем WAL.** Каждый UPDATE и DELETE записывает полную строку в WAL. Для таблиц с частыми изменениями и широкими строками (много колонок, JSONB) это может увеличить WAL volume на 30-50%.
+
+Рекомендация: используйте DEFAULT для большинства таблиц, FULL — только где действительно необходимо.
+
+## Полный поток Logical Decoding
+
+Соединим все компоненты в единый поток.
+
+<Mermaid chart={`
+sequenceDiagram
+    participant App as Приложение
+    participant PG as PostgreSQL
+    participant WAL as WAL (wal_level=logical)
+    participant Slot as Replication Slot
+    participant PGOut as pgoutput Plugin
+    participant Deb as Debezium
+    participant K as Kafka
+
+    App->>PG: UPDATE customers SET name='Bob' WHERE id=1
+
+    Note over PG: REPLICA IDENTITY FULL
+
+    PG->>WAL: Запись с полными before/after
+
+    Note over WAL,Slot: WAL сегменты сохраняются<br/>пока slot не прочитает
+
+    Deb->>Slot: Запрос изменений<br/>(streaming replication protocol)
+    Slot->>PGOut: Декодировать WAL записи
+    PGOut->>Deb: Логические изменения<br/>(relation, tuple data)
+
+    Deb->>Deb: Преобразование в CDC Event
+    Deb->>K: Публикация в topic
+
+    Deb->>Slot: Подтверждение LSN
+    Slot->>WAL: Освобождение WAL сегментов
+`} client:visible />
+
+### Ключевые точки
+
+1. **wal_level=logical** — обязательная настройка PostgreSQL
+2. **Replication Slot** — гарантирует, что WAL не удалится до прочтения
+3. **pgoutput** — преобразует бинарный WAL в структурированные данные
+4. **Publication** — определяет, какие таблицы реплицируются
+5. **REPLICA IDENTITY** — определяет полноту данных в before/after
+
+## Проверка настроек
+
+```sql
+-- Проверить wal_level
+SHOW wal_level;
+-- Должно быть: logical
+
+-- Проверить существующие слоты
+SELECT slot_name, plugin, slot_type, active
+FROM pg_replication_slots;
+
+-- Проверить publications
+SELECT pubname, puballtables
+FROM pg_publication;
+
+-- Проверить REPLICA IDENTITY для таблицы
+SELECT c.relname, c.relreplident
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relkind = 'r';
+```
+
+## Что дальше?
+
+Теперь, когда вы понимаете, как PostgreSQL преобразует WAL в логические изменения, следующий важный вопрос: **как управлять replication slots?**
+
+Slots — это мощный механизм, но они требуют внимания. Abandoned slot может заполнить диск, остановив базу данных. В следующем уроке мы изучим жизненный цикл replication slots и критически важные процедуры мониторинга.
+
+## Ключевые выводы
+
+1. **Logical Decoding** преобразует бинарный WAL в понятные события INSERT/UPDATE/DELETE
+2. **pgoutput** — стандартный плагин, работает везде, не требует установки
+3. **Publications** контролируют, какие таблицы участвуют в логической репликации
+4. **REPLICA IDENTITY** определяет полноту данных — DEFAULT для эффективности, FULL для полной истории
+5. **Replication Slots** гарантируют, что Debezium не пропустит изменения
