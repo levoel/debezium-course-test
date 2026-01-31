@@ -1,0 +1,537 @@
+---
+title: "Масштабирование коннектора: Правда о tasks.max"
+description: "Разбор мифа о tasks.max, реальные стратегии масштабирования PostgreSQL CDC, performance tuning и архитектурные решения"
+order: 6
+difficulty: "advanced"
+estimatedTime: 25
+topics: ["scaling", "tasks", "performance", "architecture"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Масштабирование коннектора: Правда о tasks.max
+
+Один из самых распространенных мифов в мире Debezium: "Чтобы увеличить пропускную способность PostgreSQL коннектора, установите `tasks.max=4`". Это **неправда**, и попытки так сделать не дадут никакого эффекта.
+
+В этом уроке мы разберем, почему PostgreSQL коннектор **принципиально ограничен одной задачей**, и изучим реальные стратегии масштабирования CDC pipeline.
+
+## Миф: tasks.max увеличивает throughput
+
+> **Myth:** "Мой PostgreSQL коннектор медленный. Установлю `tasks.max=4` для параллелизма."
+
+> **Reality:** PostgreSQL коннектор Debezium **ВСЕГДА использует только 1 task**, независимо от значения `tasks.max`. Это не баг — это архитектурное ограничение.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph MYTH["МИФ: tasks.max=4"]
+        direction LR
+        PG1["PostgreSQL"] --> T1["Task 1"]
+        PG1 --> T2["Task 2"]
+        PG1 --> T3["Task 3"]
+        PG1 --> T4["Task 4"]
+        T1 --> K1["Kafka"]
+        T2 --> K1
+        T3 --> K1
+        T4 --> K1
+    end
+
+    subgraph REALITY["РЕАЛЬНОСТЬ: tasks.max игнорируется"]
+        direction LR
+        PG2["PostgreSQL<br/>WAL"] --> SINGLE["Task 1<br/>(ЕДИНСТВЕННЫЙ)"]
+        SINGLE --> K2["Kafka"]
+        IGNORED["tasks.max = 4<br/>(игнорируется)"]
+    end
+
+    style MYTH fill:#7f1d1d,stroke:#ef4444
+    style REALITY fill:#14532d,stroke:#22c55e
+    style IGNORED fill:#92400e,stroke:#f59e0b
+`} client:visible />
+
+### Доказательство
+
+Создайте коннектор с `tasks.max: "4"` и проверьте количество tasks:
+
+```bash
+# Конфигурация с tasks.max=4
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "inventory-connector",
+    "config": {
+      "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+      "database.hostname": "postgres",
+      "database.port": "5432",
+      "database.user": "postgres",
+      "database.password": "postgres",
+      "database.dbname": "inventory",
+      "topic.prefix": "inventory",
+      "tasks.max": "4"
+    }
+  }'
+
+# Проверить количество tasks
+curl http://localhost:8083/connectors/inventory-connector/status | jq '.tasks | length'
+# Результат: 1  (не 4!)
+```
+
+## Почему PostgreSQL коннектор single-task?
+
+Причина кроется в архитектуре PostgreSQL WAL (Write-Ahead Log).
+
+### WAL — последовательный журнал
+
+<Mermaid chart={`
+flowchart LR
+    subgraph WAL["PostgreSQL WAL (Write-Ahead Log)"]
+        direction LR
+        E1["Event 1<br/>LSN: 0/1000"]
+        E2["Event 2<br/>LSN: 0/1001"]
+        E3["Event 3<br/>LSN: 0/1002"]
+        E4["Event 4<br/>LSN: 0/1003"]
+        E5["Event 5<br/>LSN: 0/1004"]
+        E1 --> E2 --> E3 --> E4 --> E5
+    end
+
+    subgraph READER["Logical Decoding"]
+        SLOT["Replication Slot<br/>position: 0/1002"]
+    end
+
+    SLOT -->|"Читает последовательно<br/>от restart_lsn"| E3
+
+    style SLOT fill:#f59e0b
+`} client:visible />
+
+WAL — это **последовательный** журнал транзакций. Logical decoding читает его **строго по порядку** от позиции `restart_lsn`. Невозможно распараллелить чтение, потому что:
+
+1. **Порядок имеет значение:** События должны обрабатываться в порядке их записи в WAL
+2. **Одна позиция:** Replication slot отслеживает одну позицию, не несколько
+3. **Транзакционная целостность:** Все изменения одной транзакции должны обрабатываться атомарно
+
+### Сравнение с другими коннекторами
+
+| Коннектор | Поддержка tasks.max | Причина |
+|-----------|---------------------|---------|
+| PostgreSQL | **Нет (только 1)** | WAL последовательный, одна точка чтения |
+| MySQL | **Нет (только 1)** | Binlog последовательный |
+| MongoDB | **Да (множество)** | Каждый shard = отдельный поток |
+| SQL Server | **Да (несколько)** | Каждая БД = отдельный capture instance |
+| Oracle | **Нет (только 1)** | LogMiner читает последовательно |
+
+### Архитектурная причина
+
+<Mermaid chart={`
+flowchart TB
+    subgraph POSTGRES["PostgreSQL"]
+        WAL["WAL Stream"]
+        SLOT["Replication Slot"]
+    end
+
+    subgraph DEBEZIUM["Debezium Connector"]
+        READER["WAL Reader<br/>(1 поток)"]
+        QUEUE["Internal Queue<br/>(8192 events)"]
+        WRITER["Kafka Writer<br/>(1 поток)"]
+    end
+
+    subgraph KAFKA["Kafka"]
+        TOPIC["Topic Partitions"]
+    end
+
+    WAL -->|"Logical Decoding"| SLOT
+    SLOT -->|"Sequential read"| READER
+    READER -->|"Events"| QUEUE
+    QUEUE -->|"Batch write"| WRITER
+    WRITER -->|"ProducerRecord"| TOPIC
+
+    NOTE["WAL Reader - bottleneck<br/>Один поток на один<br/>replication slot"]
+
+    style NOTE fill:#f59e0b
+    style READER fill:#ef4444
+`} client:visible />
+
+## Реальные стратегии масштабирования
+
+Раз `tasks.max` не работает, что делать? Есть три основных подхода.
+
+### Стратегия 1: Множественные коннекторы
+
+**Когда использовать:** Разные наборы таблиц имеют независимых потребителей.
+
+<Mermaid chart={`
+flowchart LR
+    subgraph DB["PostgreSQL"]
+        ORDERS["orders<br/>order_items"]
+        INVENTORY["products<br/>inventory"]
+        CUSTOMERS["customers<br/>addresses"]
+    end
+
+    subgraph CONNECTORS["Debezium Connectors"]
+        C1["orders-connector<br/>task=1"]
+        C2["inventory-connector<br/>task=1"]
+        C3["customers-connector<br/>task=1"]
+    end
+
+    subgraph KAFKA["Kafka Topics"]
+        T1["orders.public.orders<br/>orders.public.order_items"]
+        T2["inventory.public.products<br/>inventory.public.inventory"]
+        T3["customers.public.customers<br/>customers.public.addresses"]
+    end
+
+    ORDERS --> C1 --> T1
+    INVENTORY --> C2 --> T2
+    CUSTOMERS --> C3 --> T3
+
+    style C1 fill:#3b82f6
+    style C2 fill:#8b5cf6
+    style C3 fill:#10b981
+`} client:visible />
+
+**Конфигурация:**
+
+```json
+// orders-connector
+{
+  "name": "orders-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.dbname": "inventory",
+    "topic.prefix": "orders",
+    "table.include.list": "public.orders,public.order_items",
+    "slot.name": "debezium_orders"
+  }
+}
+
+// inventory-connector
+{
+  "name": "inventory-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.dbname": "inventory",
+    "topic.prefix": "inventory",
+    "table.include.list": "public.products,public.inventory",
+    "slot.name": "debezium_inventory"
+  }
+}
+```
+
+**Преимущества:**
+- Независимые replication slots
+- Независимые offsets
+- Изоляция failures
+
+**Недостатки:**
+- Каждый коннектор создает отдельный slot (больше WAL retention)
+- Больше ресурсов Kafka Connect
+- Сложнее управлять
+
+### Стратегия 2: Downstream параллелизация
+
+**Когда использовать:** Один коннектор, но нужна параллельная обработка.
+
+<Mermaid chart={`
+flowchart LR
+    subgraph DB["PostgreSQL"]
+        TABLE["orders table"]
+    end
+
+    subgraph DEBEZIUM["Debezium"]
+        CONN["Single Connector<br/>task=1"]
+    end
+
+    subgraph KAFKA["Kafka"]
+        TOPIC["orders topic<br/>8 partitions"]
+    end
+
+    subgraph CONSUMERS["Consumers"]
+        C1["Consumer 1<br/>partitions 0-1"]
+        C2["Consumer 2<br/>partitions 2-3"]
+        C3["Consumer 3<br/>partitions 4-5"]
+        C4["Consumer 4<br/>partitions 6-7"]
+    end
+
+    TABLE --> CONN --> TOPIC
+    TOPIC --> C1
+    TOPIC --> C2
+    TOPIC --> C3
+    TOPIC --> C4
+
+    style TOPIC fill:#f59e0b
+    style CONSUMERS fill:#14532d,stroke:#22c55e
+`} client:visible />
+
+**Как работает:**
+1. Debezium пишет события в Kafka topic
+2. Topic имеет N партиций (key = primary key таблицы)
+3. N consumer instances читают параллельно
+4. События одного ключа всегда в одной партиции (ordering гарантирован)
+
+**Конфигурация Debezium:**
+
+```json
+{
+  "name": "inventory-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "topic.prefix": "inventory",
+
+    "transforms": "route",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": ".*",
+    "transforms.route.replacement": "inventory.cdc.events"
+  }
+}
+```
+
+**Создание топика с партициями:**
+
+```bash
+kafka-topics --create \
+  --bootstrap-server kafka:9092 \
+  --topic inventory.cdc.events \
+  --partitions 8 \
+  --replication-factor 1
+```
+
+**Преимущества:**
+- Один коннектор, один slot
+- Параллелизм на стороне consumer
+- Ordering гарантирован per-key
+
+**Недостатки:**
+- Debezium все еще single-threaded
+- Bottleneck в WAL reader
+
+### Стратегия 3: Performance Tuning
+
+**Когда использовать:** Максимизировать throughput одного коннектора.
+
+```json
+{
+  "name": "high-throughput-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.dbname": "inventory",
+    "topic.prefix": "inventory",
+
+    "max.queue.size": "16384",
+    "max.batch.size": "4096",
+    "poll.interval.ms": "500",
+
+    "snapshot.fetch.size": "10240",
+
+    "producer.override.batch.size": "131072",
+    "producer.override.linger.ms": "10",
+    "producer.override.compression.type": "lz4"
+  }
+}
+```
+
+**Параметры tuning:**
+
+| Параметр | Default | Tuned | Эффект |
+|----------|---------|-------|--------|
+| `max.queue.size` | 8192 | 16384 | Больше буфер между WAL и Kafka |
+| `max.batch.size` | 2048 | 4096 | Больше events per commit |
+| `poll.interval.ms` | 1000 | 500 | Чаще poll (меньше latency) |
+| `producer.override.batch.size` | 16384 | 131072 | Больше batch к Kafka |
+| `producer.override.linger.ms` | 0 | 10 | Подождать для batch |
+| `producer.override.compression.type` | none | lz4 | Сжатие (меньше I/O) |
+
+### Performance Ceiling
+
+**Максимальная пропускная способность одного PostgreSQL коннектора:**
+
+```
+~7,000 events/second (под оптимальными условиями)
+```
+
+Это примерное значение, зависящее от:
+- Размера events (больше = медленнее)
+- Network latency между Connect и Kafka
+- Disk I/O на PostgreSQL
+- Transforms complexity
+
+**Если нужно больше 7K events/sec:**
+- Используйте множественные коннекторы
+- Архивируйте старые данные
+- Рассмотрите партиционирование PostgreSQL
+
+## Decision Framework: Выбор стратегии
+
+<Mermaid chart={`
+flowchart TD
+    START["Нужно больше throughput"] --> Q1{"Текущий throughput?"}
+
+    Q1 -->|"Меньше 7K/sec"| TUNE["Стратегия 3:<br/>Performance Tuning"]
+    Q1 -->|"Около 7K/sec или больше"| Q2{"Таблицы независимы?"}
+
+    Q2 -->|"Да"| MULTI["Стратегия 1:<br/>Multiple Connectors"]
+    Q2 -->|"Нет"| Q3{"Нужен ordering per-key?"}
+
+    Q3 -->|"Да"| DOWNSTREAM["Стратегия 2:<br/>Downstream Parallelization"]
+    Q3 -->|"Нет"| HYBRID["Комбинация:<br/>Multiple + Downstream"]
+
+    TUNE --> CHECK1{"Достаточно?"}
+    CHECK1 -->|"Нет"| Q2
+    CHECK1 -->|"Да"| DONE["Done"]
+
+    MULTI --> DONE
+    DOWNSTREAM --> DONE
+    HYBRID --> DONE
+
+    style TUNE fill:#3b82f6
+    style MULTI fill:#8b5cf6
+    style DOWNSTREAM fill:#10b981
+    style HYBRID fill:#f59e0b
+`} client:visible />
+
+## Anti-Patterns
+
+### Anti-Pattern 1: tasks.max больше 1
+
+```json
+{
+  "tasks.max": "4"  // БЕСПОЛЕЗНО для PostgreSQL!
+}
+```
+
+**Проблема:** Игнорируется. Вы думаете, что масштабировали, но ничего не изменилось.
+
+**Решение:** Не тратьте время. Используйте реальные стратегии.
+
+### Anti-Pattern 2: Все таблицы в одном коннекторе
+
+```json
+{
+  "table.include.list": "public.table1,public.table2,...,public.table100"
+}
+```
+
+**Проблема:**
+- Один slot для всех таблиц
+- Failure одной таблицы блокирует все
+- Трудно мониторить per-table lag
+
+**Решение:** Группируйте таблицы по домену/SLO.
+
+### Anti-Pattern 3: Слишком маленький max.queue.size
+
+```json
+{
+  "max.queue.size": "1024"  // Слишком мало!
+}
+```
+
+**Проблема:** Частые flush к Kafka, высокий overhead.
+
+**Решение:** Минимум 8192, лучше 16384 для high-throughput.
+
+## Мониторинг throughput
+
+### Ключевые метрики
+
+```bash
+# Events per second (rate over 5 minutes)
+curl -s http://localhost:9404/metrics | \
+  grep debezium_metrics_TotalNumberOfEventsSeen
+
+# Queue utilization
+curl -s http://localhost:9404/metrics | \
+  grep -E "QueueRemainingCapacity|QueueTotalCapacity"
+```
+
+**PromQL запросы:**
+
+```promql
+# Events per second
+rate(debezium_metrics_TotalNumberOfEventsSeen{connector="inventory-connector"}[5m])
+
+# Queue utilization %
+100 * (1 - (
+  debezium_metrics_QueueRemainingCapacity /
+  debezium_metrics_QueueTotalCapacity
+))
+```
+
+### Когда беспокоиться
+
+| Метрика | Warning | Critical | Действие |
+|---------|---------|----------|----------|
+| Events/sec | Падение более 20% | Падение более 50% | Проверить WAL reader |
+| Queue util | Более 80% | Более 95% | Kafka bottleneck |
+| Lag | Более 5s | Более 30s | Capacity review |
+
+## Lab: Measure Connector Throughput
+
+### Цель
+
+Измерить текущий throughput и определить bottleneck.
+
+### Шаги
+
+**1. Создать нагрузку на БД:**
+
+```bash
+docker exec -it postgres psql -U postgres -d inventory -c "
+-- Создать таблицу для теста
+CREATE TABLE IF NOT EXISTS load_test (
+    id SERIAL PRIMARY KEY,
+    data TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Генерировать 10000 записей
+INSERT INTO load_test (data)
+SELECT md5(random()::text)
+FROM generate_series(1, 10000);
+"
+```
+
+**2. Наблюдать throughput в Prometheus:**
+
+```bash
+# Открыть Prometheus UI
+open http://localhost:9090
+
+# Query: rate of events
+rate(debezium_metrics_TotalNumberOfEventsSeen[1m])
+```
+
+**3. Проверить queue utilization:**
+
+```promql
+100 * (1 - (
+  debezium_metrics_QueueRemainingCapacity /
+  debezium_metrics_QueueTotalCapacity
+))
+```
+
+**4. Определить bottleneck:**
+
+- **Queue util высокий (более 80%):** Kafka write bottleneck
+- **Queue util низкий, но throughput низкий:** WAL read bottleneck
+
+### Ожидаемый результат
+
+- Видите пик throughput при INSERT
+- Queue utilization временно растет
+- После INSERT throughput падает к baseline
+
+## Ключевые выводы
+
+1. **tasks.max НЕ работает для PostgreSQL** — коннектор всегда использует 1 task
+
+2. **Причина:** WAL — последовательный журнал, один reader
+
+3. **Реальные стратегии:**
+   - Множественные коннекторы (разные наборы таблиц)
+   - Downstream параллелизация (Kafka partitions + consumers)
+   - Performance tuning (queue size, batch size, compression)
+
+4. **Performance ceiling:** ~7,000 events/sec per connector
+
+5. **Monitoring:** rate(TotalNumberOfEventsSeen), Queue utilization, Lag
+
+> **Production Insight:** Не теряйте время на tasks.max. Если throughput критичен — разделяйте на множественные коннекторы и используйте downstream parallelization. Один коннектор имеет жесткий потолок.
