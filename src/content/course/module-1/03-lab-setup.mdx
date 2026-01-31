@@ -1,0 +1,273 @@
+---
+title: "Настройка лабораторного окружения"
+description: "Запуск Docker Compose стека с PostgreSQL, Kafka, Debezium Connect и мониторингом"
+order: 3
+difficulty: "beginner"
+estimatedTime: 15
+topics: ["Docker", "Lab Environment", "Kafka", "PostgreSQL"]
+prerequisites: ["module-1/02-debezium-architecture"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Настройка лабораторного окружения
+
+В этом уроке мы запустим полноценную среду для работы с Debezium: PostgreSQL с logical replication, Kafka в KRaft режиме, Debezium Connect и инструменты мониторинга.
+
+## Требования
+
+Перед началом убедитесь, что у вас установлены необходимые инструменты.
+
+### Docker Desktop
+
+Проверьте версию Docker:
+
+```bash
+docker --version
+# Docker version 24.0.0 или выше
+```
+
+### Ресурсы
+
+Откройте настройки Docker Desktop и убедитесь, что выделено:
+- **RAM:** минимум 8 GB (рекомендуется 10 GB)
+- **CPU:** минимум 4 ядра
+
+### Свободные порты
+
+Убедитесь, что следующие порты не заняты:
+
+| Порт | Сервис | Проверка |
+|------|--------|----------|
+| 5433 | PostgreSQL | `lsof -i :5433` |
+| 9092 | Kafka | `lsof -i :9092` |
+| 8083 | Kafka Connect | `lsof -i :8083` |
+| 8888 | JupyterLab | `lsof -i :8888` |
+| 3000 | Grafana | `lsof -i :3000` |
+
+> **Важно:** PostgreSQL использует порт **5433**, а не стандартный 5432. Это сделано намеренно, так как порт 5432 часто занят локальной установкой PostgreSQL.
+
+## Запуск окружения
+
+### Шаг 1: Перейдите в директорию labs
+
+```bash
+cd labs/
+```
+
+### Шаг 2: Запустите все сервисы
+
+```bash
+docker compose up -d
+```
+
+Эта команда загрузит образы (при первом запуске) и запустит 7 сервисов в фоновом режиме.
+
+### Шаг 3: Дождитесь полной инициализации
+
+Первый запуск занимает 2-3 минуты. Проверьте статус:
+
+```bash
+docker compose ps
+```
+
+Ожидаемый результат — все сервисы в статусе `healthy` или `running`:
+
+```
+NAME              STATUS
+connect           healthy
+grafana           running
+jupyter           running
+kafka             healthy
+postgres          healthy
+prometheus        running
+schema-registry   healthy
+```
+
+## Проверка сервисов
+
+После запуска убедитесь, что каждый компонент работает корректно.
+
+### Таблица проверки
+
+| Сервис | Команда/URL | Ожидаемый результат |
+|--------|-------------|---------------------|
+| PostgreSQL | `docker compose exec postgres psql -U postgres -c "SHOW wal_level;"` | `logical` |
+| Kafka | `docker compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list` | Пустой список или системные топики |
+| Connect | `curl http://localhost:8083/` | JSON с версией |
+| Schema Registry | `curl http://localhost:8081/subjects` | `[]` |
+| JupyterLab | http://localhost:8888 | Интерфейс JupyterLab |
+| Grafana | http://localhost:3000 | Страница входа (admin/admin) |
+| Prometheus | http://localhost:9090 | Интерфейс Prometheus |
+
+### Детальная проверка PostgreSQL
+
+Убедитесь, что PostgreSQL настроен для logical replication:
+
+```bash
+docker compose exec postgres psql -U postgres -c "SHOW wal_level;"
+```
+
+Результат должен быть `logical`. Также проверьте параметры репликации:
+
+```bash
+docker compose exec postgres psql -U postgres -c "SHOW max_replication_slots;"
+docker compose exec postgres psql -U postgres -c "SHOW max_wal_senders;"
+```
+
+Оба значения должны быть >= 10.
+
+### Проверка Kafka Connect
+
+```bash
+curl -s http://localhost:8083/ | jq .
+```
+
+Ожидаемый ответ:
+
+```json
+{
+  "version": "3.6.1",
+  "commit": "...",
+  "kafka_cluster_id": "..."
+}
+```
+
+Список доступных коннекторов (Debezium должен быть в списке):
+
+```bash
+curl -s http://localhost:8083/connector-plugins | jq '.[].class'
+```
+
+Вы должны увидеть `io.debezium.connector.postgresql.PostgresConnector`.
+
+## Архитектура окружения
+
+<Mermaid chart={`
+flowchart TB
+    subgraph DOCKER["Docker Compose Stack"]
+        direction TB
+
+        subgraph DATA["Data Layer"]
+            PG[(PostgreSQL<br/>:5433)]
+        end
+
+        subgraph STREAMING["Streaming Layer"]
+            KAFKA[Kafka<br/>:9092]
+            SR[Schema Registry<br/>:8081]
+            CONNECT[Debezium Connect<br/>:8083]
+        end
+
+        subgraph MONITORING["Monitoring"]
+            PROM[Prometheus<br/>:9090]
+            GRAF[Grafana<br/>:3000]
+        end
+
+        subgraph EXERCISES["Exercises"]
+            JUP[JupyterLab<br/>:8888]
+        end
+
+        PG -->|WAL| CONNECT
+        CONNECT -->|Events| KAFKA
+        KAFKA --> SR
+        CONNECT -->|Metrics| PROM
+        PROM --> GRAF
+        KAFKA -->|Consume| JUP
+        PG -->|Query| JUP
+    end
+
+    style PG fill:#3b82f6
+    style KAFKA fill:#8b5cf6
+    style CONNECT fill:#10b981
+    style JUP fill:#f59e0b
+    style GRAF fill:#ec4899
+    style PROM fill:#ef4444
+`} client:visible />
+
+## Справочник портов
+
+Используйте эту таблицу для доступа к сервисам:
+
+| Сервис | Внешний порт | Внутренний порт | URL |
+|--------|--------------|-----------------|-----|
+| PostgreSQL | 5433 | 5432 | - |
+| Kafka | 9092 | 9092 | - |
+| Kafka Connect | 8083 | 8083 | http://localhost:8083 |
+| Schema Registry | 8081 | 8081 | http://localhost:8081 |
+| JupyterLab | 8888 | 8888 | http://localhost:8888 |
+| Grafana | 3000 | 3000 | http://localhost:3000 |
+| Prometheus | 9090 | 9090 | http://localhost:9090 |
+
+> **Примечание для коннектора:** Внутри Docker сети используйте внутренние адреса: `database.hostname: postgres`, `database.port: 5432`. Для подключения с хоста используйте `localhost:5433`.
+
+## Устранение неполадок
+
+### Ошибка "port already in use"
+
+Если порт занят, найдите процесс и остановите его:
+
+```bash
+# Найти процесс на порту 5433
+lsof -i :5433
+
+# Или измените порт в labs/.env:
+POSTGRES_PORT=5434
+```
+
+### Сервисы не запускаются
+
+Проверьте логи конкретного сервиса:
+
+```bash
+docker compose logs kafka
+docker compose logs connect
+```
+
+Если видите ошибки памяти, увеличьте RAM в Docker Desktop.
+
+### Kafka Connect показывает "unhealthy"
+
+Kafka Connect зависит от Kafka. Убедитесь, что Kafka полностью запущена:
+
+```bash
+docker compose ps kafka
+# Должен показывать "healthy"
+```
+
+Если Kafka unhealthy, подождите 30 секунд или перезапустите:
+
+```bash
+docker compose restart kafka
+```
+
+### ARM64 / Apple Silicon
+
+Все образы в этом курсе протестированы на Apple Silicon (M1/M2/M3/M4) и работают без эмуляции Rosetta.
+
+## Управление окружением
+
+### Остановка (данные сохраняются)
+
+```bash
+docker compose down
+```
+
+Данные сохраняются в Docker volumes между перезапусками.
+
+### Полная очистка (удаление всех данных)
+
+```bash
+docker compose down -v
+```
+
+Это удалит все volumes — используйте для "чистого старта".
+
+### Просмотр потребления ресурсов
+
+```bash
+docker stats
+```
+
+## Что дальше?
+
+Окружение готово! В следующем уроке мы развернем первый Debezium коннектор для PostgreSQL и увидим CDC-события в Kafka.
