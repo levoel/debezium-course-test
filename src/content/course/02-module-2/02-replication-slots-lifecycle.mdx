@@ -1,0 +1,407 @@
+---
+title: "Жизненный цикл Replication Slots"
+description: "Создание, мониторинг и безопасная очистка replication slots, предотвращение disk exhaustion"
+order: 2
+difficulty: "intermediate"
+estimatedTime: 30
+topics: ["replication-slots", "wal-management", "monitoring", "pg_replication_slots"]
+prerequisites: ["module-2/01-logical-decoding-deep-dive"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Жизненный цикл Replication Slots
+
+В предыдущем уроке мы узнали, что replication slots — это "закладки" в WAL. Они гарантируют, что PostgreSQL не удалит WAL сегменты, пока Debezium их не прочитает. Это мощный механизм, но **slots требуют внимательного управления**.
+
+> **Критическое предупреждение:** Abandoned replication slot может заполнить весь диск WAL сегментами, что приведет к остановке базы данных. Это одна из самых частых проблем в production CDC.
+
+## Что такое Replication Slot?
+
+**Replication Slot** — это объект PostgreSQL, который отслеживает позицию потребителя в WAL. PostgreSQL гарантирует, что все WAL сегменты после `restart_lsn` слота будут сохранены.
+
+<Mermaid chart={`
+flowchart LR
+    subgraph WAL["WAL (Transaction Log)"]
+        direction LR
+        SEG1["Segment 1<br/>0/1000000"]
+        SEG2["Segment 2<br/>0/2000000"]
+        SEG3["Segment 3<br/>0/3000000"]
+        SEG4["Segment 4<br/>0/4000000"]
+        SEG5["Segment 5<br/>0/5000000"]
+        SEG1 --> SEG2 --> SEG3 --> SEG4 --> SEG5
+    end
+
+    SLOT["Replication Slot<br/>restart_lsn: 0/3000000"]
+    SLOT -.->|"Все после этой<br/>позиции сохраняется"| SEG3
+
+    DELETE["Можно удалить"]
+    KEEP["Сохранено для слота"]
+
+    SEG1 --> DELETE
+    SEG2 --> DELETE
+    SEG3 --> KEEP
+    SEG4 --> KEEP
+    SEG5 --> KEEP
+
+    style DELETE fill:#7f1d1d,stroke:#ef4444
+    style KEEP fill:#14532d,stroke:#22c55e
+    style SLOT fill:#f59e0b
+`} client:visible />
+
+### Ключевые атрибуты слота
+
+| Атрибут | Описание |
+|---------|----------|
+| `slot_name` | Уникальное имя слота |
+| `plugin` | Output plugin (pgoutput для Debezium) |
+| `slot_type` | logical или physical |
+| `active` | Есть ли активное соединение |
+| `restart_lsn` | Позиция, с которой нужно начать при восстановлении |
+| `confirmed_flush_lsn` | Последняя подтвержденная позиция |
+| `wal_status` | reserved, extended, unreserved, lost |
+
+## Жизненный цикл слота
+
+<Mermaid chart={`
+stateDiagram-v2
+    [*] --> Created: Debezium создает слот<br/>при первом запуске
+
+    Created --> Active: Connector подключается<br/>active = true
+    Active --> Inactive: Connector отключается<br/>active = false
+    Inactive --> Active: Connector переподключается
+
+    Inactive --> Abandoned: Connector удален,<br/>слот остался
+
+    Abandoned --> DiskFull: WAL накапливается<br/>без лимита
+    DiskFull --> DatabaseDown: Диск заполнен
+
+    Inactive --> Dropped: Безопасное удаление<br/>pg_drop_replication_slot()
+    Abandoned --> Dropped: Ручное удаление<br/>после проверки
+
+    Dropped --> [*]
+
+    note right of Abandoned
+        ОПАСНО: WAL сохраняется
+        БЕСКОНЕЧНО
+    end note
+
+    note right of DiskFull
+        БД переходит в
+        read-only или падает
+    end note
+`} client:visible />
+
+### Создание слота
+
+**Автоматически Debezium** (рекомендуется):
+
+Debezium создает слот автоматически при первом запуске коннектора:
+
+```json
+{
+  "name": "inventory-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "slot.name": "debezium_inventory",
+    "database.hostname": "postgres",
+    "database.dbname": "inventory"
+  }
+}
+```
+
+**Вручную** (для тестирования):
+
+```sql
+SELECT pg_create_logical_replication_slot(
+    'debezium_inventory',  -- имя слота
+    'pgoutput'             -- output plugin
+);
+```
+
+### Состояния слота
+
+**Active (`active = true`):** Debezium подключен и читает изменения. Нормальное рабочее состояние.
+
+**Inactive (`active = false`):** Нет активного соединения. Это может быть:
+- Коннектор временно остановлен (rebalance, restart)
+- Коннектор перманентно удален (опасно!)
+
+**Abandoned:** Inactive слот, чей коннектор больше не существует. WAL будет накапливаться бесконечно.
+
+## Мониторинг: pg_replication_slots
+
+Системное представление `pg_replication_slots` — ваш главный инструмент мониторинга.
+
+### Полный мониторинговый запрос
+
+```sql
+-- Комплексный мониторинг всех logical replication slots
+SELECT
+    slot_name,
+    plugin,
+    active,
+    active_pid,
+    -- WAL retention metrics
+    pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS lag_bytes,
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS lag_pretty,
+    -- Status
+    wal_status,
+    safe_wal_size,
+    -- LSN positions
+    restart_lsn,
+    confirmed_flush_lsn,
+    -- Additional info
+    temporary,
+    catalog_xmin
+FROM pg_replication_slots
+WHERE slot_type = 'logical'
+ORDER BY lag_bytes DESC NULLS LAST;
+```
+
+### Интерпретация результатов
+
+```
+ slot_name          | plugin   | active | lag_bytes | lag_pretty | wal_status
+--------------------+----------+--------+-----------+------------+------------
+ debezium_inventory | pgoutput | t      | 16384     | 16 kB      | reserved
+ old_abandoned_slot | pgoutput | f      | 5368709120| 5120 MB    | unreserved
+```
+
+**Здоровый слот:**
+- `active = true`
+- `lag_bytes` < 100MB (зависит от нагрузки)
+- `wal_status = 'reserved'`
+
+**Проблемный слот:**
+- `active = false` + высокий `lag_bytes`
+- `wal_status = 'unreserved'` или `'lost'`
+
+### wal_status: что означает?
+
+| Значение | Описание | Действие |
+|----------|----------|----------|
+| `reserved` | WAL зарезервирован, всё в порядке | Норма |
+| `extended` | WAL превысил max_wal_size, но слот его держит | Следить |
+| `unreserved` | WAL может быть удален в любой момент | Опасно |
+| `lost` | WAL уже удален, слот невосстановим | Пересоздать коннектор |
+
+> **`wal_status = 'lost'`** означает, что коннектор отстал слишком сильно. После удаления слота потребуется полный resnapshot базы данных.
+
+## Критическая опасность: Abandoned Slots
+
+### Как slot заполняет диск
+
+```
+День 1: Коннектор остановлен, slot inactive
+        WAL retention: 100 MB
+
+День 2: База продолжает работать
+        WAL retention: 500 MB
+
+День 3: Slot забыли
+        WAL retention: 2 GB
+
+День 7: Диск на 80%
+        WAL retention: 10 GB
+
+День 10: ДИСК ПОЛНЫЙ
+         PostgreSQL: read-only mode / crash
+```
+
+PostgreSQL **не удаляет** WAL сегменты, пока slot их не прочитал. Если slot inactive и забыт — WAL растет бесконечно.
+
+### Как обнаружить abandoned slots
+
+```sql
+-- Находим inactive slots с большим lag (потенциально abandoned)
+SELECT
+    slot_name,
+    active,
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS retained_wal,
+    wal_status
+FROM pg_replication_slots
+WHERE slot_type = 'logical'
+  AND active = false
+  AND pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) > 1073741824; -- > 1 GB
+```
+
+## Безопасное удаление slots
+
+> **ВНИМАНИЕ:** `active = false` НЕ означает "безопасно удалить"! Коннектор может быть временно остановлен (rebalance, обновление).
+
+### Чеклист перед удалением
+
+1. **Проверить Kafka Connect:** Существует ли коннектор с этим slot_name?
+   ```bash
+   curl http://localhost:8083/connectors | jq
+   ```
+
+2. **Проверить статус коннектора:**
+   ```bash
+   curl http://localhost:8083/connectors/[name]/status | jq
+   ```
+
+3. **Связаться с командой:** Убедиться, что коннектор действительно не нужен.
+
+4. **Документировать:** Записать причину удаления в runbook.
+
+### Удаление слота
+
+```sql
+-- Только после подтверждения, что коннектор удален!
+SELECT pg_drop_replication_slot('old_abandoned_slot');
+```
+
+Если slot active, сначала остановите коннектор:
+
+```bash
+# Удалить коннектор в Kafka Connect
+curl -X DELETE http://localhost:8083/connectors/inventory-connector
+
+# Затем удалить slot в PostgreSQL
+psql -c "SELECT pg_drop_replication_slot('debezium_inventory');"
+```
+
+## max_slot_wal_keep_size: Страховка от disk exhaustion
+
+PostgreSQL 13+ добавил параметр `max_slot_wal_keep_size` — лимит WAL на каждый slot.
+
+```sql
+-- postgresql.conf или ALTER SYSTEM
+max_slot_wal_keep_size = '10GB'
+```
+
+### Как это работает
+
+| WAL retention | wal_status | Поведение |
+|---------------|------------|-----------|
+| < max_slot_wal_keep_size | `reserved` | WAL сохраняется |
+| > max_slot_wal_keep_size | `unreserved` | WAL может быть удален |
+| WAL удален | `lost` | Slot невосстановим |
+
+**Рекомендация:** Всегда устанавливайте `max_slot_wal_keep_size` в production:
+
+```sql
+-- Рекомендуемые значения
+max_slot_wal_keep_size = '10GB'   -- Небольшие БД (< 100GB)
+max_slot_wal_keep_size = '50GB'   -- Средние БД
+max_slot_wal_keep_size = '100GB'  -- Большие БД с высокой нагрузкой
+```
+
+> **Компромисс:** Слишком маленький лимит — connector может потерять WAL при кратковременных проблемах. Слишком большой — не защитит от disk exhaustion. Выбирайте исходя из свободного места на диске.
+
+## Alerting: Prometheus + Grafana
+
+### Метрики для мониторинга
+
+```sql
+-- Метрика: replication_slot_lag_bytes
+-- Использовать с pg_exporter или custom exporter
+SELECT
+    slot_name,
+    pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS lag_bytes
+FROM pg_replication_slots
+WHERE slot_type = 'logical';
+```
+
+### Примеры алертов
+
+```yaml
+# Prometheus alerting rules
+groups:
+  - name: replication_slots
+    rules:
+      # Alert: Inactive slot with growing lag
+      - alert: ReplicationSlotInactiveLagHigh
+        expr: |
+          pg_replication_slot_lag_bytes{active="false"} > 1073741824
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Inactive replication slot {{ $labels.slot_name }} has >1GB lag"
+          description: "Slot may be abandoned. Check if connector exists."
+
+      # Alert: WAL status is 'lost'
+      - alert: ReplicationSlotWalLost
+        expr: |
+          pg_replication_slot_wal_status{wal_status="lost"} == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Replication slot {{ $labels.slot_name }} WAL is lost"
+          description: "Connector needs full resnapshot. WAL was deleted."
+
+      # Alert: High lag on active slot
+      - alert: ReplicationSlotLagHigh
+        expr: |
+          pg_replication_slot_lag_bytes{active="true"} > 5368709120
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Replication slot {{ $labels.slot_name }} lag >5GB"
+          description: "Connector may be slow or stuck."
+```
+
+## Документирование slots
+
+Ведите документацию о том, какой коннектор владеет каким слотом:
+
+```markdown
+| Slot Name            | Connector         | Owner Team | Created    | Notes        |
+|----------------------|-------------------|------------|------------|--------------|
+| debezium_inventory   | inventory-connector| Platform   | 2026-01-15 | Main CDC     |
+| debezium_orders      | orders-connector   | Orders     | 2026-01-20 | Order events |
+| debezium_analytics   | (DELETED)          | Analytics  | 2026-01-10 | To cleanup   |
+```
+
+Это спасет от случайного удаления активных слотов и поможет найти abandoned.
+
+## Операционный runbook
+
+### При обнаружении inactive slot с высоким lag
+
+1. **Проверить Kafka Connect:**
+   ```bash
+   curl http://localhost:8083/connectors/[connector-name]/status
+   ```
+
+2. **Если коннектор существует и FAILED:**
+   - Проверить логи: `docker logs connect 2>&1 | grep -i error`
+   - Перезапустить task: `curl -X POST .../tasks/0/restart`
+
+3. **Если коннектор не существует:**
+   - Проверить с командой-владельцем
+   - Если подтверждено удаление — drop slot
+
+4. **Если неясно:**
+   - НЕ удалять slot
+   - Эскалировать до владельца
+   - Следить за ростом lag
+
+### При wal_status = 'lost'
+
+1. **Slot невосстановим** — WAL уже удален
+2. Удалить slot: `SELECT pg_drop_replication_slot('...');`
+3. Удалить и пересоздать коннектор
+4. Коннектор выполнит полный snapshot
+5. Провести post-mortem: почему slot остался без присмотра?
+
+## Что дальше?
+
+Мы изучили, как управлять replication slots. Следующий вопрос: **как настроить PostgreSQL для оптимальной производительности CDC?**
+
+В следующем уроке мы рассмотрим конфигурацию WAL: `wal_level`, `max_wal_senders`, влияние на производительность и метрики для мониторинга.
+
+## Ключевые выводы
+
+1. **Replication Slots** — закладки в WAL, гарантирующие, что Debezium не пропустит изменения
+2. **active = false НЕ означает "безопасно удалить"** — коннектор может быть временно остановлен
+3. **Abandoned slots** накапливают WAL бесконечно, заполняя диск
+4. **max_slot_wal_keep_size** — критически важный параметр для production
+5. **Мониторинг pg_replication_slots** — обязательная практика
+6. **wal_status = 'lost'** — slot невосстановим, требуется полный resnapshot
+7. **Документируйте ownership** — какой коннектор владеет каким слотом
