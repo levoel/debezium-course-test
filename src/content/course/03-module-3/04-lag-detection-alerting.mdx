@@ -1,0 +1,457 @@
+---
+title: "Детекция отставания и настройка алертов"
+description: "Создание правил алертинга для CDC pipeline: пороги, severity levels, защита от alert storms"
+order: 4
+difficulty: "intermediate"
+estimatedTime: 35
+topics: ["alerting", "grafana", "slo", "incident-response"]
+prerequisites: ["module-3/03-grafana-dashboard-lab"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Детекция отставания и настройка алертов
+
+Dashboard показывает "что происходит", но требует постоянного наблюдения. В production нужны **автоматические уведомления** о проблемах. В этом уроке мы настроим систему алертинга для CDC pipeline.
+
+## Зачем нужны алерты на lag?
+
+### Визуализация vs Алертинг
+
+<Mermaid chart={`
+graph LR
+    subgraph "Без алертов"
+        A[Lag растет] --> B[Никто не смотрит]
+        B --> C[SLO нарушен]
+        C --> D[Клиент жалуется]
+        D --> E[Начинаем разбираться]
+    end
+
+    subgraph "С алертами"
+        F[Lag растет] --> G[Warning через 2 мин]
+        G --> H[Инженер проверяет]
+        H --> I[Проблема решена]
+        I --> J[SLO соблюден]
+    end
+
+    style C fill:#ef4444,color:#fff
+    style D fill:#ef4444,color:#fff
+    style J fill:#22c55e,color:#fff
+`} client:visible />
+
+### SLO для CDC Pipeline
+
+**Service Level Objective (SLO)** — договоренность о качестве сервиса. Для CDC типичные SLO:
+
+| Метрика | SLO | Значение для бизнеса |
+|---------|-----|---------------------|
+| Lag | до 30 секунд | Downstream системы видят данные с максимальной задержкой 30s |
+| Availability | 99.9% | CDC доступен 99.9% времени |
+| Event delivery | At-least-once | Ни одно событие не потеряно |
+
+**Важно:** SLO 30 секунд не означает "alerting на 30s". Нам нужно предупреждение **до** нарушения SLO:
+- Warning на 5s — время среагировать
+- Critical на 30s — SLO уже нарушен, требуется немедленное действие
+
+## Иерархия алертов
+
+### Уровни severity
+
+Не все проблемы одинаково критичны. Правильная иерархия предотвращает "alert fatigue":
+
+<Mermaid chart={`
+graph TB
+    subgraph "Alert Hierarchy"
+        W[Warning<br/>Investigate during business hours]
+        C[Critical<br/>Immediate action required]
+        E[Emergency<br/>Wake up on-call engineer]
+    end
+
+    W --> |"Не решено за 30 мин"| C
+    C --> |"Не решено за 15 мин"| E
+
+    style W fill:#eab308,color:#000
+    style C fill:#f97316,color:#fff
+    style E fill:#ef4444,color:#fff
+`} client:visible />
+
+### Рекомендуемые пороги для CDC
+
+| Alert | Condition | Duration ("for") | Severity | Действие |
+|-------|-----------|------------------|----------|----------|
+| Lag Warning | MilliSecondsBehindSource более 5000 | 2 min | Warning | Проверить нагрузку на БД |
+| Lag Critical | MilliSecondsBehindSource более 30000 | 5 min | Critical | SLO breach, эскалация |
+| Connector Down | Connected == 0 | 1 min | Critical | Проверить сеть, credentials |
+| Queue Saturation | QueueRemainingCapacity менее 10% | 5 min | Warning | Проверить Kafka latency |
+
+## Критичный момент: Duration ("for" clause)
+
+### Проблема мгновенных алертов
+
+CDC pipeline **нормально** имеет кратковременные spike-и lag:
+
+<Mermaid chart={`
+graph LR
+    subgraph "Batch INSERT (1000 rows)"
+        A[INSERT 1000 rows] --> B[Lag spike 3s]
+        B --> C[Processing...] --> D[Lag снова 0.2s]
+    end
+`} client:visible />
+
+Если алертить на каждый spike более 1s:
+
+```
+10:00:01 - ALERT: Lag > 1s (value: 3.2s)
+10:00:16 - RESOLVED: Lag back to normal
+10:00:31 - ALERT: Lag > 1s (value: 2.8s)
+10:00:46 - RESOLVED: Lag back to normal
+... (десятки алертов в час)
+```
+
+Результат: **alert fatigue** — операторы игнорируют алерты, пропускают реальные проблемы.
+
+### Решение: "for" duration
+
+```yaml
+# Плохо - мгновенный алерт
+condition: lag > 5000
+for: 0s  # Срабатывает на любой spike
+
+# Хорошо - устойчивый алерт
+condition: lag > 5000
+for: 2m  # Срабатывает только если lag > 5s в течение 2 минут
+```
+
+**Правило:** Condition должна быть истинной **непрерывно** в течение указанного периода.
+
+## Настройка алертов в Grafana
+
+### Шаг 1: Открытие Alerting
+
+1. В левом меню Grafana нажмите **Alerting** (иконка колокольчика)
+2. Перейдите в **Alert rules**
+3. Нажмите **+ New alert rule**
+
+### Шаг 2: Alert Rule - CDC Lag Warning
+
+**Section 1: Rule name**
+- Name: `CDC Lag Warning`
+- Folder: `Debezium` (создайте если нужно)
+- Evaluation group: `debezium-alerts` (создайте если нужно)
+
+**Section 2: Query and condition**
+
+Query A:
+```promql
+debezium_metrics_MilliSecondsBehindSource{context="streaming"}
+```
+
+Condition:
+- Type: `Threshold`
+- IS ABOVE: `5000`
+
+**Section 3: Alert evaluation behavior**
+- Evaluate every: `1m`
+- For: `2m`
+- Configure no data and error handling: `OK`
+
+**Section 4: Add details for your alert**
+
+Labels:
+```
+severity = warning
+team = platform
+component = cdc
+```
+
+Annotations:
+- Summary: `CDC lag exceeds 5 seconds`
+- Description: `Connector {{ $labels.server }} lag is {{ $value }}ms. Check database load and Kafka connectivity.`
+
+Нажмите **Save rule and exit**.
+
+### Шаг 3: Alert Rule - CDC Lag Critical
+
+Повторите процесс с другими параметрами:
+
+| Параметр | Значение |
+|----------|----------|
+| Name | CDC Lag Critical |
+| Threshold | 30000 |
+| For | 5m |
+| Severity label | critical |
+| Summary | CDC SLO breach - lag exceeds 30 seconds |
+
+### Шаг 4: Alert Rule - Connector Disconnected
+
+**Query:**
+```promql
+debezium_metrics_Connected{context="streaming"}
+```
+
+**Condition:**
+- Type: `Threshold`
+- IS BELOW: `1`
+
+**Timing:**
+- For: `1m`
+
+**Labels:**
+- severity: `critical`
+
+**Annotations:**
+- Summary: `CDC connector lost database connection`
+- Description: `Connector {{ $labels.server }} is disconnected. Immediate investigation required.`
+
+### Шаг 5: Alert Rule - Queue Saturation
+
+**Query:**
+```promql
+100 * (debezium_metrics_QueueRemainingCapacity{context="streaming"} / debezium_metrics_QueueTotalCapacity{context="streaming"})
+```
+
+**Condition:**
+- Type: `Threshold`
+- IS BELOW: `10` (менее 10% свободно = более 90% занято)
+
+**Timing:**
+- For: `5m`
+
+**Labels:**
+- severity: `warning`
+
+**Annotations:**
+- Summary: `CDC queue near saturation`
+- Description: `Queue utilization above 90% for connector {{ $labels.server }}. Check Kafka broker latency.`
+
+## Настройка Contact Points
+
+Alert rules определяют **когда** уведомлять. Contact points определяют **куда**.
+
+### Шаг 1: Создание Contact Point
+
+1. **Alerting** > **Contact points**
+2. **+ Add contact point**
+
+**Email Contact:**
+- Name: `platform-team-email`
+- Type: `Email`
+- Addresses: `platform-team@example.com`
+
+**Slack Contact (если используете):**
+- Name: `platform-alerts-slack`
+- Type: `Slack`
+- Webhook URL: `https://hooks.slack.com/services/...`
+- Channel: `#platform-alerts`
+
+### Шаг 2: Notification Policies
+
+Notification policies маршрутизируют алерты к правильным contact points.
+
+1. **Alerting** > **Notification policies**
+2. Нажмите **Edit** на root policy
+
+**Default contact point:** `platform-team-email`
+
+**Add nested policy:**
+- Matching labels: `severity = critical`
+- Contact point: `platform-alerts-slack`
+- Override timing: 
+  - Group wait: `30s`
+  - Group interval: `5m`
+  - Repeat interval: `4h`
+
+<Mermaid chart={`
+graph TD
+    A[Alert fires] --> B{severity?}
+    B -->|warning| C[Email to team]
+    B -->|critical| D[Slack + Email]
+    D --> E[Repeat every 4h if not resolved]
+`} client:visible />
+
+## Понимание MilliSecondsBehindSource
+
+### Почему метрика никогда не равна нулю?
+
+Распространенное заблуждение: "lag 0 = идеально синхронизировано".
+
+**Реальность:** Lag измеряет время от `source_timestamp` события до его обработки Debezium:
+
+```
+source_timestamp = момент записи в PostgreSQL
+processing_time = момент отправки в Kafka
+lag = processing_time - source_timestamp
+```
+
+Даже для пустой БД существует:
+- Время опроса WAL (poll interval ~500ms)
+- Время сериализации события
+- Время отправки в Kafka
+
+**Нормальный lag:** 100-500ms для idle системы, 1-5s под нагрузкой.
+
+### Когда lag не обновляется
+
+**Важно:** `MilliSecondsBehindSource` обновляется только при получении события!
+
+Если таблица не меняется:
+- `MilliSecondsBehindSource` = время последнего события (может быть 0)
+- `MilliSecondsSinceLastEvent` = растет (показывает "тишину")
+
+**Вывод:** Комбинируйте обе метрики для полной картины.
+
+## Тестирование алертов
+
+### Генерация lag для тестирования
+
+**Способ 1: Bulk INSERT**
+
+```bash
+# В контейнере PostgreSQL
+docker compose exec postgres psql -U postgres -d inventory -c "
+INSERT INTO orders (customer_name, amount)
+SELECT 'Test Customer', random() * 1000
+FROM generate_series(1, 10000);
+"
+```
+
+Это создаст временный spike lag.
+
+**Способ 2: Остановка Kafka**
+
+```bash
+# Остановить Kafka
+docker compose stop kafka
+
+# Подождать 2 минуты (для warning) или 5 минут (для critical)
+
+# Проверить Grafana Alerting > Alert rules
+# Алерт должен перейти в состояние "Firing"
+
+# Восстановить Kafka
+docker compose start kafka
+```
+
+### Проверка состояния алерта
+
+1. **Alerting** > **Alert rules**
+2. Найдите ваше правило
+3. Состояния:
+   - `Normal` — условие не выполняется
+   - `Pending` — условие выполняется, ждем "for" duration
+   - `Firing` — алерт активен, уведомления отправляются
+
+## Защита от шума: Silencing и Inhibition
+
+### Silencing (приглушение)
+
+Временно отключает уведомления. Полезно для:
+- Плановых работ (maintenance windows)
+- Известных проблем в процессе решения
+
+1. **Alerting** > **Silences**
+2. **+ Create silence**
+3. Matching labels: `component = cdc`
+4. Duration: `2h`
+5. Comment: `Planned database migration`
+
+### Inhibition
+
+Подавление связанных алертов. Пример:
+- Если `Connector Disconnected` активен
+- Подавить `Lag Warning` и `Lag Critical` (они бессмысленны при отключенном коннекторе)
+
+В Grafana настраивается через **Notification policies** > **Mute timings**.
+
+## Эскалационная матрица
+
+Пример политики эскалации для production:
+
+| Время без ответа | Действие |
+|------------------|----------|
+| 0-15 min | Slack notification, дежурный инженер |
+| 15-30 min | Email всей команде |
+| 30-60 min | SMS/звонок team lead |
+| 60+ min | Эскалация на management |
+
+В Grafana настраивается через:
+- **Repeat interval** в notification policies
+- **External integrations** (PagerDuty, OpsGenie)
+
+## Alert JSON для импорта
+
+Полный пример alert rule в формате JSON:
+
+```json
+{
+  "alert": {
+    "name": "CDC Lag SLO Breach",
+    "message": "CDC connector {{ $labels.server }} lag exceeds 30s SLO. Current: {{ $value }}ms",
+    "conditions": [
+      {
+        "evaluator": {
+          "type": "gt",
+          "params": [30000]
+        },
+        "operator": {
+          "type": "and"
+        },
+        "query": {
+          "params": ["A", "5m", "now"]
+        },
+        "reducer": {
+          "type": "avg"
+        },
+        "type": "query"
+      }
+    ],
+    "executionErrorState": "alerting",
+    "for": "5m",
+    "frequency": "1m",
+    "noDataState": "no_data"
+  },
+  "targets": [
+    {
+      "expr": "debezium_metrics_MilliSecondsBehindSource{context=\"streaming\"}",
+      "refId": "A"
+    }
+  ]
+}
+```
+
+## Чеклист production-ready алертинга
+
+- [ ] Warning alert для раннего предупреждения (5s/2m)
+- [ ] Critical alert для SLO breach (30s/5m)
+- [ ] Connector disconnected alert (1m)
+- [ ] Queue saturation alert (90%/5m)
+- [ ] Contact points настроены (email, Slack)
+- [ ] Notification policies маршрутизируют по severity
+- [ ] Тестирование выполнено (алерты срабатывают)
+- [ ] Документация создана (runbook для каждого алерта)
+
+## Контрольные вопросы
+
+1. Почему используется "for: 2m" для warning и "for: 5m" для critical?
+2. Что произойдет если удалить "for" clause из alert rule?
+3. Как отличить "lag высокий из-за нагрузки" от "lag высокий из-за проблемы"?
+
+<details>
+<summary>Ответы</summary>
+
+1. **Разные duration** дают время на реакцию. Warning появляется раньше и с меньшей задержкой — есть время исследовать. Critical появляется после устойчивой проблемы — требуется немедленное действие.
+
+2. **Без "for"** — мгновенные алерты на каждый spike. Результат: сотни ложных срабатываний, alert fatigue, игнорирование алертов.
+
+3. **Нагрузка:** Lag коррелирует с throughput (rate TotalNumberOfEventsSeen), после завершения нагрузки lag быстро снижается.
+   **Проблема:** Lag растет независимо от throughput, или throughput падает/нулевой при растущем lag.
+
+</details>
+
+## Следующий шаг
+
+В следующем уроке мы изучим **WAL bloat prevention** — как предотвратить переполнение диска из-за неактивных replication slots и настроить heartbeat для Aurora.
+
+---
+
+**Lab checkpoint:** Создайте все 4 alert rules, симулируйте lag через bulk INSERT, убедитесь что warning alert переходит в состояние Pending, затем Firing.
