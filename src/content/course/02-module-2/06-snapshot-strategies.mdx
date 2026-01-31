@@ -1,0 +1,333 @@
+---
+title: "Стратегии снэпшотов в Debezium"
+description: "Выбор между initial и incremental snapshot режимами для эффективного захвата существующих данных"
+order: 6
+difficulty: "intermediate"
+estimatedTime: 25
+topics: ["snapshot-strategies", "incremental-snapshot", "chunk-tuning"]
+prerequisites: ["module-2/05-aurora-failover-handling"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Стратегии снэпшотов в Debezium
+
+При первом запуске CDC-коннектора возникает фундаментальный вопрос: как получить текущее состояние таблицы? Debezium должен знать, что уже есть в базе данных, прежде чем начать отслеживать изменения. Этот процесс называется **снэпшотом** (snapshot).
+
+## Зачем нужен снэпшот?
+
+CDC захватывает только **изменения** — INSERT, UPDATE, DELETE. Но что насчет миллиона записей, которые уже существуют в таблице? Без снэпшота consumer увидит только новые изменения, а существующие данные останутся невидимыми.
+
+<Mermaid chart={`
+graph LR
+    subgraph "Без snapshot"
+        A[Существующие данные] -->|Невидимы| X((Потеряны))
+        B[Новые изменения] -->|Захватываются| K[Kafka]
+    end
+
+    style X fill:#ef4444,color:#fff
+`} client:visible />
+
+## Режимы snapshot в Debezium
+
+Debezium предлагает несколько режимов снэпшота, каждый для своего сценария:
+
+| Режим | Поведение | Типичный сценарий |
+|-------|-----------|-------------------|
+| `initial` | Снэпшот при первом запуске, затем только streaming | **Стандартный** — новое развертывание |
+| `initial_only` | Только снэпшот, без streaming | Одноразовая миграция данных |
+| `never` | Никогда не делать снэпшот | Коннектор пересоздается с сохраненным offset |
+| `when_needed` | Снэпшот если offset потерян | Отказоустойчивая конфигурация |
+| `always` | Снэпшот при каждом запуске | **АНТИ-ПАТТЕРН в production!** |
+
+### Конфигурация режима
+
+```json
+{
+  "name": "inventory-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "postgres",
+    "database.dbname": "inventory",
+    "topic.prefix": "inventory",
+    "table.include.list": "public.orders",
+    "snapshot.mode": "initial",
+    "plugin.name": "pgoutput"
+  }
+}
+```
+
+## Проблемы традиционного снэпшота
+
+Традиционный снэпшот (`initial`, `always`) имеет серьезные ограничения для больших таблиц:
+
+### 1. Блокировка streaming
+
+Во время снэпшота коннектор **не обрабатывает** новые изменения из WAL. Все CDC-события накапливаются в replication slot, увеличивая WAL retention.
+
+<Mermaid chart={`
+sequenceDiagram
+    participant C as Коннектор
+    participant PG as PostgreSQL
+    participant K as Kafka
+
+    rect rgb(255, 200, 200)
+        Note over C,K: Период блокировки streaming
+        C->>PG: SELECT * FROM large_table (SNAPSHOT)
+        Note over PG: 10 миллионов строк...
+        Note over PG: WAL накапливается
+        PG-->>C: Все строки
+        C->>K: op='r' events
+    end
+
+    rect rgb(200, 255, 200)
+        Note over C,K: Streaming возобновляется
+        C->>PG: Чтение WAL
+        PG-->>C: Накопленные изменения
+        C->>K: op='c/u/d' events
+    end
+`} client:visible />
+
+### 2. Нет возобновляемости
+
+Если коннектор падает во время снэпшота большой таблицы, приходится начинать сначала. Для таблицы в 100GB это может означать часы потерянной работы.
+
+### 3. Блокировки таблиц
+
+В зависимости от режима изоляции, снэпшот может требовать блокировок, влияющих на production workload.
+
+## Incremental Snapshots (Debezium 1.6+)
+
+**Incremental snapshots** — современный подход, решающий все вышеперечисленные проблемы:
+
+| Характеристика | Traditional | Incremental |
+|----------------|-------------|-------------|
+| Streaming во время снэпшота | Заблокирован | Продолжается параллельно |
+| Возобновляемость | Нет | Да, с позиции последнего chunk |
+| Блокировки таблиц | Возможны | Минимальные |
+| Управление | Автоматически при старте | По запросу через signaling table |
+
+<Mermaid chart={`
+sequenceDiagram
+    participant C as Коннектор
+    participant PG as PostgreSQL
+    participant K as Kafka
+    participant S as Signaling Table
+
+    Note over C,K: Параллельная работа
+
+    rect rgb(200, 255, 200)
+        S->>C: execute-snapshot signal
+        loop Chunk by chunk
+            C->>PG: SELECT * WHERE id BETWEEN x AND y
+            PG-->>C: Chunk (2048 строк)
+            C->>K: op='r' (snapshot events)
+        end
+    end
+
+    par Одновременно
+        PG->>C: WAL changes
+        C->>K: op='c/u/d' (streaming events)
+    end
+
+    Note over K: Оба потока событий в топике
+`} client:visible />
+
+### Как работает incremental snapshot
+
+1. **Chunk-based чтение:** Вместо SELECT всей таблицы, коннектор читает порциями (chunks) по primary key
+2. **Watermark tracking:** Каждый chunk имеет watermark позицию, позволяющую возобновить с места остановки
+3. **Collision detection:** Если запись изменилась во время снэпшота, приоритет отдается streaming событию
+
+### Формат событий
+
+Incremental snapshot события имеют `op: 'r'` (read) и метаданные в `source`:
+
+```json
+{
+  "payload": {
+    "op": "r",
+    "source": {
+      "snapshot": "true",
+      "db": "inventory",
+      "table": "orders"
+    },
+    "after": {
+      "id": 1,
+      "customer_id": 100,
+      "total": 150.00
+    }
+  }
+}
+```
+
+Streaming события отличаются отсутствием `snapshot: true`:
+
+```json
+{
+  "payload": {
+    "op": "c",
+    "source": {
+      "snapshot": "false",
+      "db": "inventory",
+      "table": "orders"
+    },
+    "after": {
+      "id": 1001,
+      "customer_id": 200,
+      "total": 75.50
+    }
+  }
+}
+```
+
+## Выбор стратегии: Decision Framework
+
+<Mermaid chart={`
+flowchart TD
+    A[Нужен снэпшот?] -->|Да| B{Размер таблицы}
+    A -->|Нет| Z1["snapshot.mode=never"]
+
+    B -->|< 1M строк| C{Допустимый downtime?}
+    B -->|>= 1M строк| D[Incremental Snapshot]
+
+    C -->|Да, до 30 мин| E["snapshot.mode=initial"]
+    C -->|Нет| D
+
+    D --> F{Нужна фильтрация?}
+    F -->|Нет| G["Полный incremental"]
+    F -->|Да| H["additional-conditions"]
+
+    style D fill:#10b981,color:#fff
+    style Z1 fill:#6366f1,color:#fff
+    style E fill:#f59e0b,color:#fff
+`} client:visible />
+
+### Рекомендации по сценариям
+
+**Новое развертывание, маленькие таблицы (< 1M строк):**
+```json
+"snapshot.mode": "initial"
+```
+Простой вариант. Снэпшот пройдет за минуты.
+
+**Новое развертывание, большие таблицы (> 1M строк):**
+```json
+"snapshot.mode": "never",
+"signal.data.collection": "public.debezium_signal"
+```
+Используйте incremental snapshot через signaling table.
+
+**Пересоздание коннектора (offset сохранен):**
+```json
+"snapshot.mode": "never"
+```
+Коннектор продолжит с сохраненной позиции.
+
+**Восстановление после сбоя:**
+```json
+"snapshot.mode": "when_needed"
+```
+Автоматический снэпшот только если offset потерян.
+
+## Настройка chunk size
+
+Размер chunk критически влияет на производительность incremental snapshot:
+
+### Формула расчета
+
+```python
+chunk_size = (target_chunk_memory_mb * 1024) / average_row_size_kb
+```
+
+**Пример:** Целевая память 50MB, средний размер строки 5KB:
+```python
+chunk_size = (50 * 1024) / 5 = 10240 строк
+```
+
+### Рекомендации по типам таблиц
+
+| Тип таблицы | Размер строки | chunk_size |
+|-------------|---------------|------------|
+| **Wide JSONB** (много JSON колонок) | 50-100KB | 500-1000 |
+| **Standard OLTP** (обычная структура) | 2-10KB | 2048-4096 |
+| **Narrow logs** (узкие записи) | 0.5-2KB | 8192-16384 |
+
+### Конфигурация
+
+```json
+{
+  "name": "orders-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "snapshot.mode": "never",
+    "incremental.snapshot.chunk.size": "2048",
+    "signal.data.collection": "public.debezium_signal",
+    "signal.enabled.channels": "source"
+  }
+}
+```
+
+### Измерение размера строки
+
+```sql
+-- Средний размер строки в таблице
+SELECT
+    pg_size_pretty(pg_total_relation_size('public.orders') / COUNT(*)) AS avg_row_size
+FROM public.orders;
+
+-- Более точный расчет по pg_stats
+SELECT
+    SUM(avg_width) AS estimated_row_bytes
+FROM pg_stats
+WHERE tablename = 'orders' AND schemaname = 'public';
+```
+
+## Критические предупреждения
+
+### АНТИ-ПАТТЕРН: snapshot.mode=always
+
+```json
+// НЕ ДЕЛАЙТЕ ТАК В PRODUCTION!
+{
+  "snapshot.mode": "always"
+}
+```
+
+**Проблемы:**
+- При каждом рестарте коннектора полный снэпшот
+- Блокировка streaming на время снэпшота
+- Дублирование всех данных в Kafka
+- Взрывной рост WAL retention
+
+**Когда допустимо:** Только для разработки и тестирования.
+
+### Schema changes во время incremental snapshot
+
+Debezium **не поддерживает** изменения схемы во время incremental snapshot:
+
+```sql
+-- Это вызовет ошибку во время snapshot!
+ALTER TABLE orders ADD COLUMN new_field TEXT;
+```
+
+**Решение:** Координируйте maintenance windows:
+1. Остановите snapshot через signaling table
+2. Примените schema changes
+3. Перезапустите snapshot
+
+## Что мы узнали
+
+1. **Снэпшот необходим** для захвата существующих данных при первом запуске
+2. **Traditional snapshot** блокирует streaming и не возобновляем
+3. **Incremental snapshots** работают параллельно со streaming и возобновляемы
+4. **Режим выбирается** по размеру таблицы и требованиям к downtime
+5. **Chunk size** рассчитывается по формуле на основе размера строки
+6. **snapshot.mode=always** — анти-паттерн для production
+
+## Что дальше?
+
+В следующем уроке мы выполним практическую работу: создадим signaling table, запустим incremental snapshot для большой таблицы и напишем Python consumer для мониторинга процесса снэпшота.
