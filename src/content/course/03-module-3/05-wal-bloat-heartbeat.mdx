@@ -1,0 +1,534 @@
+---
+title: "WAL Bloat и Heartbeat"
+description: "Предотвращение WAL bloat через многослойную защиту: max_slot_wal_keep_size, heartbeat, мониторинг и операционные runbooks"
+order: 5
+difficulty: "intermediate"
+estimatedTime: 30
+topics: ["wal-management", "heartbeat", "replication-slots", "production"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# WAL Bloat и Heartbeat
+
+WAL bloat - это одна из **самых частых production-проблем** при работе с Debezium и PostgreSQL. Когда replication slot не продвигается, WAL накапливается бесконечно, заполняя диск и приводя базу данных в read-only режим.
+
+> **Critical:** Без правильной защиты abandoned slot может заполнить диск за дни или даже часы на высоконагруженных системах. Это не теоретическая угроза - это происходит регулярно в production.
+
+## Проблема WAL Bloat
+
+В [уроке о replication slots](/course/02-module-2/02-replication-slots-lifecycle) мы изучили, как slots удерживают WAL. Теперь рассмотрим, почему это становится проблемой.
+
+### Сценарий: Low-Traffic Table
+
+<Mermaid chart={`
+sequenceDiagram
+    participant Orders as orders table
+    participant Slot as Replication Slot
+    participant WAL as WAL Segments
+    participant Disk as Disk Space
+
+    Note over Orders: Активная таблица - 1000 записей/час
+    Orders->>Slot: CDC события
+    Slot->>Slot: restart_lsn продвигается
+    WAL->>WAL: Старые сегменты удаляются
+    Disk->>Disk: Стабильно 1GB
+
+    Note over Orders: ---
+    Note over Orders: Low-traffic таблица - 1 запись/день
+
+    rect rgb(127, 29, 29)
+        Note over Orders,Disk: ПРОБЛЕМА: Slot не продвигается!
+        loop 7 дней
+            Orders->>Orders: Нет изменений
+            Slot->>Slot: restart_lsn НЕ МЕНЯЕТСЯ
+            WAL->>WAL: +500 MB/день накапливается
+        end
+        Disk->>Disk: 3.5 GB consumed
+    end
+
+    Note over Disk: День 14: Disk full!
+`} client:visible />
+
+**Механизм проблемы:**
+
+1. Slot создается при первом запуске Debezium
+2. `restart_lsn` показывает последнюю обработанную позицию
+3. PostgreSQL не удаляет WAL сегменты после этой позиции
+4. Если таблица не меняется - slot не продвигается
+5. WAL накапливается от **всех** транзакций в БД, не только мониторируемых таблиц
+
+### Последствия
+
+| Этап | Симптомы | Влияние |
+|------|----------|---------|
+| Warning | pg_wal занимает более 50% диска | Алерты мониторинга |
+| Critical | Диск заполнен на более 90% | Производительность деградирует |
+| Outage | Диск заполнен на 100% | PostgreSQL переходит в read-only |
+| Recovery | Требуется ручное вмешательство | Downtime, потенциальная потеря данных |
+
+## Многослойная защита от WAL Bloat
+
+Правильная защита требует нескольких уровней. Один слой может отказать - многослойность обеспечивает resilience.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph THREAT["Угроза: WAL Bloat"]
+        direction LR
+        ABANDONED["Abandoned Slot"]
+        LOWTRAFFIC["Low-Traffic Table"]
+        SLOW["Slow Consumer"]
+    end
+
+    subgraph DEFENSE["Многослойная защита"]
+        direction TB
+
+        L1["Layer 1: max_slot_wal_keep_size<br/>PostgreSQL parameter<br/>Жесткий лимит WAL на slot"]
+        L2["Layer 2: Heartbeat<br/>Debezium configuration<br/>Принудительное продвижение slot"]
+        L3["Layer 3: Monitoring<br/>pg_replication_slots<br/>Алерты на lag и wal_status"]
+        L4["Layer 4: Runbooks<br/>Операционные процедуры<br/>Чеклисты реагирования"]
+
+        L1 --> L2 --> L3 --> L4
+    end
+
+    THREAT --> DEFENSE
+
+    L1 -.->|"Invalidates slot<br/>at limit"| PROTECTED["Protected"]
+    L2 -.->|"Advances slot<br/>every 10s"| PROTECTED
+    L3 -.->|"Alert before<br/>critical"| PROTECTED
+    L4 -.->|"Human can<br/>intervene"| PROTECTED
+
+    style L1 fill:#14532d,stroke:#22c55e
+    style L2 fill:#1e3a5f,stroke:#3b82f6
+    style L3 fill:#92400e,stroke:#f59e0b
+    style L4 fill:#581c87,stroke:#a855f7
+    style PROTECTED fill:#10b981
+`} client:visible />
+
+## Layer 1: max_slot_wal_keep_size
+
+Это **обязательный** параметр PostgreSQL для production CDC. Он устанавливает жесткий лимит WAL retention на каждый slot.
+
+```sql
+-- Установка лимита (требует перезапуска или reload)
+ALTER SYSTEM SET max_slot_wal_keep_size = '10GB';
+SELECT pg_reload_conf();
+
+-- Проверка текущего значения
+SHOW max_slot_wal_keep_size;
+```
+
+### Как работает
+
+| WAL Retention | wal_status | Поведение |
+|---------------|------------|-----------|
+| меньше limit | `reserved` | WAL сохраняется, всё нормально |
+| больше limit | `unreserved` | WAL может быть удален |
+| WAL удален | `lost` | Slot инвалидирован, требуется resnapshot |
+
+### Выбор значения
+
+```sql
+-- Рекомендации по размеру
+max_slot_wal_keep_size = '10GB'   -- Небольшие БД (менее 100GB data)
+max_slot_wal_keep_size = '50GB'   -- Средние БД (100GB-1TB)
+max_slot_wal_keep_size = '100GB'  -- Большие БД (более 1TB)
+```
+
+**Формула расчета:**
+
+```
+Recommended limit =
+    (WAL generation rate per hour) x
+    (Maximum acceptable connector downtime in hours) x
+    1.5 (safety margin)
+
+Example:
+    50 MB/hour x 24 hours x 1.5 = 1.8 GB
+    -> Set to 5GB for safety margin
+```
+
+> **Компромисс:** Слишком маленький лимит - slot инвалидируется при кратких проблемах (придется делать полный resnapshot). Слишком большой - не защитит от disk exhaustion.
+
+### Aurora PostgreSQL
+
+Для Aurora используйте DB Cluster Parameter Group:
+
+```
+Parameter: rds.logical_replication
+Value: 1
+
+Parameter: max_slot_wal_keep_size
+Value: 10737418240 (в байтах = 10GB)
+```
+
+## Layer 2: Heartbeat Configuration
+
+Heartbeat заставляет slot продвигаться даже когда мониторируемые таблицы не меняются.
+
+<Mermaid chart={`
+flowchart LR
+    subgraph DEBEZIUM["Debezium Connector"]
+        HB["Heartbeat Timer<br/>каждые 10 сек"]
+    end
+
+    subgraph PG["PostgreSQL"]
+        FUNC["pg_logical_emit_message()"]
+        WAL["WAL"]
+        SLOT["Replication Slot<br/>restart_lsn"]
+    end
+
+    subgraph KAFKA["Kafka"]
+        HBT["__debezium-heartbeat.prefix"]
+    end
+
+    HB -->|"SELECT pg_logical_emit_message(...)"| FUNC
+    FUNC -->|"Записывает<br/>logical message"| WAL
+    WAL -->|"Debezium читает<br/>heartbeat event"| SLOT
+    SLOT -->|"restart_lsn<br/>ПРОДВИГАЕТСЯ"| SLOT
+    HB -->|"Heartbeat event"| HBT
+
+    style HB fill:#f59e0b
+    style SLOT fill:#14532d,stroke:#22c55e
+`} client:visible />
+
+### pg_logical_emit_message() vs Heartbeat Table
+
+PostgreSQL 14+ предоставляет функцию `pg_logical_emit_message()` - это **рекомендуемый** подход.
+
+| Подход | pg_logical_emit_message() | Heartbeat Table |
+|--------|---------------------------|-----------------|
+| PostgreSQL версия | 14+ | Любая |
+| Требует таблицу | Нет | Да |
+| Нагрузка на БД | Минимальная | UPDATE каждые N секунд |
+| Блокировки | Нет | Возможны на таблице |
+| Настройка | Одна строка конфига | Создать таблицу + права |
+
+### Конфигурация с pg_logical_emit_message (рекомендуется)
+
+```json
+{
+  "name": "inventory-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "debezium_user",
+    "database.password": "secret",
+    "database.dbname": "inventory",
+    "topic.prefix": "inventory",
+    "table.include.list": "public.orders,public.customers",
+    "plugin.name": "pgoutput",
+
+    "heartbeat.interval.ms": "10000",
+    "heartbeat.action.query": "SELECT pg_logical_emit_message(false, 'heartbeat', now()::varchar)"
+  }
+}
+```
+
+**Параметры heartbeat:**
+
+| Параметр | Значение | Описание |
+|----------|----------|----------|
+| `heartbeat.interval.ms` | `10000` | Интервал между heartbeat (10 сек) |
+| `heartbeat.action.query` | SQL запрос | Выполняется для продвижения slot |
+| `heartbeat.topics.prefix` | `__debezium-heartbeat` | Kafka topic для heartbeat events |
+
+> **10 секунд** - это рекомендуемое значение, оптимизированное для Aurora failover detection. Меньший интервал создает лишнюю нагрузку, больший - увеличивает время обнаружения проблем.
+
+### Конфигурация с heartbeat table (PostgreSQL 13 и ниже)
+
+```sql
+-- Создание heartbeat таблицы
+CREATE TABLE IF NOT EXISTS public.heartbeat (
+    id INTEGER PRIMARY KEY,
+    ts TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Начальная запись
+INSERT INTO public.heartbeat (id, ts)
+VALUES (1, NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- Права для Debezium user
+GRANT SELECT, UPDATE ON public.heartbeat TO debezium_user;
+```
+
+```json
+{
+  "heartbeat.interval.ms": "10000",
+  "heartbeat.action.query": "UPDATE public.heartbeat SET ts = NOW() WHERE id = 1",
+  "table.include.list": "public.orders,public.customers,public.heartbeat"
+}
+```
+
+## Layer 3: Мониторинг Slot Health
+
+### Comprehensive Monitoring Query
+
+```sql
+-- Полный мониторинг replication slots
+SELECT
+    slot_name,
+    plugin,
+    database,
+    active,
+    restart_lsn,
+    confirmed_flush_lsn,
+    -- WAL retention metrics
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS retained_wal,
+    pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS retained_bytes,
+    -- Slot health status (PostgreSQL 14+)
+    wal_status,
+    safe_wal_size,
+    -- Health assessment
+    CASE
+        WHEN NOT active AND pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) > 1073741824
+        THEN 'CRITICAL: Inactive slot retaining more than 1GB'
+        WHEN wal_status = 'lost'
+        THEN 'CRITICAL: Slot invalidated'
+        WHEN wal_status != 'reserved'
+        THEN 'WARNING: WAL status degraded'
+        WHEN NOT active
+        THEN 'WARNING: Inactive slot'
+        ELSE 'OK'
+    END AS health_status
+FROM pg_replication_slots
+WHERE slot_type = 'logical'
+ORDER BY retained_bytes DESC NULLS LAST;
+```
+
+### Alert Thresholds
+
+```yaml
+# Grafana alert rules
+- name: Replication Slot WAL Retention
+  condition: retained_bytes more than 1073741824  # 1 GB
+  for: 5m
+  severity: warning
+  annotations:
+    summary: "Slot retaining more than 1GB WAL"
+
+- name: Replication Slot WAL Critical
+  condition: retained_bytes more than 5368709120  # 5 GB
+  for: 10m
+  severity: critical
+  annotations:
+    summary: "URGENT: Slot retaining more than 5GB WAL"
+
+- name: Slot Invalidated
+  condition: wal_status == 'lost'
+  for: 1m
+  severity: critical
+  annotations:
+    summary: "Slot invalidated - requires resnapshot"
+```
+
+### wal_status Values
+
+| Значение | Описание | Действие |
+|----------|----------|----------|
+| `reserved` | WAL зарезервирован, всё в порядке | Мониторить размер |
+| `extended` | WAL превысил max_wal_size, но slot держит | Следить внимательно |
+| `unreserved` | WAL может быть удален в любой момент | Немедленная проверка коннектора |
+| `lost` | WAL уже удален, slot невосстановим | Требуется полный resnapshot |
+
+## Layer 4: Operational Runbooks
+
+### Runbook: Обнаружен High WAL Retention
+
+**Триггер:** Alert "Slot retaining more than 1GB WAL"
+
+**Шаги:**
+
+1. **Проверить статус коннектора:**
+```bash
+curl -s http://localhost:8083/connectors/inventory-connector/status | jq '.connector.state, .tasks[0].state'
+```
+
+2. **Если RUNNING но lag растет:**
+```bash
+# Проверить логи на ошибки
+docker logs connect 2>&1 | tail -100 | grep -i error
+```
+
+3. **Если FAILED:**
+```bash
+# Перезапустить task
+curl -X POST http://localhost:8083/connectors/inventory-connector/tasks/0/restart
+```
+
+4. **Если коннектор не существует:**
+```bash
+# Проверить список коннекторов
+curl -s http://localhost:8083/connectors | jq
+# Если slot orphaned - эскалировать к владельцу
+```
+
+### Runbook: Slot Invalidated (wal_status = 'lost')
+
+**Триггер:** Alert "Slot invalidated"
+
+**Это означает:** WAL, необходимый для slot, был удален. Продолжение CDC невозможно без действий.
+
+**Шаги:**
+
+1. **Остановить коннектор:**
+```bash
+curl -X PUT http://localhost:8083/connectors/inventory-connector/pause
+```
+
+2. **Удалить orphaned slot:**
+```sql
+SELECT pg_drop_replication_slot('debezium_inventory');
+```
+
+3. **Перезапустить коннектор (выполнит initial snapshot):**
+```bash
+curl -X PUT http://localhost:8083/connectors/inventory-connector/resume
+```
+
+4. **Мониторить snapshot progress:**
+```bash
+# Проверять пока SnapshotCompleted = true
+curl -s http://localhost:8083/connectors/inventory-connector/status | jq
+```
+
+5. **Post-mortem:** Почему slot остался без присмотра?
+
+### Runbook: Подозрение на Abandoned Slot
+
+**Триггер:** Inactive slot с растущим lag
+
+```sql
+-- Найти подозрительные slots
+SELECT
+    slot_name,
+    active,
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS retained_wal
+FROM pg_replication_slots
+WHERE slot_type = 'logical'
+  AND active = false
+  AND pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) > 104857600; -- more than 100 MB
+```
+
+**Шаги:**
+
+1. **НЕ удалять сразу!** Slot может принадлежать временно остановленному коннектору
+
+2. **Найти владельца:**
+```bash
+# Есть ли коннектор с таким slot_name?
+curl -s http://localhost:8083/connectors | jq
+```
+
+3. **Если коннектор существует и PAUSED:**
+   - Связаться с командой-владельцем
+   - Выяснить причину паузы и ETA восстановления
+
+4. **Если коннектор не существует:**
+   - Подтвердить с командой, что коннектор удален навсегда
+   - Документировать решение
+   - Удалить slot: `SELECT pg_drop_replication_slot('slot_name');`
+
+## Lab: Configure Heartbeat and Verify Slot Advancement
+
+### Цель
+
+Настроить heartbeat и убедиться, что slot продвигается даже при отсутствии изменений в мониторируемых таблицах.
+
+### Предварительные требования
+
+- Запущенный lab environment (docker-compose up -d)
+- Коннектор inventory-connector развернут
+
+### Шаги
+
+**1. Проверить текущую позицию slot:**
+
+```bash
+docker exec -it postgres psql -U postgres -d inventory -c "
+SELECT
+    slot_name,
+    restart_lsn,
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS lag
+FROM pg_replication_slots
+WHERE slot_name LIKE 'debezium%';
+"
+```
+
+**2. Обновить коннектор с heartbeat:**
+
+```bash
+curl -X PUT http://localhost:8083/connectors/inventory-connector/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "postgres",
+    "database.dbname": "inventory",
+    "topic.prefix": "inventory",
+    "table.include.list": "public.orders,public.customers",
+    "plugin.name": "pgoutput",
+    "heartbeat.interval.ms": "10000",
+    "heartbeat.action.query": "SELECT pg_logical_emit_message(false, '\''heartbeat'\'', now()::varchar)"
+  }'
+```
+
+**3. Подождать 30 секунд (3 heartbeat cycles):**
+
+```bash
+sleep 30
+```
+
+**4. Проверить, что slot продвинулся:**
+
+```bash
+docker exec -it postgres psql -U postgres -d inventory -c "
+SELECT
+    slot_name,
+    restart_lsn,
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS lag
+FROM pg_replication_slots
+WHERE slot_name LIKE 'debezium%';
+"
+```
+
+**5. Проверить heartbeat events в Kafka:**
+
+```bash
+docker exec -it kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic __debezium-heartbeat.inventory \
+  --from-beginning \
+  --max-messages 3 \
+  --property print.timestamp=true
+```
+
+### Ожидаемый результат
+
+- `restart_lsn` должен обновиться (сравнить со Шагом 1)
+- `lag` должен быть минимальным (менее 1 MB)
+- В Kafka topic видны heartbeat events каждые 10 секунд
+
+## Ключевые выводы
+
+1. **WAL bloat - реальная угроза:** Без защиты slot заполнит диск, вызвав database outage
+
+2. **Многослойная защита обязательна:**
+   - Layer 1: `max_slot_wal_keep_size` (жесткий лимит)
+   - Layer 2: Heartbeat (активное продвижение)
+   - Layer 3: Мониторинг (раннее обнаружение)
+   - Layer 4: Runbooks (готовность к реагированию)
+
+3. **pg_logical_emit_message()** - рекомендуемый подход для PostgreSQL 14+
+
+4. **Heartbeat каждые 10 секунд** - оптимально для production
+
+5. **Abandoned slot - не просто inactive:** active=false может означать временную паузу, всегда проверяйте владельца
+
+6. **wal_status='lost'** означает point of no return - требуется полный resnapshot
+
+> **Production Insight:** Настройте мониторинг WAL retention ДО первого инцидента. Большинство production outages от WAL bloat происходят потому, что команда узнала о проблеме только когда диск заполнился.
