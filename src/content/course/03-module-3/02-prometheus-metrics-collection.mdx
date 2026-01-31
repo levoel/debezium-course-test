@@ -1,0 +1,470 @@
+---
+title: "Prometheus: Сбор метрик Debezium"
+description: "JMX Exporter конфигурация, Prometheus scraping, PromQL запросы для Debezium мониторинга"
+order: 2
+difficulty: "intermediate"
+estimatedTime: 25
+topics: ["prometheus", "jmx-exporter", "promql", "metrics-collection"]
+prerequisites: ["module-3/01-jmx-metrics-interpretation"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Prometheus: Сбор метрик Debezium
+
+В предыдущем уроке мы изучили, какие JMX метрики экспортирует Debezium. Теперь научимся **собирать эти метрики в Prometheus** — систему мониторинга, которая хранит time series данные и позволяет создавать алерты.
+
+## Архитектура сбора метрик
+
+Prometheus использует **pull-модель**: он периодически запрашивает метрики с целевых endpoints.
+
+<Mermaid chart={`
+flowchart LR
+    subgraph CONNECT["Kafka Connect Container"]
+        JVM["Debezium JVM"]
+        JMX["JMX MBeans"]
+        EXPORTER["JMX Exporter<br/>Agent на :9404"]
+        JVM --> JMX
+        JMX --> EXPORTER
+    end
+
+    subgraph PROM["Prometheus Container"]
+        SCRAPER["Scraper<br/>каждые 15s"]
+        TSDB["Time Series DB"]
+        SCRAPER --> TSDB
+    end
+
+    EXPORTER -->|"GET /metrics"| SCRAPER
+
+    subgraph CLIENTS["Потребители"]
+        GRAFANA["Grafana<br/>Dashboards"]
+        ALERTMGR["Alertmanager<br/>Notifications"]
+    end
+
+    TSDB --> GRAFANA
+    TSDB --> ALERTMGR
+
+    style EXPORTER fill:#f59e0b
+    style SCRAPER fill:#e11d48
+    style TSDB fill:#8b5cf6
+`} client:visible />
+
+**Компоненты:**
+
+1. **JMX Exporter** — Java agent, встроенный в Debezium Connect образ
+2. **Prometheus** — скрапит `/metrics` endpoint, хранит time series
+3. **Grafana** — визуализация и alerting
+4. **Alertmanager** — маршрутизация уведомлений (опционально)
+
+## JMX Exporter: Преобразование JMX в Prometheus формат
+
+JMX Exporter — это Java agent, который читает JMX MBeans и экспортирует их в формате Prometheus.
+
+### Как JMX Exporter запускается в Debezium Connect
+
+В нашем lab-окружении JMX Exporter уже настроен в `docker-compose.yml`:
+
+```yaml
+# labs/docker-compose.yml (фрагмент)
+connect:
+  image: quay.io/debezium/connect:2.5.4
+  ports:
+    - "8083:8083"    # Kafka Connect REST API
+    - "9404:9404"    # JMX Exporter HTTP endpoint
+  environment:
+    JMXHOST: "0.0.0.0"
+    JMXPORT: 9404
+    JMXAUTH: "false"
+    JMXSSL: "false"
+```
+
+**Ключевые переменные:**
+- `JMXPORT=9404` — порт, на котором JMX Exporter слушает HTTP запросы
+- `JMXHOST=0.0.0.0` — принимать соединения со всех интерфейсов
+- `JMXAUTH=false` — без аутентификации (для lab; в production включите!)
+
+### Конфигурация JMX Exporter
+
+JMX Exporter использует YAML конфигурацию для определения, какие JMX бины экспортировать и как их называть в Prometheus.
+
+**Типичная конфигурация для Debezium:**
+
+```yaml
+# jmx-exporter-config.yml
+startDelaySeconds: 0
+ssl: false
+lowercaseOutputName: false
+lowercaseOutputLabelNames: false
+
+rules:
+  # Kafka Connect Worker metrics
+  - pattern: "kafka.connect<type=connect-worker-metrics>([^:]+):"
+    name: "kafka_connect_worker_$1"
+
+  # Kafka Connect Source Task metrics
+  - pattern: "kafka.connect<type=source-task-metrics, connector=([^,]+), task=([^>]+)><>([^:]+)"
+    name: "kafka_connect_source_task_$3"
+    labels:
+      connector: "$1"
+      task: "$2"
+
+  # Debezium Streaming metrics
+  - pattern: "debezium.([^:]+)<type=connector-metrics, context=([^,]+), server=([^>]+)><>([^:]+)"
+    name: "debezium_metrics_$4"
+    labels:
+      plugin: "$1"
+      context: "$2"
+      server: "$3"
+
+  # Debezium per-table metrics (Debezium 3.0+)
+  - pattern: "debezium.([^:]+)<type=connector-metrics, context=([^,]+), server=([^,]+), table=([^>]+)><>([^:]+)"
+    name: "debezium_metrics_$5"
+    labels:
+      plugin: "$1"
+      context: "$2"
+      server: "$3"
+      table: "$4"
+```
+
+**Как работают правила:**
+1. `pattern` — regex для JMX ObjectName
+2. `name` — имя метрики в Prometheus
+3. `labels` — извлечение labels из ObjectName
+
+> **Debezium Connect образ** уже включает JMX Exporter с базовой конфигурацией. Для большинства случаев дополнительная настройка не требуется.
+
+## Prometheus: Конфигурация scraping
+
+Prometheus нужно сообщить, откуда собирать метрики. Это делается в `prometheus.yml`.
+
+### Наша lab-конфигурация
+
+```yaml
+# labs/monitoring/prometheus.yml
+global:
+  scrape_interval: 15s      # Интервал сбора метрик
+  evaluation_interval: 15s  # Интервал оценки alerting rules
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Kafka Connect JMX metrics (Debezium connectors)
+  - job_name: 'kafka-connect'
+    static_configs:
+      - targets: ['connect:9404']  # Docker service name
+    metric_relabel_configs:
+      # Keep only Kafka Connect and Debezium metrics
+      - source_labels: [__name__]
+        regex: 'kafka_connect_.*|debezium_.*'
+        action: keep
+```
+
+### Разбор конфигурации
+
+**global.scrape_interval: 15s**
+
+Prometheus запрашивает метрики каждые 15 секунд. Это баланс между:
+- Свежестью данных (меньше интервал = актуальнее данные)
+- Нагрузкой на Connect (больше запросов = больше overhead)
+
+> **Почему 15 секунд?** Для CDC мониторинга это оптимальный баланс. Lag в несколько секунд обычно приемлем, а редкие сборы снижают нагрузку. Для критичных систем можно уменьшить до 5s.
+
+**job_name: 'kafka-connect'**
+
+Логическое имя для группы targets. Все метрики от этого job будут иметь label `job="kafka-connect"`.
+
+**targets: ['connect:9404']**
+
+Адрес JMX Exporter endpoint. `connect` — это имя Docker сервиса, внутри Docker network разрешается в IP контейнера.
+
+**metric_relabel_configs**
+
+Фильтрация метрик ПОСЛЕ сбора (отличается от `relabel_configs`, который работает ДО):
+- `source_labels: [__name__]` — применять к имени метрики
+- `regex: 'kafka_connect_.*|debezium_.*'` — оставить только matching
+- `action: keep` — сохранить, остальные отбросить
+
+Это снижает cardinality и хранение — JMX Exporter экспортирует много JVM метрик, которые нам не нужны.
+
+## Проверка работы scraping
+
+### Шаг 1: Проверить Prometheus targets
+
+1. Откройте http://localhost:9090
+2. Перейдите в **Status → Targets**
+3. Найдите job `kafka-connect`
+
+Ожидаемый результат:
+
+| Endpoint | State | Labels |
+|----------|-------|--------|
+| connect:9404 | **UP** | job="kafka-connect" |
+
+Если статус **DOWN** — проверьте:
+- Запущен ли Debezium Connect? (`docker ps | grep connect`)
+- Доступен ли порт? (`curl http://localhost:9404/metrics`)
+- Правильный ли hostname в конфигурации?
+
+### Шаг 2: Посмотреть raw метрики
+
+В Prometheus UI выполните запрос:
+
+```
+{job="kafka-connect"}
+```
+
+Это покажет ВСЕ метрики от этого job. Для Debezium-специфичных:
+
+```
+{__name__=~"debezium_.*"}
+```
+
+## PromQL: Язык запросов Prometheus
+
+PromQL (Prometheus Query Language) — мощный язык для анализа time series данных.
+
+### Базовый синтаксис
+
+**Селектор метрики:**
+```promql
+debezium_metrics_MilliSecondsBehindSource
+```
+
+**С фильтрацией по labels:**
+```promql
+debezium_metrics_MilliSecondsBehindSource{connector="inventory-connector"}
+```
+
+**Несколько labels:**
+```promql
+debezium_metrics_MilliSecondsBehindSource{connector="inventory-connector", context="streaming"}
+```
+
+### Ключевые PromQL запросы для Debezium
+
+#### 1. Текущий lag (отставание)
+
+```promql
+debezium_metrics_MilliSecondsBehindSource{connector="inventory-connector"}
+```
+
+Возвращает текущее значение lag в миллисекундах.
+
+#### 2. Utilization очереди (%)
+
+```promql
+100 * (1 - (
+  debezium_metrics_QueueRemainingCapacity /
+  debezium_metrics_QueueTotalCapacity
+))
+```
+
+Формула: `(Total - Remaining) / Total * 100`
+
+При 0% — очередь пуста, при 100% — переполнена.
+
+#### 3. События в секунду (throughput)
+
+```promql
+rate(debezium_metrics_TotalNumberOfEventsSeen[5m])
+```
+
+`rate()` вычисляет среднюю скорость изменения counter за указанный период (5 минут).
+
+#### 4. Обнаружение stale коннектора
+
+```promql
+debezium_metrics_MilliSecondsSinceLastEvent > 30000
+```
+
+Возвращает 1 если коннектор не получал события более 30 секунд.
+
+#### 5. Проверка соединения
+
+```promql
+debezium_metrics_Connected == 0
+```
+
+Возвращает 1 если коннектор отключен от БД.
+
+#### 6. Агрегация по всем коннекторам
+
+```promql
+max(debezium_metrics_MilliSecondsBehindSource) by (connector)
+```
+
+Максимальный lag для каждого коннектора.
+
+### PromQL функции для мониторинга
+
+| Функция | Назначение | Пример |
+|---------|------------|--------|
+| `rate()` | Скорость изменения counter | `rate(events[5m])` |
+| `increase()` | Прирост counter за период | `increase(events[1h])` |
+| `avg_over_time()` | Среднее за период | `avg_over_time(lag[5m])` |
+| `max_over_time()` | Максимум за период | `max_over_time(lag[1h])` |
+| `changes()` | Количество изменений | `changes(connected[5m])` |
+| `absent()` | Отсутствие метрики | `absent(lag{conn="x"})` |
+
+### Пример: Dashboard query для lag
+
+```promql
+# Текущий lag с moving average
+avg_over_time(
+  debezium_metrics_MilliSecondsBehindSource{connector="inventory-connector"}[2m]
+)
+```
+
+Это сглаживает краткосрочные всплески, показывая тренд.
+
+## Naming conventions: kafka_connect_* vs debezium_*
+
+В Prometheus вы увидите два типа метрик:
+
+**kafka_connect_* — метрики Kafka Connect framework:**
+- `kafka_connect_worker_connector_count` — количество коннекторов
+- `kafka_connect_source_task_poll_batch_avg_time_ms` — среднее время poll
+
+**debezium_* — метрики Debezium connector:**
+- `debezium_metrics_MilliSecondsBehindSource` — lag
+- `debezium_metrics_TotalNumberOfEventsSeen` — events
+
+Для мониторинга CDC health используйте `debezium_*` метрики.
+
+## Cardinality management
+
+**Cardinality** — количество уникальных time series. Высокая cardinality увеличивает потребление памяти и замедляет запросы.
+
+### Источники высокой cardinality
+
+1. **Per-table metrics** (Debezium 3.0+):
+   - Каждая таблица = отдельная time series
+   - 100 таблиц × 10 метрик = 1000 series
+
+2. **Transaction IDs в labels**:
+   - Если transaction_id становится label — series растут бесконечно
+
+3. **High-cardinality topic names**:
+   - Динамические topic names = много series
+
+### Mitigation strategies
+
+**1. Фильтрация в Prometheus:**
+```yaml
+metric_relabel_configs:
+  # Удалить per-table metrics если не нужны
+  - source_labels: [table]
+    regex: '.+'
+    action: drop
+```
+
+**2. Aggregation в Grafana:**
+```promql
+# Вместо per-table, агрегируйте
+sum(debezium_metrics_TotalNumberOfEventsSeen) by (connector)
+```
+
+**3. Ограничение таблиц в Debezium:**
+```json
+{
+  "table.include.list": "public.orders,public.customers"
+}
+```
+
+## Lab: Исследование метрик в Prometheus UI
+
+Выполните эти упражнения в вашем lab-окружении.
+
+### Подготовка
+
+```bash
+cd labs
+docker-compose up -d
+
+# Убедитесь, что Connect готов
+curl http://localhost:8083/connectors
+```
+
+### Упражнение 1: Просмотр всех доступных метрик
+
+1. Откройте http://localhost:9090
+2. Введите запрос:
+   ```
+   {__name__=~"debezium_.*"}
+   ```
+3. Изучите доступные метрики
+
+### Упражнение 2: Мониторинг lag
+
+1. Запрос текущего lag:
+   ```promql
+   debezium_metrics_MilliSecondsBehindSource
+   ```
+2. Переключитесь на вкладку **Graph**
+3. Установите range: 5 минут
+4. Наблюдайте изменения lag
+
+### Упражнение 3: Расчет queue utilization
+
+1. Введите:
+   ```promql
+   100 * (1 - debezium_metrics_QueueRemainingCapacity / debezium_metrics_QueueTotalCapacity)
+   ```
+2. Если коннектор idle — результат будет 0%
+3. Создайте нагрузку в PostgreSQL и наблюдайте изменения
+
+### Упражнение 4: Throughput rate
+
+1. Запрос:
+   ```promql
+   rate(debezium_metrics_TotalNumberOfEventsSeen[1m])
+   ```
+2. Выполните INSERT в PostgreSQL:
+   ```sql
+   INSERT INTO customers (name, email)
+   SELECT 'User ' || i, 'user' || i || '@test.com'
+   FROM generate_series(1, 100) AS i;
+   ```
+3. Наблюдайте всплеск в rate
+
+## Важные нюансы Prometheus для Debezium
+
+### Scrape interval vs метрика freshness
+
+Если `scrape_interval=15s`, а lag меняется каждую секунду — вы видите snapshot каждые 15 секунд. Для alerting это обычно достаточно.
+
+### Метрики отсутствуют, если коннектор не запущен
+
+Prometheus возвращает пустой результат для несуществующих метрик. Используйте `absent()` для обнаружения:
+
+```promql
+absent(debezium_metrics_Connected{connector="inventory-connector"})
+```
+
+Возвращает 1 если метрика отсутствует (коннектор не запущен).
+
+### Prometheus не хранит данные вечно
+
+По умолчанию retention = 15 дней. Для долгосрочного анализа:
+- Увеличьте retention в Prometheus
+- Используйте remote write в long-term storage (Thanos, Cortex)
+
+## Что дальше?
+
+Теперь вы умеете собирать метрики Debezium в Prometheus и писать PromQL запросы. Следующий шаг — **визуализация в Grafana** и настройка production-ready dashboards.
+
+В следующем уроке мы создадим Grafana dashboard с ключевыми метриками CDC и настроим alerting rules.
+
+## Ключевые выводы
+
+1. **JMX Exporter** преобразует JMX MBeans в Prometheus формат на порту 9404
+2. **Prometheus scrape_interval 15s** — оптимальный баланс для CDC мониторинга
+3. **metric_relabel_configs** фильтрует метрики, снижая cardinality
+4. **PromQL rate()** вычисляет скорость изменения counters
+5. `debezium_metrics_*` — основные метрики для CDC health
+6. **absent()** обнаруживает отсутствие метрик (коннектор не запущен)
+7. Фильтрация по labels: `{connector="name", context="streaming"}`
+8. Наш lab использует `connect:9404` как target (Docker service name)
