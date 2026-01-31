@@ -1,0 +1,309 @@
+---
+title: "Настройка Aurora PostgreSQL для CDC"
+description: "Конфигурация DB Cluster Parameter Group, rds.logical_replication, и обязательный reboot для включения логической репликации в Aurora"
+order: 4
+difficulty: "intermediate"
+estimatedTime: 25
+topics: ["aurora", "aws", "parameter-groups", "rds-logical-replication"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Настройка Aurora PostgreSQL для CDC
+
+## Aurora PostgreSQL vs стандартный PostgreSQL
+
+Amazon Aurora PostgreSQL — это облачная версия PostgreSQL, оптимизированная для AWS. Для настройки CDC в Aurora есть несколько **критических отличий** от стандартного PostgreSQL:
+
+| Аспект | PostgreSQL | Aurora PostgreSQL |
+|--------|------------|-------------------|
+| **Конфигурация WAL** | `postgresql.conf` | DB Cluster Parameter Group |
+| **Включение логической репликации** | `wal_level = logical` | `rds.logical_replication = 1` |
+| **Применение изменений** | Перезапуск сервиса | **Reboot инстанса (обязательно!)** |
+| **Права доступа** | Superuser | `rds_superuser` role |
+| **Плагин вывода** | Любой (pgoutput, wal2json) | pgoutput (wal2json предустановлен) |
+
+> **Ключевое отличие:** В Aurora нельзя напрямую редактировать конфигурационные файлы. Все параметры настраиваются через **Parameter Groups** в AWS Console или CLI.
+
+## DB Cluster Parameter Group vs DB Instance Parameter Group
+
+В Aurora существует два типа parameter groups. Для логической репликации **критически важно** использовать правильный тип:
+
+<Mermaid chart={`
+flowchart TB
+    subgraph CLUSTER["DB Cluster Parameter Group"]
+        direction TB
+        P1["rds.logical_replication"]
+        P2["max_replication_slots"]
+        P3["max_wal_senders"]
+        P4["max_logical_replication_workers"]
+    end
+
+    subgraph INSTANCE["DB Instance Parameter Group"]
+        direction TB
+        P5["shared_buffers"]
+        P6["work_mem"]
+        P7["maintenance_work_mem"]
+    end
+
+    CLUSTER -->|"Применяется ко ВСЕМУ кластеру"| WRITER[Writer Instance]
+    CLUSTER --> READER1[Reader Instance 1]
+    CLUSTER --> READER2[Reader Instance 2]
+
+    INSTANCE -->|"Применяется к конкретному инстансу"| WRITER
+
+    style CLUSTER fill:#14532d,stroke:#22c55e,stroke-width:3px
+    style INSTANCE fill:#1e3a5f,stroke:#3b82f6
+    style WRITER fill:#f59e0b
+    style READER1 fill:#6366f1
+    style READER2 fill:#6366f1
+`} client:visible />
+
+> **Warning:** `rds.logical_replication` доступен **только** в DB Cluster Parameter Group. Если вы создадите DB Instance Parameter Group и попытаетесь добавить этот параметр — вы его не найдете!
+
+## Процесс настройки Aurora для Debezium
+
+Настройка состоит из пяти этапов. Каждый этап обязателен:
+
+<Mermaid chart={`
+flowchart LR
+    A["1. Создать<br/>Parameter Group"] --> B["2. Изменить<br/>параметры"]
+    B --> C["3. Применить<br/>к кластеру"]
+    C --> D["4. Reboot<br/>Writer Instance"]
+    D --> E["5. Проверить<br/>конфигурацию"]
+
+    style A fill:#3b82f6
+    style B fill:#8b5cf6
+    style C fill:#f59e0b
+    style D fill:#ef4444,stroke:#fff,stroke-width:2px
+    style E fill:#22c55e
+`} client:visible />
+
+### Необходимые параметры
+
+| Параметр | Значение | Описание |
+|----------|----------|----------|
+| `rds.logical_replication` | `1` | Включает логическую репликацию (изменяет wal_level на logical) |
+| `max_replication_slots` | `10` | Максимум слотов репликации (минимум 1 на коннектор) |
+| `max_wal_senders` | `10` | Максимум соединений для чтения WAL |
+| `max_logical_replication_workers` | `10` | Воркеры для логической репликации |
+| `max_worker_processes` | `30` | Должен быть >= сумме всех worker-параметров |
+
+## Настройка через AWS Console
+
+### Шаг 1: Создание Parameter Group
+
+1. Откройте **AWS Console** → **RDS** → **Parameter groups**
+2. Нажмите **Create parameter group**
+3. Заполните форму:
+   - **Parameter group family:** `aurora-postgresql15` (или ваша версия)
+   - **Type:** `DB Cluster Parameter Group` (**не DB Parameter Group!**)
+   - **Group name:** `debezium-logical-replication`
+   - **Description:** `Logical replication for Debezium CDC`
+
+### Шаг 2: Настройка параметров
+
+1. Выберите созданную группу → **Edit**
+2. Найдите и измените параметры:
+
+```
+rds.logical_replication = 1
+max_replication_slots = 10
+max_wal_senders = 10
+max_logical_replication_workers = 10
+max_worker_processes = 30
+```
+
+3. Нажмите **Save changes**
+
+### Шаг 3: Применение к кластеру
+
+1. Перейдите в **RDS** → **Databases**
+2. Выберите ваш Aurora кластер → **Modify**
+3. В секции **Additional configuration**:
+   - **DB cluster parameter group:** выберите `debezium-logical-replication`
+4. **Apply immediately** (для dev/test) или schedule maintenance window
+5. Нажмите **Modify cluster**
+
+### Шаг 4: Reboot Writer Instance
+
+> **CRITICAL:** Изменения параметров **НЕ применяются автоматически**. Без reboot `wal_level` останется `replica`, и Debezium не сможет подключиться!
+
+1. В списке инстансов кластера найдите **Writer**
+2. **Actions** → **Reboot**
+3. Дождитесь статуса **Available** (3-5 минут)
+
+### Шаг 5: Проверка конфигурации
+
+Подключитесь к базе данных и выполните:
+
+```sql
+-- Проверка wal_level (должен быть 'logical')
+SHOW wal_level;
+-- Ожидаемый результат: logical
+
+-- Проверка rds.logical_replication
+SHOW rds.logical_replication;
+-- Ожидаемый результат: on
+
+-- Проверка лимитов
+SHOW max_replication_slots;
+-- Ожидаемый результат: 10 (или ваше значение)
+
+SHOW max_wal_senders;
+-- Ожидаемый результат: 10 (или ваше значение)
+```
+
+Если `wal_level` показывает `replica` — **вы забыли выполнить reboot!**
+
+## Настройка через AWS CLI
+
+Для автоматизации используйте AWS CLI. Это рекомендуемый подход для production и CI/CD:
+
+```bash
+#!/bin/bash
+# Aurora PostgreSQL CDC Setup Script
+
+# Переменные
+CLUSTER_ID="debezium-aurora-cluster"
+PARAM_GROUP_NAME="debezium-logical-replication"
+REGION="us-east-1"
+PG_FAMILY="aurora-postgresql15"
+
+# 1. Создать DB Cluster Parameter Group
+aws rds create-db-cluster-parameter-group \
+    --db-cluster-parameter-group-name $PARAM_GROUP_NAME \
+    --db-parameter-group-family $PG_FAMILY \
+    --description "Logical replication for Debezium CDC" \
+    --region $REGION
+
+echo "Parameter group created: $PARAM_GROUP_NAME"
+
+# 2. Настроить параметры для логической репликации
+aws rds modify-db-cluster-parameter-group \
+    --db-cluster-parameter-group-name $PARAM_GROUP_NAME \
+    --parameters \
+        "ParameterName=rds.logical_replication,ParameterValue=1,ApplyMethod=pending-reboot" \
+        "ParameterName=max_replication_slots,ParameterValue=10,ApplyMethod=pending-reboot" \
+        "ParameterName=max_wal_senders,ParameterValue=10,ApplyMethod=pending-reboot" \
+        "ParameterName=max_logical_replication_workers,ParameterValue=10,ApplyMethod=pending-reboot" \
+    --region $REGION
+
+echo "Parameters configured for logical replication"
+
+# 3. Применить parameter group к кластеру
+aws rds modify-db-cluster \
+    --db-cluster-identifier $CLUSTER_ID \
+    --db-cluster-parameter-group-name $PARAM_GROUP_NAME \
+    --apply-immediately \
+    --region $REGION
+
+echo "Parameter group applied to cluster: $CLUSTER_ID"
+
+# 4. Получить имя Writer Instance
+WRITER_INSTANCE=$(aws rds describe-db-clusters \
+    --db-cluster-identifier $CLUSTER_ID \
+    --region $REGION \
+    --query 'DBClusters[0].DBClusterMembers[?IsClusterWriter==`true`].DBInstanceIdentifier' \
+    --output text)
+
+echo "Writer instance: $WRITER_INSTANCE"
+
+# 5. Reboot Writer Instance (ОБЯЗАТЕЛЬНО!)
+aws rds reboot-db-instance \
+    --db-instance-identifier $WRITER_INSTANCE \
+    --region $REGION
+
+echo "Rebooting writer instance..."
+
+# 6. Дождаться завершения reboot
+aws rds wait db-instance-available \
+    --db-instance-identifier $WRITER_INSTANCE \
+    --region $REGION
+
+echo "Writer instance is available"
+echo "Configuration complete! Verify with: SHOW wal_level;"
+```
+
+## Aurora Serverless: Ограничения
+
+Не все версии Aurora Serverless поддерживают логическую репликацию:
+
+| Версия | Поддержка CDC |
+|--------|---------------|
+| **Aurora Serverless v1** | **НЕ поддерживается** |
+| **Aurora Serverless v2** | Поддерживается |
+| **Aurora Provisioned** | Поддерживается |
+
+> **Warning:** Если вы используете Aurora Serverless v1, миграция на v2 или Provisioned **обязательна** для работы с Debezium.
+
+## Права доступа: rds_superuser
+
+В Aurora PostgreSQL нет роли `superuser`. Вместо нее используется `rds_superuser`:
+
+```sql
+-- Создание пользователя для Debezium
+CREATE USER debezium_user WITH PASSWORD 'secure_password';
+
+-- Назначение rds_superuser (требуется для репликации)
+GRANT rds_superuser TO debezium_user;
+
+-- Или более ограниченный вариант:
+GRANT rds_replication TO debezium_user;
+
+-- Права на чтение таблиц (для всех таблиц в public)
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO debezium_user;
+```
+
+## Troubleshooting
+
+### Проблема: "wal_level must be logical"
+
+**Симптом:** Debezium connector не может подключиться, в логах ошибка:
+```
+wal_level must be logical to use logical replication
+```
+
+**Причина:** Reboot не был выполнен после изменения параметров.
+
+**Решение:**
+1. Проверьте статус в AWS Console — если **pending-reboot**, выполните reboot
+2. После reboot проверьте: `SHOW wal_level;`
+
+### Проблема: Параметр rds.logical_replication не найден
+
+**Симптом:** При поиске параметра в parameter group он отсутствует.
+
+**Причина:** Вы создали **DB Instance Parameter Group** вместо **DB Cluster Parameter Group**.
+
+**Решение:** Создайте новую parameter group с типом **DB Cluster Parameter Group**.
+
+### Проблема: permission denied for replication
+
+**Симптом:** Debezium не может создать replication slot.
+
+**Причина:** Пользователь не имеет прав на репликацию.
+
+**Решение:**
+```sql
+GRANT rds_replication TO your_debezium_user;
+-- или
+GRANT rds_superuser TO your_debezium_user;
+```
+
+## Чеклист настройки Aurora CDC
+
+Используйте этот чеклист для проверки конфигурации:
+
+- [ ] Создан **DB Cluster** Parameter Group (не DB Instance!)
+- [ ] `rds.logical_replication = 1`
+- [ ] `max_replication_slots >= 10`
+- [ ] `max_wal_senders >= 10`
+- [ ] Parameter group применен к кластеру
+- [ ] **Writer instance перезагружен**
+- [ ] `SHOW wal_level;` возвращает `logical`
+- [ ] Пользователь Debezium имеет `rds_superuser` или `rds_replication`
+
+## Что дальше?
+
+После настройки Aurora для логической репликации важно понимать поведение системы при failover. В следующем уроке мы разберем критическую особенность Aurora: **replication slots не синхронизируются при failover**, что может привести к потере данных. Вы узнаете, как настроить heartbeat для детектирования таких ситуаций.
