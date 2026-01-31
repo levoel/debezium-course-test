@@ -1,0 +1,394 @@
+---
+title: "Настройка WAL для CDC"
+description: "Конфигурация wal_level, производительность, измерение baseline, мониторинг WAL для production CDC"
+order: 3
+difficulty: "intermediate"
+estimatedTime: 25
+topics: ["wal-configuration", "performance-tuning", "postgresql-config"]
+prerequisites: ["module-2/02-replication-slots-lifecycle"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Настройка WAL для CDC
+
+Прежде чем включить CDC в production, необходимо правильно настроить PostgreSQL. Неправильная конфигурация может привести к снижению производительности или нехватке дисков. В этом уроке мы изучим ключевые параметры WAL и научимся измерять их влияние.
+
+## wal_level: Иерархия уровней
+
+PostgreSQL поддерживает три уровня детализации WAL. Для CDC требуется `logical`.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph LEVELS["Иерархия wal_level"]
+        direction TB
+        MINIMAL["minimal<br/>Только crash recovery<br/>Минимальный объем WAL"]
+        REPLICA["replica<br/>+ Physical replication<br/>+ Point-in-time recovery"]
+        LOGICAL["logical<br/>+ Logical decoding<br/>+ CDC (Debezium)"]
+
+        MINIMAL --> REPLICA --> LOGICAL
+    end
+
+    MINIMAL -.->|"Недостаточно<br/>для репликации"| X1[" "]
+    REPLICA -.->|"Недостаточно<br/>для CDC"| X2[" "]
+    LOGICAL -.->|"Требуется<br/>для Debezium"| CHECK["Debezium Ready"]
+
+    style MINIMAL fill:#7f1d1d,stroke:#ef4444
+    style REPLICA fill:#1e3a5f,stroke:#3b82f6
+    style LOGICAL fill:#14532d,stroke:#22c55e
+    style CHECK fill:#10b981
+`} client:visible />
+
+| Уровень | Для чего | Объем WAL |
+|---------|----------|-----------|
+| `minimal` | Только crash recovery | Минимальный |
+| `replica` | Physical replication, PITR | +10-20% к minimal |
+| `logical` | Logical replication, CDC | +5-15% к replica |
+
+```sql
+-- Проверить текущий уровень
+SHOW wal_level;
+
+-- Изменить (требует перезапуска!)
+ALTER SYSTEM SET wal_level = 'logical';
+-- Затем: systemctl restart postgresql
+```
+
+> **Изменение wal_level требует перезапуска PostgreSQL.** Планируйте maintenance window.
+
+## Полная конфигурация для CDC
+
+Вот минимальный набор параметров для production CDC:
+
+```ini
+# postgresql.conf
+
+#----------------------
+# WAL Settings for CDC
+#----------------------
+
+# Уровень логирования - обязательно для Debezium
+wal_level = logical
+
+# Количество одновременных replication connections
+# Минимум: количество коннекторов + 2 запаса
+max_wal_senders = 10
+
+# Количество replication slots
+# Минимум: количество коннекторов + 2 запаса
+max_replication_slots = 10
+
+# КРИТИЧЕСКИ ВАЖНО: лимит WAL на slot
+# Защита от disk exhaustion при abandoned slots
+max_slot_wal_keep_size = '10GB'
+
+#----------------------
+# Optional Tuning
+#----------------------
+
+# Размер WAL сегмента (по умолчанию 16MB)
+# Увеличьте для high-throughput систем
+wal_segment_size = '16MB'
+
+# Минимальное время хранения WAL (для PITR)
+wal_keep_size = '1GB'
+```
+
+### Проверка после изменения
+
+```sql
+-- Все параметры должны вернуть корректные значения
+SHOW wal_level;                    -- logical
+SHOW max_wal_senders;              -- >= 10
+SHOW max_replication_slots;        -- >= 10
+SHOW max_slot_wal_keep_size;       -- 10GB или больше
+```
+
+## Влияние на производительность
+
+Включение `wal_level=logical` увеличивает объем WAL. Важно понимать, насколько.
+
+<Mermaid chart={`
+flowchart LR
+    subgraph WORKLOAD["Тип нагрузки"]
+        INSERT["INSERT-heavy<br/>Много вставок"]
+        MIXED["Mixed workload<br/>INSERT + UPDATE"]
+        UPDATE["UPDATE-heavy<br/>Много обновлений"]
+    end
+
+    subgraph IMPACT["Увеличение WAL"]
+        I1["+ 5%"]
+        I2["+ 10%"]
+        I3["+ 15-30%"]
+    end
+
+    INSERT --> I1
+    MIXED --> I2
+    UPDATE --> I3
+
+    style INSERT fill:#14532d,stroke:#22c55e
+    style MIXED fill:#1e3a5f,stroke:#3b82f6
+    style UPDATE fill:#7f1d1d,stroke:#ef4444
+`} client:visible />
+
+### Почему UPDATE дороже INSERT?
+
+При `wal_level=logical`:
+- **INSERT:** логируется только новая строка
+- **UPDATE:** логируется новая строка + ключ для идентификации (REPLICA IDENTITY)
+- **DELETE:** логируется ключ для идентификации
+
+При `REPLICA IDENTITY FULL` ситуация еще хуже:
+- **UPDATE/DELETE:** логируется **полная старая строка**
+
+| Операция | DEFAULT | FULL |
+|----------|---------|------|
+| INSERT | +5% | +5% |
+| UPDATE | +10% | +30-50% |
+| DELETE | +5% | +20-30% |
+
+> **Рекомендация:** Используйте `REPLICA IDENTITY FULL` только для таблиц, где действительно нужна полная история изменений.
+
+## Измерение baseline WAL
+
+Перед включением `wal_level=logical` измерьте текущий WAL volume. Это позволит оценить реальное влияние.
+
+### Шаг 1: Измерение текущего WAL rate
+
+```sql
+-- Запомнить начальную позицию
+SELECT pg_current_wal_lsn() AS start_lsn;
+-- Результат: 0/1A000000
+
+-- Подождать 5 минут (300 секунд)
+
+-- Измерить конечную позицию
+SELECT pg_current_wal_lsn() AS end_lsn;
+-- Результат: 0/1B800000
+
+-- Вычислить rate
+SELECT
+    pg_wal_lsn_diff('0/1B800000', '0/1A000000') AS bytes_5min,
+    pg_wal_lsn_diff('0/1B800000', '0/1A000000') / 300.0 AS bytes_per_sec,
+    pg_size_pretty(pg_wal_lsn_diff('0/1B800000', '0/1A000000') / 300.0 * 3600) AS per_hour;
+```
+
+### Шаг 2: Автоматизированный скрипт
+
+```sql
+-- Функция для измерения WAL rate
+CREATE OR REPLACE FUNCTION measure_wal_rate(duration_seconds INTEGER DEFAULT 60)
+RETURNS TABLE(
+    bytes_total BIGINT,
+    bytes_per_second NUMERIC,
+    megabytes_per_hour NUMERIC
+) AS $$
+DECLARE
+    start_lsn pg_lsn;
+    end_lsn pg_lsn;
+BEGIN
+    start_lsn := pg_current_wal_lsn();
+    PERFORM pg_sleep(duration_seconds);
+    end_lsn := pg_current_wal_lsn();
+
+    RETURN QUERY SELECT
+        pg_wal_lsn_diff(end_lsn, start_lsn),
+        pg_wal_lsn_diff(end_lsn, start_lsn) / duration_seconds::NUMERIC,
+        pg_wal_lsn_diff(end_lsn, start_lsn) / duration_seconds::NUMERIC * 3600 / 1024 / 1024;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Использование (измерение за 60 секунд)
+SELECT * FROM measure_wal_rate(60);
+```
+
+### Шаг 3: Сравнение до и после
+
+1. Измерьте rate с `wal_level=replica`
+2. Включите `wal_level=logical` и перезапустите
+3. Измерьте rate снова
+4. Вычислите процент увеличения
+
+```sql
+-- Пример результатов:
+-- До (replica):  50 MB/hour
+-- После (logical): 55 MB/hour
+-- Увеличение: 10%
+```
+
+## Мониторинг WAL в production
+
+### Размер WAL директории
+
+```sql
+-- Количество WAL файлов и общий размер
+SELECT
+    count(*) AS wal_files,
+    pg_size_pretty(sum(size)) AS total_size,
+    pg_size_pretty(count(*) * 16 * 1024 * 1024) AS theoretical_size
+FROM pg_ls_waldir();
+```
+
+### Текущий WAL rate
+
+```sql
+-- WAL генерация за последние статистики
+SELECT
+    pg_size_pretty(pg_wal_lsn_diff(
+        pg_current_wal_lsn(),
+        '0/0'::pg_lsn
+    )) AS total_wal_generated;
+```
+
+### Таблицы с высокой нагрузкой
+
+Таблицы с частыми UPDATE/DELETE создают больше WAL при logical decoding:
+
+```sql
+-- Топ-10 таблиц по количеству изменений
+SELECT
+    schemaname,
+    relname AS table_name,
+    n_tup_ins AS inserts,
+    n_tup_upd AS updates,
+    n_tup_del AS deletes,
+    n_tup_upd + n_tup_del AS total_modifications,
+    CASE
+        WHEN n_tup_upd + n_tup_del > 100000 THEN 'HIGH - consider REPLICA IDENTITY'
+        WHEN n_tup_upd + n_tup_del > 10000 THEN 'MEDIUM'
+        ELSE 'LOW'
+    END AS modification_level
+FROM pg_stat_user_tables
+ORDER BY total_modifications DESC
+LIMIT 10;
+```
+
+### Мониторинг replication lag
+
+```sql
+-- Lag по каждому слоту
+SELECT
+    slot_name,
+    active,
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) AS lag,
+    wal_status
+FROM pg_replication_slots
+WHERE slot_type = 'logical';
+```
+
+## Capacity Planning
+
+### Расчет дискового пространства
+
+```
+Требуемое место для WAL =
+    (WAL rate в MB/hour) ×
+    (Максимальный downtime коннектора в hours) ×
+    (Количество slots) +
+    (Буфер 50%)
+
+Пример:
+    55 MB/hour × 24 hours × 2 slots × 1.5 = 3.96 GB
+    → Рекомендация: max_slot_wal_keep_size = 5GB
+```
+
+### Расчет I/O нагрузки
+
+```sql
+-- Оценка дополнительной I/O нагрузки
+-- Если текущий WAL rate = 50 MB/hour
+-- При wal_level=logical увеличение 10-15%
+-- Дополнительная запись: 5-7.5 MB/hour
+
+-- Проверьте, что disk throughput выдержит
+-- iostat -x 1 | grep pg_wal_device
+```
+
+## Prometheus метрики для WAL
+
+```yaml
+# Пример scrape config для pg_exporter
+scrape_configs:
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['postgres:9187']
+
+# Ключевые метрики:
+# pg_wal_lsn_diff - текущая позиция WAL
+# pg_replication_slot_lag_bytes - lag по слотам
+# pg_stat_database_blks_read/written - I/O
+```
+
+### Grafana Dashboard Query примеры
+
+```promql
+# WAL генерация rate (bytes/sec)
+rate(pg_wal_lsn_diff[5m])
+
+# Суммарный lag всех слотов
+sum(pg_replication_slot_lag_bytes)
+
+# Алерт: lag > 1GB на любом слоте
+pg_replication_slot_lag_bytes > 1073741824
+```
+
+## Чеклист перед включением CDC
+
+- [ ] **wal_level = logical** установлен
+- [ ] **max_wal_senders >= 10** (или по количеству коннекторов + запас)
+- [ ] **max_replication_slots >= 10** (или по количеству коннекторов + запас)
+- [ ] **max_slot_wal_keep_size** установлен (защита от disk exhaustion)
+- [ ] Измерен baseline WAL rate
+- [ ] Рассчитано дисковое пространство для WAL retention
+- [ ] Настроен мониторинг (pg_replication_slots, WAL size)
+- [ ] REPLICA IDENTITY настроен для нужных таблиц
+- [ ] Запланирован maintenance window для перезапуска PostgreSQL
+
+## Частые проблемы
+
+### "wal_level must be logical"
+
+```
+Ошибка: Debezium не может создать replication slot
+Причина: wal_level = replica или minimal
+Решение:
+  1. ALTER SYSTEM SET wal_level = 'logical';
+  2. Перезапустить PostgreSQL
+  3. SHOW wal_level; -- должно быть 'logical'
+```
+
+### Высокий I/O после включения CDC
+
+```
+Симптом: Disk I/O saturation, медленные запросы
+Причина: Слишком много таблиц с REPLICA IDENTITY FULL
+Решение:
+  1. Определить таблицы с FULL: SELECT relname, relreplident FROM pg_class
+  2. Оценить необходимость FULL для каждой
+  3. Переключить на DEFAULT где возможно
+```
+
+### WAL директория заполняется
+
+```
+Симптом: /var/lib/postgresql/data/pg_wal на 80%+
+Причина: Abandoned slot или слишком медленный consumer
+Решение:
+  1. Проверить pg_replication_slots (inactive slots с большим lag)
+  2. Проверить max_slot_wal_keep_size
+  3. Удалить abandoned slots
+```
+
+## Что дальше?
+
+Мы настроили PostgreSQL для CDC. Но что если вы используете Amazon Aurora? В следующем уроке мы изучим специфику Aurora: parameter groups, обязательный reboot и поведение при failover.
+
+## Ключевые выводы
+
+1. **wal_level=logical** — обязательное требование для Debezium (требует перезапуска)
+2. **Производительность:** +5-15% WAL volume, больше для UPDATE-heavy workloads
+3. **REPLICA IDENTITY FULL** значительно увеличивает WAL — используйте осторожно
+4. **max_slot_wal_keep_size** — критический параметр для защиты от disk exhaustion
+5. **Измеряйте baseline** до включения logical replication
+6. **Мониторинг:** pg_replication_slots, pg_ls_waldir(), высоко-модифицируемые таблицы
+7. **Capacity planning:** рассчитайте место под WAL × downtime × slots
