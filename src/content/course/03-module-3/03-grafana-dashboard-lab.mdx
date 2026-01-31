@@ -1,0 +1,450 @@
+---
+title: "Лабораторная: построение Grafana дашборда для CDC"
+description: "Пошаговое создание дашборда мониторинга Debezium с панелями lag, throughput и queue utilization"
+order: 3
+difficulty: "intermediate"
+estimatedTime: 40
+topics: ["grafana", "dashboards", "visualization", "prometheus"]
+prerequisites: ["module-3/02-prometheus-metrics-collection"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Лабораторная: построение Grafana дашборда для CDC
+
+В этой лабораторной работе мы создадим production-ready дашборд для мониторинга Debezium коннектора. Вы научитесь визуализировать ключевые метрики: отставание от источника, пропускную способность и утилизацию внутренней очереди.
+
+## Подготовка лабораторного окружения
+
+### Проверка доступности сервисов
+
+Убедитесь, что Docker Compose стек запущен:
+
+```bash
+cd labs/
+docker compose ps
+```
+
+Все сервисы должны быть в статусе `healthy` или `running`.
+
+### Доступ к Grafana
+
+1. Откройте браузер: http://localhost:3000
+2. Войдите с учетными данными: `admin` / `admin`
+3. При первом входе можете пропустить смену пароля
+
+### Проверка Prometheus datasource
+
+Grafana уже настроена с Prometheus datasource через provisioning. Проверьте:
+
+1. Перейдите в **Connections** > **Data sources**
+2. Убедитесь, что **Prometheus** отображается как default datasource
+3. Нажмите на него и протестируйте соединение кнопкой **Save & test**
+
+> **Важно:** Datasource настроен через provisioning и отмечен как `editable: false`. Это означает, что изменения в UI не сохранятся после перезапуска контейнера. Такой подход типичен для production — конфигурация хранится в коде.
+
+### Существующий справочный дашборд
+
+В Grafana уже есть дашборд **Debezium Connect Monitoring** (создан в Phase 4). Он содержит базовые панели:
+- Connector Status
+- Task Count
+- Total Records Polled
+- Records Polled Rate
+- Connector Lag
+
+Мы создадим новый, более детальный дашборд с фокусом на production мониторинг.
+
+## Архитектура дашборда
+
+Эффективный CDC дашборд организован по принципу "от общего к частному":
+
+<Mermaid chart={`
+graph TB
+    subgraph "Row 1: Health Overview"
+        A[Status<br/>Stat Panel]
+        B[Current Lag<br/>Gauge]
+        C[Events/sec<br/>Stat]
+        D[Queue Usage<br/>Gauge]
+    end
+
+    subgraph "Row 2: Time Series"
+        E[Lag Trend<br/>Time Series]
+        F[Throughput<br/>Time Series]
+        G[Queue Utilization<br/>Time Series]
+    end
+
+    subgraph "Row 3: Details"
+        H[Staleness<br/>Time Series]
+        I[Transactions<br/>Time Series]
+    end
+
+    style A fill:#22c55e,color:#fff
+    style B fill:#eab308,color:#000
+    style C fill:#3b82f6,color:#fff
+    style D fill:#8b5cf6,color:#fff
+`} client:visible />
+
+**Row 1 (Health Overview):** Мгновенное состояние — оператор видит "все в порядке" или "требуется внимание" за секунду.
+
+**Row 2 (Time Series):** Тренды — понимание динамики, обнаружение аномалий.
+
+**Row 3 (Details):** Детальная информация для troubleshooting.
+
+## Создание дашборда
+
+### Шаг 1: Создание нового дашборда
+
+1. В левом меню нажмите **Dashboards**
+2. Нажмите **+ New** > **New Dashboard**
+3. Нажмите **Add visualization**
+4. Выберите **Prometheus** как datasource
+
+### Шаг 2: Панель Connector Status (Stat)
+
+Первая панель показывает статус подключения к базе данных.
+
+**Query:**
+```promql
+debezium_metrics_Connected{context="streaming"}
+```
+
+**Panel settings:**
+- **Panel type:** Stat
+- **Title:** Connector Status
+- **Description:** Database connection status (1=Connected, 0=Disconnected)
+
+**Value mappings** (Settings > Value mappings):
+
+| Value | Display text | Color |
+|-------|-------------|-------|
+| 1 | Connected | green |
+| 0 | Disconnected | red |
+
+**Thresholds:**
+- Base: red
+- 1: green
+
+**Position:** Width 6, Height 4
+
+Нажмите **Apply** для сохранения панели.
+
+### Шаг 3: Панель Current Lag (Gauge)
+
+Эта панель показывает текущее отставание от источника в секундах.
+
+**Query:**
+```promql
+debezium_metrics_MilliSecondsBehindSource{context="streaming"} / 1000
+```
+
+> **Примечание:** Делим на 1000 для конвертации из миллисекунд в секунды — проще читать.
+
+**Panel settings:**
+- **Panel type:** Gauge
+- **Title:** Current Lag (seconds)
+- **Description:** Time behind source database. Normal: under 5s, Warning: 5-30s, Critical: over 30s
+- **Unit:** seconds (s)
+
+**Thresholds:**
+- Base (green): 0
+- Yellow: 5
+- Red: 30
+
+**Gauge options:**
+- Min: 0
+- Max: 60 (показывает полную шкалу до критического уровня)
+
+**Position:** Width 6, Height 4, рядом с Status
+
+### Шаг 4: Панель Events per Second (Stat)
+
+Показывает текущую пропускную способность коннектора.
+
+**Query:**
+```promql
+rate(debezium_metrics_TotalNumberOfEventsSeen{context="streaming"}[1m])
+```
+
+**Panel settings:**
+- **Panel type:** Stat
+- **Title:** Events/sec
+- **Description:** Current CDC event throughput (1-minute rate)
+- **Unit:** short
+- **Decimals:** 1
+
+**Graph mode:** Area (показывает sparkline)
+
+**Position:** Width 6, Height 4
+
+### Шаг 5: Панель Queue Usage (Gauge)
+
+Внутренняя очередь Debezium — критичный индикатор backpressure.
+
+**Query:**
+```promql
+100 * (1 - (debezium_metrics_QueueRemainingCapacity{context="streaming"} / debezium_metrics_QueueTotalCapacity{context="streaming"}))
+```
+
+**Логика:** `(Total - Remaining) / Total * 100` = процент использования.
+
+**Panel settings:**
+- **Panel type:** Gauge
+- **Title:** Queue Usage %
+- **Description:** Internal event queue utilization. High values indicate backpressure from Kafka.
+- **Unit:** percent (0-100)
+
+**Thresholds:**
+- Base (green): 0
+- Yellow: 50
+- Orange: 75
+- Red: 90
+
+**Position:** Width 6, Height 4
+
+### Промежуточный результат
+
+После первых четырех панелей ваш дашборд должен выглядеть так:
+
+<Mermaid chart={`
+graph LR
+    subgraph "Row 1: Health Overview (4 panels)"
+        A["Connected"]
+        B["0.3s lag"]
+        C["125.4 events/sec"]
+        D["12% queue"]
+    end
+`} client:visible />
+
+### Шаг 6: Панель Lag Trend (Time Series)
+
+Теперь добавим временные ряды для анализа трендов.
+
+**Query:**
+```promql
+debezium_metrics_MilliSecondsBehindSource{context="streaming"} / 1000
+```
+
+**Panel settings:**
+- **Panel type:** Time series
+- **Title:** Lag Trend
+- **Description:** Historical view of connector lag. Use for capacity planning and anomaly detection.
+- **Unit:** seconds (s)
+
+**Legend:** Hidden (одна метрика)
+
+**Thresholds (визуальные линии на графике):**
+- Enable threshold lines: On
+- Warning line at 5
+- Critical line at 30
+
+**Position:** Width 12, Height 8
+
+### Шаг 7: Панель Throughput (Time Series)
+
+**Query:**
+```promql
+rate(debezium_metrics_TotalNumberOfEventsSeen{context="streaming"}[1m])
+```
+
+**Panel settings:**
+- **Panel type:** Time series
+- **Title:** Event Throughput
+- **Description:** CDC events processed per second. Drops may indicate source database issues or connector problems.
+- **Unit:** short
+
+**Position:** Width 12, Height 8
+
+### Шаг 8: Панель Queue Utilization (Time Series)
+
+**Query:**
+```promql
+100 * (1 - (debezium_metrics_QueueRemainingCapacity{context="streaming"} / debezium_metrics_QueueTotalCapacity{context="streaming"}))
+```
+
+**Panel settings:**
+- **Panel type:** Time series
+- **Title:** Queue Utilization
+- **Description:** Persistent high utilization (over 80%) indicates Kafka write bottleneck.
+- **Unit:** percent (0-100)
+
+**Axis:**
+- Min: 0
+- Max: 100
+
+**Position:** Width 12, Height 8
+
+### Шаг 9: Панель Staleness (Time Series)
+
+Метрика "как давно было последнее событие" — полезна для low-traffic таблиц.
+
+**Query:**
+```promql
+debezium_metrics_MilliSecondsSinceLastEvent{context="streaming"} / 1000
+```
+
+**Panel settings:**
+- **Panel type:** Time series
+- **Title:** Time Since Last Event
+- **Description:** Seconds since connector received any event. High values on active tables indicate streaming issues.
+- **Unit:** seconds (s)
+
+**Position:** Width 12, Height 6
+
+### Шаг 10: Панель Committed Transactions (Time Series)
+
+**Query:**
+```promql
+rate(debezium_metrics_NumberOfCommittedTransactions{context="streaming"}[1m])
+```
+
+**Panel settings:**
+- **Panel type:** Time series
+- **Title:** Transactions/sec
+- **Description:** Source database transaction rate being captured.
+- **Unit:** short
+
+**Position:** Width 12, Height 6
+
+## Настройка переменных (Variables)
+
+Переменные позволяют фильтровать дашборд по коннектору.
+
+### Добавление переменной $connector
+
+1. Нажмите на иконку шестеренки (Dashboard settings)
+2. Перейдите в **Variables** > **Add variable**
+3. Настройте:
+
+| Параметр | Значение |
+|----------|----------|
+| Name | connector |
+| Type | Query |
+| Data source | Prometheus |
+| Query | `label_values(debezium_metrics_Connected, server)` |
+| Regex | `.*` |
+| Include All option | On |
+| Custom all value | `.*` |
+
+4. Нажмите **Update** и **Save dashboard**
+
+### Использование переменной в запросах
+
+Обновите все запросы, добавив фильтр по `server`:
+
+```promql
+debezium_metrics_MilliSecondsBehindSource{context="streaming", server=~"$connector"}
+```
+
+Теперь вы можете выбирать конкретный коннектор в dropdown меню.
+
+## Настройки дашборда
+
+### General settings
+
+1. Dashboard settings > General
+2. **Title:** Debezium Production Monitoring
+3. **Description:** Production-focused CDC monitoring with lag, throughput, and queue metrics
+4. **Tags:** debezium, cdc, monitoring, production
+
+### Time settings
+
+1. Dashboard settings > Time options
+2. **Auto-refresh:** 15s (соответствует Prometheus scrape interval)
+3. **Time range:** Last 1 hour
+
+### JSON Model
+
+Для справки — полный дашборд доступен в файле:
+
+```
+labs/monitoring/grafana/dashboards/debezium-production.json
+```
+
+Вы можете импортировать его через **Dashboards** > **Import** > **Upload JSON file**.
+
+## Экспорт и сохранение дашборда
+
+### Экспорт в JSON
+
+1. Откройте Dashboard settings (иконка шестеренки)
+2. Нажмите **JSON Model** в левом меню
+3. Скопируйте JSON или нажмите **Save to file**
+
+### Сравнение с эталоном
+
+Сравните ваш дашборд с `debezium-production.json`:
+
+1. Импортируйте эталонный дашборд
+2. Сравните набор панелей и запросы
+3. Обратите внимание на thresholds — они соответствуют alert levels из следующего урока
+
+## Интерпретация дашборда
+
+<Mermaid chart={`
+graph TB
+    subgraph "Здоровый CDC Pipeline"
+        A["Status: Connected"]
+        B["Lag: 0.1-0.5s"]
+        C["Queue: 5-20%"]
+        D["Throughput: стабильный"]
+    end
+
+    subgraph "Требует внимания"
+        E["Status: Connected"]
+        F["Lag: 5-30s Warning"]
+        G["Queue: 50-80%"]
+        H["Throughput: снижается"]
+    end
+
+    subgraph "Критическое состояние"
+        I["Status: Connected или нет"]
+        J["Lag: более 30s Critical"]
+        K["Queue: более 90%"]
+        L["Throughput: падает/нуль"]
+    end
+
+    A --> E --> I
+    B --> F --> J
+    C --> G --> K
+    D --> H --> L
+`} client:visible />
+
+### Типичные сценарии
+
+| Симптом | Вероятная причина | Действие |
+|---------|-------------------|----------|
+| Lag растет, Queue низкий | Источник генерирует много событий | Проверить нагрузку на БД |
+| Lag растет, Queue высокий | Kafka не успевает принимать | Проверить Kafka broker latency |
+| Lag стабильный, Staleness растет | Нет новых событий | Нормально для low-traffic таблиц |
+| Status Disconnected | Потеря соединения с БД | Проверить сеть и credentials |
+
+## Контрольные вопросы
+
+1. Почему Queue Usage важнее Queue Remaining Capacity для дашборда?
+2. Какой Prometheus scrape interval влияет на минимальную детализацию графиков?
+3. Почему MilliSecondsBehindSource никогда не равен нулю?
+
+<details>
+<summary>Ответы</summary>
+
+1. **Queue Usage (%)** — относительная метрика, сразу показывает "много или мало". Queue Remaining Capacity — абсолютное значение, требует знания QueueTotalCapacity для интерпретации.
+
+2. **15 секунд** — данные обновляются с этой частотой. Графики с интервалом меньше 15s не покажут дополнительных деталей.
+
+3. Всегда есть **processing time** — время от записи в БД до попадания в Kafka. Типичные значения 100-500ms — это нормально.
+
+</details>
+
+## Следующий шаг
+
+В следующем уроке мы настроим **алерты** на основе этих метрик. Dashboard показывает "что происходит", алерты уведомляют "когда нужно действовать".
+
+---
+
+**Checkpoint:** Экспортируйте свой дашборд в JSON и сравните с `labs/monitoring/grafana/dashboards/debezium-production.json`. Убедитесь, что все ключевые панели присутствуют:
+- Connector Status
+- Current Lag (gauge)
+- Events/sec
+- Queue Usage
+- Lag Trend (time series)
+- Throughput (time series)
