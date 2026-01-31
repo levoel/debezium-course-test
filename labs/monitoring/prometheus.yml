@@ -1,0 +1,22 @@
+# Prometheus configuration for Debezium Lab
+# Scrapes JMX metrics from Kafka Connect via port 9404
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Kafka Connect JMX metrics (Debezium connectors)
+  - job_name: 'kafka-connect'
+    static_configs:
+      - targets: ['connect:9404']
+    metric_relabel_configs:
+      # Keep only Kafka Connect related metrics
+      - source_labels: [__name__]
+        regex: 'kafka_connect_.*|debezium_.*'
+        action: keep
