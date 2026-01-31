@@ -1,0 +1,297 @@
+---
+title: "Архитектура Debezium"
+description: "Компоненты Debezium, режимы развертывания: Kafka Connect, Server, Embedded"
+order: 2
+difficulty: "beginner"
+estimatedTime: 20
+topics: ["Debezium", "Kafka Connect", "Architecture"]
+prerequisites: ["module-1/01-cdc-fundamentals"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Архитектура Debezium
+
+В предыдущем уроке мы узнали, что log-based CDC читает журнал транзакций базы данных. Но как это реализуется на практике? Debezium — это платформа с открытым исходным кодом, которая делает CDC доступным и надежным.
+
+## Что такое Debezium?
+
+**Debezium** — это распределенная платформа для Change Data Capture, построенная на Apache Kafka Connect. Она предоставляет коннекторы для популярных СУБД:
+
+- PostgreSQL (pgoutput plugin)
+- MySQL / MariaDB (binlog)
+- MongoDB (oplog)
+- SQL Server (CDC feature)
+- Oracle (LogMiner)
+- Db2, Cassandra, Vitess и другие
+
+Ключевое преимущество Debezium — **единый формат событий** независимо от исходной СУБД. Потребители получают одинаковую структуру данных, будь то PostgreSQL или MongoDB.
+
+## Три режима развертывания
+
+Debezium можно развернуть тремя способами, каждый из которых подходит для разных сценариев.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph MODE1["Kafka Connect (рекомендуется)"]
+        direction LR
+        DB1[(Database)] --> CONN1[Debezium Connector]
+        CONN1 --> KC[Kafka Connect Cluster]
+        KC --> K1[Kafka]
+    end
+
+    subgraph MODE2["Debezium Server"]
+        direction LR
+        DB2[(Database)] --> DS[Debezium Server]
+        DS --> SINK[Cloud Sink]
+        SINK --> |"Pub/Sub, Kinesis,\nEventHub"| CLOUD[Cloud Services]
+    end
+
+    subgraph MODE3["Embedded Engine"]
+        direction LR
+        DB3[(Database)] --> EMB[Your Java App]
+        EMB --> |"Custom\nProcessing"| TARGET[Any Target]
+    end
+
+    style MODE1 fill:#14532d,stroke:#22c55e
+    style MODE2 fill:#1e3a5f,stroke:#3b82f6
+    style MODE3 fill:#4a1d1d,stroke:#ef4444
+    style KC fill:#10b981
+    style DS fill:#3b82f6
+    style EMB fill:#ef4444
+`} client:visible />
+
+### 1. Kafka Connect (рекомендуемый)
+
+**Когда использовать:** В большинстве случаев. Особенно если в вашем стеке уже есть Kafka.
+
+Debezium работает как коннектор внутри Kafka Connect — фреймворка для интеграции с Kafka. Kafka Connect берет на себя:
+
+- Масштабирование (добавляйте workers)
+- Отказоустойчивость (автоматический failover)
+- Управление offsets (где остановились при чтении WAL)
+- REST API для управления коннекторами
+
+```json
+{
+  "name": "postgres-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "postgres",
+    "database.dbname": "inventory",
+    "topic.prefix": "inventory",
+    "plugin.name": "pgoutput"
+  }
+}
+```
+
+### 2. Debezium Server
+
+**Когда использовать:** Когда в стеке нет Kafka, а события нужно отправлять в облачные сервисы.
+
+Debezium Server — это standalone приложение, которое читает WAL и отправляет события напрямую в:
+
+- Google Cloud Pub/Sub
+- Amazon Kinesis
+- Azure Event Hubs
+- Apache Pulsar
+- Redis Streams
+- HTTP webhook
+
+Конфигурация через `application.properties`:
+
+```properties
+debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector
+debezium.source.database.hostname=postgres
+debezium.source.database.port=5432
+debezium.source.database.user=postgres
+debezium.source.database.password=postgres
+debezium.source.database.dbname=inventory
+
+# Отправка в Pub/Sub
+debezium.sink.type=pubsub
+debezium.sink.pubsub.project.id=my-project
+```
+
+### 3. Embedded Engine
+
+**Когда использовать:** Когда нужен максимальный контроль или минимальная задержка.
+
+Debezium можно встроить как библиотеку в ваше Java-приложение:
+
+```java
+// Embedded Debezium в Java приложении
+try (DebeziumEngine<ChangeEvent<String, String>> engine =
+        DebeziumEngine.create(Json.class)
+            .using(props)
+            .notifying(record -> {
+                // Ваша логика обработки события
+                System.out.println(record.value());
+            })
+            .build()) {
+
+    executor.execute(engine);
+}
+```
+
+Преимущества: нет внешних зависимостей, минимальная latency, полный контроль над обработкой.
+
+Недостатки: вы сами отвечаете за offset management, масштабирование, отказоустойчивость.
+
+## Архитектура Kafka Connect
+
+Поскольку Kafka Connect — рекомендуемый режим, разберем его детальнее.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph CLUSTER["Kafka Connect Cluster"]
+        direction TB
+        W1[Worker 1]
+        W2[Worker 2]
+        W3[Worker 3]
+
+        W1 --- W2
+        W2 --- W3
+        W1 --- W3
+    end
+
+    subgraph TOPICS["Kafka Internal Topics"]
+        direction LR
+        CONFIG[connect-configs]
+        OFFSETS[connect-offsets]
+        STATUS[connect-status]
+    end
+
+    REST[REST API :8083] --> CLUSTER
+    CLUSTER --> TOPICS
+    CLUSTER --> DATA[Data Topics]
+
+    style CLUSTER fill:#14532d,stroke:#22c55e
+    style REST fill:#3b82f6
+    style TOPICS fill:#f59e0b
+    style DATA fill:#8b5cf6
+`} client:visible />
+
+### Компоненты Kafka Connect
+
+**Workers** — JVM процессы, которые выполняют коннекторы. В distributed mode workers образуют кластер и распределяют нагрузку.
+
+**Connectors** — конфигурация задачи (какую БД читать, какие таблицы). Один коннектор может порождать несколько tasks.
+
+**Tasks** — единицы работы. Например, один task на каждую таблицу. Tasks распределяются между workers.
+
+**Internal Topics:**
+- `connect-configs` — конфигурации коннекторов
+- `connect-offsets` — позиции чтения (где остановились в WAL)
+- `connect-status` — статусы коннекторов и tasks
+
+### REST API для управления
+
+Kafka Connect предоставляет REST API на порту 8083:
+
+```bash
+# Список коннекторов
+curl http://localhost:8083/connectors
+
+# Создать коннектор
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d @connector-config.json
+
+# Статус коннектора
+curl http://localhost:8083/connectors/postgres-connector/status
+
+# Перезапустить task
+curl -X POST http://localhost:8083/connectors/postgres-connector/tasks/0/restart
+
+# Удалить коннектор
+curl -X DELETE http://localhost:8083/connectors/postgres-connector
+```
+
+## Поток CDC событий
+
+Полный путь события от изменения в БД до потребителя:
+
+<Mermaid chart={`
+sequenceDiagram
+    participant App as Приложение
+    participant PG as PostgreSQL
+    participant WAL as WAL (pgoutput)
+    participant Deb as Debezium Connector
+    participant KC as Kafka Connect
+    participant K as Kafka Topic
+    participant C as Consumer
+
+    App->>PG: UPDATE customers SET name='Bob' WHERE id=1
+    PG->>WAL: Запись в transaction log
+
+    Note over WAL,Deb: Logical Replication Protocol
+
+    Deb->>WAL: Запрос изменений (replication slot)
+    WAL-->>Deb: Изменение в формате pgoutput
+    Deb->>Deb: Преобразование в CDC формат
+    Deb->>KC: Передача события
+    KC->>K: Публикация в topic inventory.public.customers
+    KC->>KC: Сохранение offset в connect-offsets
+
+    Note over K,C: Событие доступно потребителям
+
+    C->>K: poll()
+    K-->>C: CDC Event
+    C->>C: Обработка: op="u", before={...}, after={name:"Bob"}
+`} client:visible />
+
+### Ключевые моменты
+
+1. **Replication Slot** — PostgreSQL резервирует WAL сегменты, пока Debezium их не прочитает. Гарантия: ни одно изменение не будет потеряно.
+
+2. **pgoutput** — встроенный плагин PostgreSQL (с версии 10). Не требует установки дополнительного ПО.
+
+3. **Offset Storage** — Kafka Connect сохраняет позицию чтения. При перезапуске Debezium продолжит с того же места.
+
+4. **Topic Naming** — по умолчанию: `{topic.prefix}.{schema}.{table}`. Например: `inventory.public.customers`.
+
+## Версии в нашем курсе
+
+В лабораторном окружении курса используются:
+
+| Компонент | Версия | Почему |
+|-----------|--------|--------|
+| **Debezium** | 2.5.4 | Стабильная версия, совместимость с ARM64 |
+| **Kafka** | 7.8.1 (Confluent) | KRaft mode (без ZooKeeper), production-ready |
+| **PostgreSQL** | 15+ | Встроенный pgoutput, логическая репликация |
+| **Python** | confluent-kafka | Нативная производительность через librdkafka |
+
+> **Примечание:** Debezium 3.x пока не используется из-за проблем с Java 21 на ARM64 (Apple Silicon). Версия 2.5.x полностью стабильна и поддерживает все необходимые функции.
+
+## Выбор режима развертывания
+
+| Критерий | Kafka Connect | Server | Embedded |
+|----------|---------------|--------|----------|
+| **Kafka в стеке** | Есть | Нет | Любой |
+| **Масштабируемость** | Автоматическая | Ручная | Ручная |
+| **Отказоустойчивость** | Встроенная | Базовая | Своя |
+| **Сложность** | Низкая | Низкая | Высокая |
+| **Latency** | Мс | Мс | Микросекунды |
+| **Use case** | 90% случаев | Cloud-native | Специализированный |
+
+## Что дальше?
+
+Теперь, когда вы понимаете архитектуру, пора запустить CDC на практике. В следующем уроке мы развернем лабораторное окружение с Docker Compose и создадим первый коннектор.
+
+**Вы научитесь:**
+- Запускать Kafka, PostgreSQL и Debezium Connect
+- Создавать коннектор через REST API
+- Наблюдать CDC события в Kafka
+
+## Ключевые выводы
+
+1. **Debezium** — это платформа CDC с коннекторами для всех популярных СУБД
+2. **Kafka Connect** — рекомендуемый режим развертывания (масштабируемость, отказоустойчивость, простота)
+3. **Debezium Server** — для сценариев без Kafka (отправка в cloud сервисы)
+4. **Embedded Engine** — для максимального контроля в Java-приложениях
+5. **pgoutput** — встроенный плагин PostgreSQL, не требует установки
+6. **REST API** — управление коннекторами через HTTP запросы
