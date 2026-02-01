@@ -433,7 +433,7 @@ Lag между **Aurora master** и **Aurora read replica** в cross-region repl
 
 **Scenario**:
 
-1. Primary region работает нормально, Debezium читает binlog с lag <1 second
+1. Primary region работает нормально, Debezium читает binlog с lag менее 1 секунды
 2. `AuroraBinlogReplicaLag` в secondary region = 300 seconds (5 минут) из-за network latency
 3. Primary region **failover** -> secondary region becomes new master
 4. Debezium reconnect к new master (secondary region)
@@ -758,7 +758,7 @@ receivers:
 
 3. **Seconds Since Last Event** (Stat panel)
    - Metric: `debezium_metrics_MilliSecondsSinceLastEvent{context="streaming"} / 1000`
-   - Thresholds: <10s=Green, 10-60s=Yellow, >60s=Red
+   - Thresholds: less than `10s`=Green, `10-60s`=Yellow, more than `60s`=Red
    - Heartbeat health indicator
 
 **Row 2: Lag Metrics**
@@ -777,7 +777,7 @@ receivers:
 3. **Queue Remaining Capacity** (Gauge panel)
    - Metric: `100 * (1 - (debezium_metrics_QueueRemainingCapacity / debezium_metrics_QueueTotalCapacity))`
    - Unit: Percent
-   - Thresholds: <50%=Green, 50-80%=Yellow, >80%=Red
+   - Thresholds: less than 50%=Green, 50-80%=Yellow, more than 80%=Red
 
 **Row 3: Position Tracking**
 
@@ -1064,7 +1064,7 @@ curl -s http://localhost:9404/metrics | grep MilliSecondsBehindSource | awk '{pr
 
 **Verification**:
 
-- Wait for alarm to enter `OK` state (lag <300s)
+- Wait for alarm to enter `OK` state (lag less than 300s)
 - Simulate lag: Pause replica cluster (if test environment) or wait for natural lag spike
 - Verify alarm triggers and SNS notification received
 
