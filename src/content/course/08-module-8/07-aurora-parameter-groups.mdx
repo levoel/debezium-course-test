@@ -1,0 +1,843 @@
+---
+title: "Aurora MySQL: Конфигурация Parameter Groups для CDC"
+description: "Глубокое погружение в конфигурацию Aurora MySQL parameter groups для CDC: cluster vs instance параметры, binlog retention через stored procedures, reboot requirements"
+order: 7
+difficulty: "intermediate"
+estimatedTime: 25
+topics: ["aurora-mysql", "aws", "parameter-groups", "binlog", "cdc"]
+prerequisites: ["module-8/06-schema-history-recovery"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+import Callout from '../../../components/Callout.tsx';
+
+# Aurora MySQL: Конфигурация Parameter Groups для CDC
+
+Если вы прошли Модуль 12, вы знаете, как настроить community MySQL для CDC: отредактировать `/etc/my.cnf`, добавить `binlog_format=ROW`, перезапустить MySQL, установить retention через `SET PERSIST binlog_expire_logs_seconds=604800`. **Aurora MySQL работает совершенно иначе.**
+
+Aurora — это managed database service от AWS. Вы **не имеете прямого доступа к файловой системе** и не можете редактировать `my.cnf`. Вместо этого Aurora использует **parameter groups** — механизм конфигурации через AWS API/Console.
+
+В этом уроке мы разберём фундаментальные различия между community MySQL и Aurora MySQL конфигурацией, научимся создавать custom parameter groups, настраивать binlog retention через Aurora-specific stored procedures и избегать критических ошибок с reboot requirements.
+
+<Callout type="note">
+**Community MySQL vs Aurora MySQL:**
+- **Community MySQL:** Полный контроль над сервером, доступ к `/etc/my.cnf`, `SET PERSIST` для динамических параметров
+- **Aurora MySQL:** Managed service, конфигурация через parameter groups, некоторые параметры настраиваются только через stored procedures
+</Callout>
+
+## Managed Service Model: Что это значит для CDC?
+
+Разберём, как Aurora абстрагирует конфигурацию MySQL.
+
+### Community MySQL: Direct Access
+
+```bash
+# Community MySQL — полный контроль
+ssh mysql-server
+
+# Редактируем конфигурацию напрямую
+sudo vim /etc/my.cnf
+```
+
+```ini
+# /etc/my.cnf
+[mysqld]
+server-id=1
+log-bin=mysql-bin
+binlog_format=ROW
+binlog_row_image=FULL
+gtid_mode=ON
+enforce_gtid_consistency=ON
+binlog_expire_logs_seconds=604800  # 7 дней
+```
+
+```bash
+# Перезапускаем MySQL
+sudo systemctl restart mysql
+
+# Проверяем
+mysql -e "SHOW VARIABLES LIKE 'binlog_format'"
+```
+
+**Прямой контроль над всем процессом.**
+
+### Aurora MySQL: Parameter Groups Abstraction
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                  AWS Management Layer                      │
+│  (Console / CLI / CloudFormation / Terraform)              │
+└────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────────┐
+│               DB Cluster Parameter Group                   │
+│  (cluster-wide settings: binlog_format, GTID, etc.)        │
+└────────────────────────────────────────────────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  Writer      │    │  Reader 1    │    │  Reader 2    │
+│  Instance    │    │  Instance    │    │  Instance    │
+│              │    │              │    │              │
+│  DB Param    │    │  DB Param    │    │  DB Param    │
+│  Group       │    │  Group       │    │  Group       │
+│  (instance)  │    │  (instance)  │    │  (instance)  │
+└──────────────┘    └──────────────┘    └──────────────┘
+```
+
+**Вы не имеете:**
+- SSH доступа к Aurora instances
+- Доступа к файловой системе (`/etc/my.cnf` не существует для вас)
+- Возможности напрямую перезапустить mysqld процесс
+
+**Вы управляете через:**
+- AWS Management Console
+- AWS CLI (`aws rds modify-db-cluster-parameter-group`)
+- AWS SDKs (boto3, AWS SDK for Java, etc.)
+- Infrastructure-as-Code (CloudFormation, Terraform)
+
+<Callout type="tip">
+**Преимущество managed service:** AWS управляет резервным копированием, патчингом, multi-AZ failover, read replicas. Вы фокусируетесь на конфигурации, а не на инфраструктуре.
+</Callout>
+
+## Parameter Group Types: Cluster vs Instance
+
+Aurora MySQL имеет **два уровня** parameter groups. Понимание их различий критично для CDC конфигурации.
+
+### DB Cluster Parameter Group
+
+**Scope:** Cluster-wide (применяется к writer и всем reader instances)
+
+**Для чего используется:**
+- Replication параметры (binlog, GTID)
+- Cluster-level features (Aurora Enhanced Binlog, backtrack)
+- Character sets и collations
+
+**Примеры параметров:**
+
+| Параметр | Назначение | Значение для CDC |
+|----------|------------|------------------|
+| `binlog_format` | Формат binlog событий | `ROW` (обязательно) |
+| `binlog_row_image` | Количество данных в ROW событиях | `FULL` (рекомендуется) |
+| `gtid_mode` | Включить GTID tracking | `ON` (для production failover) |
+| `enforce_gtid_consistency` | Запретить non-GTID транзакции | `ON` (если GTID включён) |
+| `aurora_enhanced_binlog` | Enhanced Binlog feature (Aurora 3.x) | `0` или `1` (см. Урок 08) |
+
+**Как создать:**
+
+```bash
+# AWS CLI команда
+aws rds create-db-cluster-parameter-group \
+  --db-cluster-parameter-group-name debezium-aurora-mysql-80 \
+  --db-parameter-group-family aurora-mysql8.0 \
+  --description "Aurora MySQL 8.0 cluster parameter group for Debezium CDC"
+```
+
+### DB Parameter Group (Instance-level)
+
+**Scope:** Individual instance (writer или specific reader)
+
+**Для чего используется:**
+- Performance tuning (буферы, кэши)
+- Connection limits
+- Instance-specific timeouts
+
+**Примеры параметров:**
+
+| Параметр | Назначение | Когда настраивать |
+|----------|------------|-------------------|
+| `max_connections` | Максимум одновременных подключений | Если Debezium + приложение превышают default (90) |
+| `innodb_buffer_pool_size` | InnoDB кэш размер | Performance tuning |
+| `connect_timeout` | Timeout для новых подключений | Network latency issues |
+| `slow_query_log` | Логирование медленных запросов | Debugging Debezium queries |
+
+**Как создать:**
+
+```bash
+aws rds create-db-parameter-group \
+  --db-parameter-group-name debezium-aurora-instance-pg \
+  --db-parameter-group-family aurora-mysql8.0 \
+  --description "Aurora MySQL 8.0 instance parameter group for Debezium"
+```
+
+### Критическая таблица: Где настраивать CDC параметры
+
+<Callout type="danger">
+**ОПАСНОСТЬ: Binlog параметры ТОЛЬКО на cluster level**
+
+Самая частая ошибка — пытаться установить `binlog_format` через DB Parameter Group (instance-level). Это не сработает. AWS вернёт ошибку "parameter not found" или проигнорирует изменение.
+</Callout>
+
+| Параметр | Уровень | Что будет, если поставить на неправильном уровне |
+|----------|---------|--------------------------------------------------|
+| `binlog_format` | **Cluster** | Instance level: AWS error "parameter not applicable" |
+| `binlog_row_image` | **Cluster** | Instance level: Игнорируется, используется cluster default |
+| `gtid_mode` | **Cluster** | Instance level: Не применяется |
+| `aurora_enhanced_binlog` | **Cluster** | Instance level: Не применяется |
+| `max_connections` | **Instance** | Cluster level: AWS error "parameter is instance-level" |
+| `innodb_buffer_pool_size` | **Instance** | Cluster level: Не применяется |
+
+**Правило:**
+- **Всё, что касается binlog, replication, GTID** → DB Cluster Parameter Group
+- **Всё, что касается performance, connections** → DB Parameter Group
+
+<Mermaid chart={`
+flowchart TB
+    subgraph CLUSTER["DB Cluster Parameter Group"]
+        direction TB
+        BINLOG["binlog_format=ROW<br/>binlog_row_image=FULL"]
+        GTID["gtid_mode=ON<br/>enforce_gtid_consistency=ON"]
+        ENHANCED["aurora_enhanced_binlog=0 or 1"]
+    end
+
+    subgraph WRITER["Writer Instance"]
+        direction TB
+        WPG["DB Parameter Group<br/>(instance-level)"]
+        WDB["mysqld process"]
+        WPG --> WDB
+    end
+
+    subgraph READER1["Reader Instance 1"]
+        direction TB
+        R1PG["DB Parameter Group<br/>(instance-level)"]
+        R1DB["mysqld process"]
+        R1PG --> R1DB
+    end
+
+    CLUSTER -->|"Inherits binlog settings"| WRITER
+    CLUSTER -->|"Inherits binlog settings"| READER1
+
+    style CLUSTER fill:#f59e0b,stroke:#fb923c
+    style BINLOG fill:#14532d,stroke:#22c55e
+    style GTID fill:#14532d,stroke:#22c55e
+    style ENHANCED fill:#14532d,stroke:#22c55e
+`} client:visible />
+
+## Creating Custom Parameter Group for CDC
+
+Default parameter groups в Aurora **нельзя модифицировать**. Вы должны создать custom parameter group.
+
+### Step 1: Create DB Cluster Parameter Group
+
+```bash
+# Создать custom parameter group
+aws rds create-db-cluster-parameter-group \
+  --db-cluster-parameter-group-name debezium-aurora-cdc \
+  --db-parameter-group-family aurora-mysql8.0 \
+  --description "Aurora MySQL 8.0 for Debezium CDC - binlog enabled"
+
+# Проверить создание
+aws rds describe-db-cluster-parameter-groups \
+  --db-cluster-parameter-group-name debezium-aurora-cdc
+```
+
+**Вывод:**
+
+```json
+{
+  "DBClusterParameterGroups": [
+    {
+      "DBClusterParameterGroupName": "debezium-aurora-cdc",
+      "DBParameterGroupFamily": "aurora-mysql8.0",
+      "Description": "Aurora MySQL 8.0 for Debezium CDC - binlog enabled",
+      "DBClusterParameterGroupArn": "arn:aws:rds:us-east-1:123456789012:cluster-pg:debezium-aurora-cdc"
+    }
+  ]
+}
+```
+
+### Step 2: Modify Binlog Parameters
+
+**Важно:** MySQL 8.0.34+ **по умолчанию** использует `binlog_format=ROW`. Aurora MySQL 8.0.40 основан на MySQL 8.0.40, поэтому default уже ROW. Но **явная установка рекомендуется** для ясности и защиты от будущих изменений defaults.
+
+```bash
+# Установить binlog_format=ROW (явно)
+aws rds modify-db-cluster-parameter-group \
+  --db-cluster-parameter-group-name debezium-aurora-cdc \
+  --parameters "ParameterName=binlog_format,ParameterValue=ROW,ApplyMethod=pending-reboot"
+
+# Установить binlog_row_image=FULL (рекомендуется для CDC)
+aws rds modify-db-cluster-parameter-group \
+  --db-cluster-parameter-group-name debezium-aurora-cdc \
+  --parameters "ParameterName=binlog_row_image,ParameterValue=FULL,ApplyMethod=pending-reboot"
+
+# Включить GTID mode (для production failover support)
+aws rds modify-db-cluster-parameter-group \
+  --db-cluster-parameter-group-name debezium-aurora-cdc \
+  --parameters "ParameterName=gtid_mode,ParameterValue=ON,ApplyMethod=pending-reboot"
+
+aws rds modify-db-cluster-parameter-group \
+  --db-cluster-parameter-group-name debezium-aurora-cdc \
+  --parameters "ParameterName=enforce_gtid_consistency,ParameterValue=ON,ApplyMethod=pending-reboot"
+```
+
+**Можно объединить в один вызов:**
+
+```bash
+aws rds modify-db-cluster-parameter-group \
+  --db-cluster-parameter-group-name debezium-aurora-cdc \
+  --parameters \
+    ParameterName=binlog_format,ParameterValue=ROW,ApplyMethod=pending-reboot \
+    ParameterName=binlog_row_image,ParameterValue=FULL,ApplyMethod=pending-reboot \
+    ParameterName=gtid_mode,ParameterValue=ON,ApplyMethod=pending-reboot \
+    ParameterName=enforce_gtid_consistency,ParameterValue=ON,ApplyMethod=pending-reboot
+```
+
+<Callout type="note">
+**ApplyMethod Options:**
+- `pending-reboot`: Изменения применятся после reboot instance
+- `immediate`: Изменения применяются немедленно (если параметр dynamic)
+
+Binlog параметры **требуют reboot**, поэтому используйте `pending-reboot`.
+</Callout>
+
+### Step 3: Verify Parameter Changes
+
+```bash
+# Проверить параметры в parameter group
+aws rds describe-db-cluster-parameters \
+  --db-cluster-parameter-group-name debezium-aurora-cdc \
+  --query "Parameters[?ParameterName=='binlog_format' || ParameterName=='gtid_mode']"
+```
+
+**Ожидаемый вывод:**
+
+```json
+[
+  {
+    "ParameterName": "binlog_format",
+    "ParameterValue": "ROW",
+    "ApplyType": "static",
+    "DataType": "string",
+    "IsModifiable": true,
+    "ApplyMethod": "pending-reboot"
+  },
+  {
+    "ParameterName": "gtid_mode",
+    "ParameterValue": "ON",
+    "ApplyType": "static",
+    "DataType": "string",
+    "IsModifiable": true,
+    "ApplyMethod": "pending-reboot"
+  }
+]
+```
+
+## Associating Parameter Group with Aurora Cluster
+
+После создания custom parameter group, его нужно привязать к Aurora cluster.
+
+### Modify Cluster to Use Custom Parameter Group
+
+```bash
+# Привязать parameter group к cluster
+aws rds modify-db-cluster \
+  --db-cluster-identifier my-aurora-cluster \
+  --db-cluster-parameter-group-name debezium-aurora-cdc \
+  --apply-immediately
+
+# Проверить статус
+aws rds describe-db-clusters \
+  --db-cluster-identifier my-aurora-cluster \
+  --query "DBClusters[0].DBClusterParameterGroup"
+```
+
+**Вывод:**
+
+```
+"debezium-aurora-cdc"
+```
+
+**Важно:** Привязка parameter group НЕ применяет изменения немедленно. Для static параметров (binlog_format, gtid_mode) требуется **reboot**.
+
+### Check Parameter Group Status
+
+```bash
+# Проверить, применены ли изменения
+aws rds describe-db-clusters \
+  --db-cluster-identifier my-aurora-cluster \
+  --query "DBClusters[0].[DBClusterParameterGroup, DBClusterMembers[*].[DBInstanceIdentifier, DBClusterParameterGroupStatus]]"
+```
+
+**Вывод (до reboot):**
+
+```json
+[
+  "debezium-aurora-cdc",
+  [
+    ["my-aurora-instance-1", "pending-reboot"],
+    ["my-aurora-instance-2-reader", "pending-reboot"]
+  ]
+]
+```
+
+**Status `pending-reboot`** означает, что parameter group привязан, но параметры ещё не активны.
+
+<Mermaid chart={`
+flowchart LR
+    CREATE["Create Custom<br/>Parameter Group"] --> MODIFY["Modify Parameters<br/>(binlog_format, GTID)"]
+    MODIFY --> ASSOCIATE["Associate with<br/>Aurora Cluster"]
+    ASSOCIATE --> STATUS{"Parameter<br/>Group Status"}
+    STATUS -->|"pending-reboot"| REBOOT["Reboot Instances<br/>(Writer + Readers)"]
+    STATUS -->|"in-sync"| DONE["✅ Parameters Active"]
+    REBOOT --> DONE
+
+    style CREATE fill:#1e3a5f,stroke:#3b82f6
+    style MODIFY fill:#1e3a5f,stroke:#3b82f6
+    style ASSOCIATE fill:#1e3a5f,stroke:#3b82f6
+    style REBOOT fill:#f59e0b,stroke:#fb923c
+    style DONE fill:#10b981,stroke:#22c55e
+`} client:visible />
+
+## Reboot Requirements: Aurora 2.10+ Critical Change
+
+Это одна из самых коварных ошибок конфигурации Aurora MySQL для CDC.
+
+<Callout type="danger">
+**Aurora 2.10+ Reboot Behavior Changed**
+
+До Aurora MySQL 2.09:
+- Reboot writer instance → все reader instances автоматически rebooted
+
+После Aurora MySQL 2.10+:
+- Reboot writer instance → **readers НЕ rebooted автоматически**
+- Readers продолжают использовать старые parameter values до manual reboot
+</Callout>
+
+### Problem Scenario
+
+```bash
+# 1. Вы rebooted только writer instance
+aws rds reboot-db-instance --db-instance-identifier my-aurora-instance-1
+
+# 2. Проверяете binlog_format на writer
+mysql -h my-aurora-cluster.cluster-abc123.us-east-1.rds.amazonaws.com -u admin -p
+
+mysql> SHOW VARIABLES LIKE 'binlog_format';
+# +-----------------+-------+
+# | Variable_name   | Value |
+# +-----------------+-------+
+# | binlog_format   | ROW   |
+# +-----------------+-------+
+```
+
+**Вы думаете:** "Всё работает! ROW формат активен."
+
+```bash
+# 3. Но подключение к reader instance показывает:
+mysql -h my-aurora-instance-2-reader.abc123.us-east-1.rds.amazonaws.com -u admin -p
+
+mysql> SHOW VARIABLES LIKE 'binlog_format';
+# +-----------------+-------+
+# | Variable_name   | Value |
+# +-----------------+-------+
+# | binlog_format   | MIXED |  ← СТАРОЕ ЗНАЧЕНИЕ!
+# +-----------------+-------+
+```
+
+**Проблема:** Reader instance всё ещё использует старый parameter group default.
+
+### Aurora Version Detection
+
+```sql
+-- Проверить версию Aurora MySQL
+SELECT AURORA_VERSION();
+-- Вывод: 3.09.0 (соответствует MySQL 8.0.40)
+
+-- Или через AWS CLI
+aws rds describe-db-clusters \
+  --db-cluster-identifier my-aurora-cluster \
+  --query "DBClusters[0].EngineVersion"
+-- Вывод: "8.0.mysql_aurora.3.09.0"
+```
+
+**Mapping Aurora версий:**
+
+| Aurora Version | Community MySQL | Reboot Behavior |
+|----------------|-----------------|-----------------|
+| Aurora 2.09 и ниже | MySQL 5.7.x | Writer reboot → readers auto-reboot |
+| Aurora 2.10+ | MySQL 5.7.x | Writer reboot → **readers NOT auto-reboot** |
+| Aurora 3.x | MySQL 8.0.x | Writer reboot → **readers NOT auto-reboot** |
+
+**Вывод:** Если вы используете Aurora MySQL 8.0.40 (Aurora 3.09.0), вам **необходимо вручную reboot каждый reader instance**.
+
+### Correct Reboot Procedure
+
+```bash
+# Step 1: Reboot writer instance
+aws rds reboot-db-instance \
+  --db-instance-identifier my-aurora-instance-1
+
+# Дождаться завершения (можно мониторить через describe-db-instances)
+aws rds wait db-instance-available \
+  --db-instance-identifier my-aurora-instance-1
+
+# Step 2: Reboot КАЖДЫЙ reader instance вручную (Aurora 2.10+)
+aws rds reboot-db-instance \
+  --db-instance-identifier my-aurora-instance-2-reader
+
+aws rds wait db-instance-available \
+  --db-instance-identifier my-aurora-instance-2-reader
+
+# Если есть ещё reader instances, reboot их тоже
+aws rds reboot-db-instance \
+  --db-instance-identifier my-aurora-instance-3-reader
+```
+
+<Callout type="warning">
+**Downtime impact:**
+- Writer reboot: 30-60 секунд downtime (writes blocked)
+- Reader reboot: Connections to specific reader dropped (но другие readers available)
+
+**Рекомендация:** Выполняйте reboot в maintenance window.
+</Callout>
+
+### Verification After Reboot
+
+```bash
+# Проверить, что все instances используют новые параметры
+aws rds describe-db-clusters \
+  --db-cluster-identifier my-aurora-cluster \
+  --query "DBClusters[0].DBClusterMembers[*].[DBInstanceIdentifier, DBClusterParameterGroupStatus]"
+```
+
+**Ожидаемый вывод (после reboot):**
+
+```json
+[
+  ["my-aurora-instance-1", "in-sync"],
+  ["my-aurora-instance-2-reader", "in-sync"],
+  ["my-aurora-instance-3-reader", "in-sync"]
+]
+```
+
+**Status `in-sync`** означает, что parameter group полностью применён.
+
+**SQL verification:**
+
+```sql
+-- На writer instance
+SHOW VARIABLES LIKE 'binlog_format';
+-- binlog_format | ROW
+
+-- На reader instance
+SHOW VARIABLES LIKE 'binlog_format';
+-- binlog_format | ROW
+
+-- Оба должны показывать одинаковые значения
+```
+
+## Binlog Retention via Stored Procedures
+
+Community MySQL использует `binlog_expire_logs_seconds` для управления retention. **Aurora MySQL НЕ поддерживает этот параметр.**
+
+Вместо этого Aurora предоставляет **stored procedures** для конфигурации binlog retention.
+
+### Why Parameter Doesn't Work
+
+```sql
+-- Community MySQL (работает)
+SET PERSIST binlog_expire_logs_seconds = 604800;  -- 7 дней
+
+-- Aurora MySQL (НЕ работает)
+SET GLOBAL binlog_expire_logs_seconds = 604800;
+-- ERROR 1238 (HY000): Variable 'binlog_expire_logs_seconds' is a read only variable
+```
+
+**Причина:** Aurora управляет binlog файлами на storage layer, который вы не контролируете. Retention настраивается через Aurora-specific stored procedures.
+
+### Aurora Stored Procedures for Binlog Retention
+
+Aurora MySQL предоставляет процедуру `mysql.rds_set_configuration` для управления binlog retention.
+
+```sql
+-- Подключиться к writer instance (только writer может выполнять это)
+mysql -h my-aurora-cluster.cluster-abc123.us-east-1.rds.amazonaws.com -u admin -p
+
+-- Установить retention на 7 дней (168 часов)
+CALL mysql.rds_set_configuration('binlog retention hours', 168);
+```
+
+**Вывод:**
+
+```
+Query OK, 0 rows affected (0.01 sec)
+```
+
+### Maximum Retention Values
+
+<Callout type="note">
+**Retention limits зависят от Aurora версии:**
+
+| Aurora Version | Maximum Binlog Retention |
+|----------------|--------------------------|
+| Aurora < 2.11.0 | 168 hours (7 дней) |
+| Aurora >= 2.11.0 (MySQL 5.7) | 2160 hours (90 дней) |
+| Aurora 3.x (MySQL 8.0) | 2160 hours (90 дней) |
+</Callout>
+
+```sql
+-- Для Aurora 3.x можно установить до 90 дней
+CALL mysql.rds_set_configuration('binlog retention hours', 2160);  -- 90 дней
+```
+
+**Для Phase 14 labs:** Используем 168 hours (7 дней), как в Phase 12 decision [12-01].
+
+```sql
+CALL mysql.rds_set_configuration('binlog retention hours', 168);
+```
+
+### Verify Retention Configuration
+
+```sql
+-- Проверить текущую конфигурацию retention
+CALL mysql.rds_show_configuration;
+```
+
+**Вывод:**
+
+```
++------------------------+-------+----------------------------------------------------------------------+
+| name                   | value | description                                                          |
++------------------------+-------+----------------------------------------------------------------------+
+| binlog retention hours | 168   | binlog retention hours specifies the duration in hours before...     |
++------------------------+-------+----------------------------------------------------------------------+
+1 row in set (0.00 sec)
+```
+
+**Проверить фактические binlog файлы:**
+
+```sql
+SHOW BINARY LOGS;
+```
+
+**Вывод:**
+
+```
++---------------------------+-----------+
+| Log_name                  | File_size |
++---------------------------+-----------+
+| mysql-bin-changelog.000001| 177       |
+| mysql-bin-changelog.000002| 154       |
+| mysql-bin-changelog.000003| 201       |
+| mysql-bin-changelog.000004| 189       |
+| mysql-bin-changelog.000005| 234       |
++---------------------------+-----------+
+5 rows in set (0.00 sec)
+```
+
+**Если retention работает корректно:**
+- Старые файлы (более 7 дней назад) автоматически удалены
+- Новые файлы присутствуют и доступны для Debezium
+
+### Pitfall: Backup Retention Affects Binlog Retention
+
+<Callout type="warning">
+**Binlog retention tied to backup retention**
+
+Aurora's binlog retention **зависит от automated backups**. Если backup retention короче, чем binlog retention, binlog файлы будут purged раньше.
+
+**Example:**
+- `binlog retention hours = 168` (7 дней)
+- `backup retention period = 1` (1 день)
+- **Фактический binlog retention: 1 день** (ограничен backup retention)
+</Callout>
+
+**Проверить backup retention:**
+
+```bash
+aws rds describe-db-clusters \
+  --db-cluster-identifier my-aurora-cluster \
+  --query "DBClusters[0].BackupRetentionPeriod"
+```
+
+**Вывод:**
+
+```
+7
+```
+
+**Значение:** 7 дней (минимум для production). Aurora по умолчанию использует 7 дней backup retention.
+
+**Если backup retention < binlog retention:**
+
+```bash
+# Увеличить backup retention до соответствия binlog retention
+aws rds modify-db-cluster \
+  --db-cluster-identifier my-aurora-cluster \
+  --backup-retention-period 7 \
+  --apply-immediately
+```
+
+**Правило:** `backup_retention_period` >= `binlog retention hours / 24`
+
+## Verification Checklist
+
+После всех изменений, выполните полную проверку конфигурации.
+
+### 1. Parameter Group Applied
+
+```bash
+# Проверить, что cluster использует custom parameter group
+aws rds describe-db-clusters \
+  --db-cluster-identifier my-aurora-cluster \
+  --query "DBClusters[0].DBClusterParameterGroup"
+
+# Ожидается: "debezium-aurora-cdc"
+```
+
+### 2. All Instances In-Sync
+
+```bash
+# Проверить status всех instances
+aws rds describe-db-clusters \
+  --db-cluster-identifier my-aurora-cluster \
+  --query "DBClusters[0].DBClusterMembers[*].[DBInstanceIdentifier, DBClusterParameterGroupStatus]"
+
+# Ожидается: все instances в status "in-sync"
+```
+
+### 3. Binlog Format on Writer
+
+```sql
+-- Подключиться к writer endpoint
+mysql -h my-aurora-cluster.cluster-abc123.us-east-1.rds.amazonaws.com -u admin -p
+
+SHOW VARIABLES LIKE 'binlog_format';
+-- binlog_format | ROW
+```
+
+### 4. Binlog Format on Reader
+
+```sql
+-- Подключиться к reader endpoint (если есть)
+mysql -h my-aurora-cluster.cluster-ro-abc123.us-east-1.rds.amazonaws.com -u admin -p
+
+SHOW VARIABLES LIKE 'binlog_format';
+-- binlog_format | ROW (должно совпадать с writer)
+```
+
+<Callout type="danger">
+**Если reader показывает другое значение:**
+- Вы забыли reboot reader instance (Aurora 2.10+)
+- Выполните `aws rds reboot-db-instance --db-instance-identifier <reader-id>`
+</Callout>
+
+### 5. GTID Mode Active
+
+```sql
+SHOW VARIABLES LIKE 'gtid_mode';
+-- gtid_mode | ON
+
+SHOW VARIABLES LIKE 'enforce_gtid_consistency';
+-- enforce_gtid_consistency | ON
+```
+
+### 6. Binlog Retention Configured
+
+```sql
+CALL mysql.rds_show_configuration;
+-- binlog retention hours | 168
+```
+
+### 7. Binlog Files Present
+
+```sql
+SHOW BINARY LOGS;
+-- Должны быть видны binlog файлы (mysql-bin-changelog.NNNNNN)
+```
+
+### 8. Master Status
+
+```sql
+SHOW MASTER STATUS;
+```
+
+**Вывод:**
+
+```
++---------------------------+----------+--------------+------------------+-------------------------------------------+
+| File                      | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set                         |
++---------------------------+----------+--------------+------------------+-------------------------------------------+
+| mysql-bin-changelog.000005| 234      |              |                  | 3e11fa47-71ca-11e1-9e33-c80aa9429562:1-27 |
++---------------------------+----------+--------------+------------------+-------------------------------------------+
+```
+
+**Если `File` пустой или GTID пустой:**
+- Binlog не активирован
+- Проверьте parameter group и reboot status
+
+## Common Pitfalls
+
+Разберём типичные ошибки при конфигурации Aurora MySQL для CDC.
+
+| Pitfall | Симптом | Причина | Решение |
+|---------|---------|---------|---------|
+| **Binlog params on instance PG** | `binlog_format` игнорируется | Установлено на DB Parameter Group вместо DB Cluster PG | Переместить в DB Cluster Parameter Group |
+| **Forgot to reboot readers (Aurora 2.10+)** | Reader shows old parameter values | Readers не rebooted после cluster PG изменений | Manually reboot каждый reader instance |
+| **Retention shorter than expected** | Binlog files purged after 1-2 days | Backup retention < binlog retention | Увеличить `backup_retention_period` |
+| **Connecting to reader for CDC** | Debezium errors: "binlog file not found" | Debezium подключен к reader endpoint | Use writer endpoint для Debezium |
+| **Default parameter group used** | Cannot modify parameters | Trying to modify default.aurora-mysql8.0 | Create custom parameter group |
+| **ApplyMethod=immediate for static params** | Changes not applied | Static params require reboot | Use `ApplyMethod=pending-reboot` + reboot |
+
+### Pitfall Deep Dive: Connecting to Reader Endpoint
+
+```json
+// ❌ НЕПРАВИЛЬНО: Debezium connector config
+{
+  "database.hostname": "my-aurora-cluster.cluster-ro-abc123.us-east-1.rds.amazonaws.com",  // Reader endpoint!
+  "database.port": "3306",
+  ...
+}
+```
+
+**Проблема:** Aurora read replicas используют **physical replication** (storage-level), не binlog replication. Binlog генерируется **только на writer instance**.
+
+**Симптомы:**
+- Debezium errors: "Could not find binlog file"
+- Connector fails to start
+- Intermittent failures (если reader promoted to writer)
+
+```json
+// ✅ ПРАВИЛЬНО: Use writer (cluster) endpoint
+{
+  "database.hostname": "my-aurora-cluster.cluster-abc123.us-east-1.rds.amazonaws.com",  // Cluster endpoint (writer)
+  "database.port": "3306",
+  ...
+}
+```
+
+**Cluster endpoint:** Всегда указывает на current writer instance, даже после failover.
+
+## Key Takeaways
+
+1. **Aurora MySQL managed service** — нет прямого доступа к `/etc/my.cnf`, конфигурация через parameter groups
+2. **DB Cluster Parameter Group для binlog** — `binlog_format`, `gtid_mode`, `aurora_enhanced_binlog` ТОЛЬКО на cluster level
+3. **DB Parameter Group для instance tuning** — `max_connections`, `innodb_buffer_pool_size` на instance level
+4. **Default parameter groups read-only** — создавайте custom parameter group для CDC
+5. **Reboot required for static params** — `binlog_format`, `gtid_mode` требуют reboot после изменения
+6. **Aurora 2.10+ manual reader reboot** — readers НЕ rebooted автоматически, reboot каждый reader вручную
+7. **Binlog retention via stored procedures** — `mysql.rds_set_configuration('binlog retention hours', N)`, НЕ через parameter
+8. **Maximum retention 90 дней (Aurora 3.x)** — 168 hours для старых версий, 2160 hours для Aurora >= 2.11.0
+9. **Backup retention affects binlog** — binlog purged если backup retention короче
+10. **Connect Debezium to writer endpoint** — binlog доступен только на writer, не на readers
+11. **Verify on both writer and readers** — проверьте `binlog_format` на всех instances после reboot
+12. **ApplyMethod=pending-reboot** — для static параметров + explicit reboot
+
+## What's Next?
+
+Мы разобрали конфигурацию Aurora MySQL parameter groups для CDC. Теперь вы знаете:
+- Как создать custom DB cluster parameter group
+- Как настроить binlog retention через stored procedures
+- Как правильно reboot instances (Aurora 2.10+)
+- Как избежать типичных ошибок конфигурации
+
+В следующем уроке (08) мы погрузимся в **Aurora Enhanced Binlog** — архитектуру, которая фундаментально меняет binlog storage:
+- Parallel writes (transaction log + binlog simultaneously)
+- 99% faster recovery после failovers
+- Compute overhead reduction (50% → 13%)
+- Критические ограничения (backtrack incompatibility, no cross-region replication)
+
+Enhanced Binlog — это opt-in feature с production tradeoffs. Prepare for deep architectural dive.
