@@ -62,8 +62,10 @@ CREATE TABLE outbox (
 | REPLICA IDENTITY | `ALTER TABLE outbox REPLICA IDENTITY FULL;` | Не требуется (binlog ROW format захватывает full row data) |
 | Default storage | N/A | `ENGINE=InnoDB` (mandatory для binlog) |
 
-<Callout type="info" title="MySQL Binlog Configuration">
-**MySQL binlog с ROW format автоматически захватывает полные данные строк** — не требуется эквивалент PostgreSQL `REPLICA IDENTITY FULL`. Убедитесь, что binlog_format=ROW установлен (см. [Module 8 - MySQL Configuration](/course/module-8/01-mysql-aurora-setup)).
+<Callout type="note">
+**MySQL Binlog Configuration**
+
+MySQL binlog с ROW format автоматически захватывает полные данные строк — не требуется эквивалент PostgreSQL `REPLICA IDENTITY FULL`. Убедитесь, что binlog_format=ROW установлен (см. [Module 8 - MySQL Configuration](/course/module-8/01-mysql-aurora-setup)).
 </Callout>
 
 ---
@@ -192,8 +194,10 @@ MySQL connector требует **дополнительные параметры
 **Rule:** One connector = one schema history topic.
 </Callout>
 
-<Callout type="info" title="database.server.id Selection">
-**`database.server.id`** должен быть уникальным и НЕ конфликтовать с server_id MySQL server или других MySQL connectors.
+<Callout type="note">
+**database.server.id Selection**
+
+`database.server.id` должен быть уникальным и НЕ конфликтовать с server_id MySQL server или других MySQL connectors.
 
 **Recommended range:** 184000-184999 для Debezium connectors (см. [Module 8 - Multi-Connector Deployment](/course/module-8/06-multi-connector-deployment) для registry pattern).
 
@@ -425,8 +429,10 @@ table_env.execute_sql("""
 | **Debezium format** | `'format' = 'debezium-json'` | Automatic parsing of CDC envelope (before/after/op) |
 | **Duplicate handling** | `'table.exec.source.cdc-events-duplicate' = 'true'` | At-least-once semantics with CDC |
 
-<Callout type="info" title="Why source_database Field?">
-**`source_database` column критичен для:**
+<Callout type="note">
+**Why source_database Field?**
+
+`source_database` column критичен для:
 1. **Troubleshooting:** Быстро определить, какой connector создал событие
 2. **Audit trail:** Track origin в data lineage
 3. **Conditional processing:** Разная логика для PostgreSQL vs MySQL events
