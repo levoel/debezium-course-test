@@ -1,0 +1,708 @@
+---
+title: "IAM и Workload Identity для CDC Pipeline"
+description: "Безопасная аутентификация Debezium Server и других компонентов CDC в GCP"
+order: 3
+difficulty: "intermediate"
+estimatedTime: 35
+topics: ["IAM", "Workload Identity", "GKE", "Security", "Service Accounts"]
+prerequisites: ["module-6/02-debezium-server-pubsub"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# IAM и Workload Identity для CDC Pipeline
+
+В современных облачных CDC-архитектурах критически важна безопасная аутентификация компонентов при доступе к облачным сервисам. В этом уроке мы разберем правильные паттерны аутентификации для Debezium Server и других компонентов CDC в GCP.
+
+## Проблема аутентификации в CDC
+
+**Компоненты, которым нужен доступ к GCP:**
+- **Debezium Server** → публикация событий в Pub/Sub
+- **Dataflow Job** → чтение из Pub/Sub, запись в BigQuery
+- **Cloud Run** → чтение из Pub/Sub, обработка событий
+
+**Традиционный подход (anti-pattern):**
+```bash
+# ❌ НЕ ДЕЛАЙТЕ ТАК
+gcloud iam service-accounts keys create key.json \
+  --iam-account=debezium@project.iam.gserviceaccount.com
+
+# Затем монтировать key.json в контейнер
+docker run -v $(pwd)/key.json:/app/key.json \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/app/key.json \
+  debezium/server:2.5
+```
+
+**Почему это опасно:**
+1. **Утечка ключей:** Файл key.json может попасть в git, логи, Docker image layers
+2. **Ротация:** Ключи живут до 10 лет, их нужно периодически обновлять вручную
+3. **Аудит:** Сложно отследить, где и как используется ключ
+4. **Излишние права:** Часто используют roles/owner или roles/editor вместо конкретных ролей
+
+**Современный подход (best practice):**
+- **Workload Identity Federation** для GKE → K8s Service Account автоматически получает токены GCP
+- **Service Account Impersonation** для Cloud Run → прямое связывание SA с сервисом
+- **Secret Manager** для database credentials → централизованное хранилище секретов с аудитом
+
+---
+
+## IAM роли для компонентов CDC
+
+Каждый компонент должен иметь **минимальный набор прав** (principle of least privilege).
+
+### Таблица ролей
+
+| Компонент | Требуемые роли | Почему |
+|-----------|---------------|--------|
+| **Debezium Server** | `roles/pubsub.publisher` | Публикация CDC событий в Pub/Sub topics |
+| **Dataflow Job** | `roles/pubsub.subscriber`<br/>`roles/bigquery.dataEditor`<br/>`roles/dataflow.worker` | Чтение из Pub/Sub subscriptions<br/>Запись в BigQuery таблицы<br/>Управление ресурсами Dataflow |
+| **Cloud Run** | `roles/pubsub.subscriber` | Получение событий из Pub/Sub triggers |
+| **Secret Manager Access** | `roles/secretmanager.secretAccessor` | Чтение database credentials из Secret Manager |
+
+### Примеры назначения ролей
+
+```bash
+# Debezium Server Service Account
+gcloud iam service-accounts create debezium-server-sa \
+  --display-name="Debezium Server CDC"
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/pubsub.publisher"
+
+# Dataflow Worker Service Account
+gcloud iam service-accounts create dataflow-worker-sa \
+  --display-name="Dataflow CDC to BigQuery"
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:dataflow-worker-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/pubsub.subscriber"
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:dataflow-worker-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/bigquery.dataEditor"
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:dataflow-worker-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/dataflow.worker"
+```
+
+**Важно:** Замените `PROJECT_ID` на ваш GCP project ID.
+
+---
+
+## Workload Identity для GKE
+
+**Workload Identity** — это механизм связывания Kubernetes Service Account с GCP Service Account. Это позволяет pod'ам автоматически получать токены GCP без ключей.
+
+### Как это работает
+
+<Mermaid chart={`
+graph LR
+    Pod[Pod в GKE] --> KSA[Kubernetes<br/>Service Account]
+    KSA --> |iam.gke.io/gcp-service-account| WI[Workload Identity<br/>Binding]
+    WI --> GCPSA[GCP Service Account]
+    GCPSA --> IAM[IAM Roles]
+    IAM --> PubSub[Pub/Sub API]
+    IAM --> SM[Secret Manager API]
+
+    style Pod fill:#e3f2fd
+    style GCPSA fill:#c8e6c9
+    style IAM fill:#fff9c4
+`} client:visible />
+
+**Поток аутентификации:**
+1. Pod запускается с Kubernetes Service Account
+2. K8s SA имеет аннотацию `iam.gke.io/gcp-service-account`
+3. GKE Metadata Server предоставляет GCP токен pod'у
+4. Приложение использует токен для вызовов GCP API
+5. Токен автоматически обновляется (ротация каждые 1 час)
+
+### Настройка Workload Identity
+
+**Шаг 1: Создание GCP Service Account**
+
+```bash
+# Создаем GCP Service Account
+gcloud iam service-accounts create debezium-server-sa \
+  --display-name="Debezium Server CDC" \
+  --project=PROJECT_ID
+
+# Назначаем необходимые роли
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/pubsub.publisher"
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+**Шаг 2: Создание Kubernetes Service Account**
+
+```yaml
+# k8s/service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: debezium-server
+  namespace: cdc
+  annotations:
+    # КЛЮЧЕВАЯ АННОТАЦИЯ: связывает K8s SA с GCP SA
+    iam.gke.io/gcp-service-account: debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com
+```
+
+**Шаг 3: Binding K8s SA → GCP SA**
+
+```bash
+# Разрешаем K8s Service Account использовать GCP Service Account
+gcloud iam service-accounts add-iam-policy-binding \
+  debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com \
+  --role=roles/iam.workloadIdentityUser \
+  --member="serviceAccount:PROJECT_ID.svc.id.goog[cdc/debezium-server]"
+```
+
+**Формат member:** `serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/K8S_SA_NAME]`
+- `PROJECT_ID` — ваш GCP project
+- `NAMESPACE` — Kubernetes namespace (в примере: `cdc`)
+- `K8S_SA_NAME` — имя K8s Service Account (в примере: `debezium-server`)
+
+**Шаг 4: Использование в Deployment**
+
+```yaml
+# k8s/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: debezium-server
+  namespace: cdc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: debezium-server
+  template:
+    metadata:
+      labels:
+        app: debezium-server
+    spec:
+      # ВАЖНО: указываем K8s Service Account
+      serviceAccountName: debezium-server
+      containers:
+      - name: server
+        image: debezium/server:2.5
+        env:
+        # Workload Identity НЕ требует GOOGLE_APPLICATION_CREDENTIALS
+        # GKE Metadata Server автоматически предоставляет токены
+        - name: DEBEZIUM_SINK_TYPE
+          value: "pubsub"
+        - name: DEBEZIUM_SINK_PUBSUB_PROJECT_ID
+          value: "PROJECT_ID"
+        volumeMounts:
+        - name: config
+          mountPath: /debezium/conf
+        - name: data
+          mountPath: /debezium/data
+      volumes:
+      - name: config
+        configMap:
+          name: debezium-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: debezium-offset-storage
+```
+
+**Проверка работы Workload Identity:**
+
+```bash
+# Войти в pod
+kubectl exec -it -n cdc debezium-server-xxx -- /bin/bash
+
+# Проверить, какой GCP account активен
+gcloud auth list
+# Ожидаемый вывод:
+# ACTIVE: debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com
+
+# Проверить доступ к Pub/Sub
+gcloud pubsub topics list --project=PROJECT_ID
+# Должны увидеть список топиков (если есть права)
+```
+
+---
+
+## Workload Identity для Cloud Run
+
+Для Cloud Run процесс проще — Service Account прямо прикрепляется к Cloud Run сервису.
+
+### Настройка
+
+**Шаг 1: Создание Service Account**
+
+```bash
+gcloud iam service-accounts create cdc-processor-sa \
+  --display-name="Cloud Run CDC Processor" \
+  --project=PROJECT_ID
+
+# Назначаем роли
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:cdc-processor-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/pubsub.subscriber"
+```
+
+**Шаг 2: Деплой Cloud Run с Service Account**
+
+```bash
+# Deploy Cloud Run сервиса с указанием service account
+gcloud run deploy cdc-processor \
+  --image=gcr.io/PROJECT_ID/cdc-processor:latest \
+  --region=us-central1 \
+  --service-account=cdc-processor-sa@PROJECT_ID.iam.gserviceaccount.com \
+  --no-allow-unauthenticated
+```
+
+**Или обновление существующего сервиса:**
+
+```bash
+gcloud run services update cdc-processor \
+  --service-account=cdc-processor-sa@PROJECT_ID.iam.gserviceaccount.com \
+  --region=us-central1
+```
+
+**В коде Cloud Run приложения:**
+
+```python
+# main.py - Cloud Run сервис НЕ требует GOOGLE_APPLICATION_CREDENTIALS
+from google.cloud import pubsub_v1
+
+# Аутентификация происходит автоматически через attached service account
+subscriber = pubsub_v1.SubscriberClient()
+subscription_path = subscriber.subscription_path('PROJECT_ID', 'cdc-subscription')
+
+def callback(message):
+    print(f"Received: {message.data}")
+    message.ack()
+
+streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
+```
+
+---
+
+## Secret Manager для Database Credentials
+
+Database пароли **никогда** не должны быть в:
+- Git репозитории
+- Environment variables в plain text
+- ConfigMaps в Kubernetes
+
+**Правильный подход:** Secret Manager.
+
+### Создание секрета
+
+```bash
+# Создать секрет для database password
+echo -n "postgres_password_here" | gcloud secrets create db-password \
+  --data-file=- \
+  --replication-policy="automatic" \
+  --project=PROJECT_ID
+
+# Создать секрет для database username
+echo -n "debezium_user" | gcloud secrets create db-username \
+  --data-file=- \
+  --replication-policy="automatic" \
+  --project=PROJECT_ID
+```
+
+**ВАЖНО:** Используйте `echo -n` чтобы избежать символа новой строки в секрете.
+
+### Доступ к секретам
+
+**Предоставить доступ Service Account:**
+
+```bash
+gcloud secrets add-iam-policy-binding db-password \
+  --member="serviceAccount:debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor" \
+  --project=PROJECT_ID
+
+gcloud secrets add-iam-policy-binding db-username \
+  --member="serviceAccount:debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor" \
+  --project=PROJECT_ID
+```
+
+### Монтирование в Kubernetes (CSI Driver)
+
+**Установка Secret Manager CSI Driver:**
+
+```bash
+# Для GKE с Workload Identity
+kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp/main/deploy/provider-gcp-plugin.yaml
+```
+
+**SecretProviderClass:**
+
+```yaml
+# k8s/secret-provider.yaml
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: debezium-db-secrets
+  namespace: cdc
+spec:
+  provider: gcp
+  parameters:
+    secrets: |
+      - resourceName: "projects/PROJECT_ID/secrets/db-username/versions/latest"
+        path: "db-username"
+      - resourceName: "projects/PROJECT_ID/secrets/db-password/versions/latest"
+        path: "db-password"
+```
+
+**Использование в Deployment:**
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: debezium-server
+  namespace: cdc
+spec:
+  template:
+    spec:
+      serviceAccountName: debezium-server
+      containers:
+      - name: server
+        image: debezium/server:2.5
+        env:
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: debezium-db-creds
+              key: db-username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: debezium-db-creds
+              key: db-password
+        volumeMounts:
+        - name: secrets
+          mountPath: "/mnt/secrets"
+          readOnly: true
+      volumes:
+      - name: secrets
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "debezium-db-secrets"
+```
+
+**Альтернатива: Прямое чтение из кода (Python)**
+
+```python
+from google.cloud import secretmanager
+
+client = secretmanager.SecretManagerServiceClient()
+
+# Формат: projects/PROJECT_ID/secrets/SECRET_NAME/versions/latest
+name = "projects/PROJECT_ID/secrets/db-password/versions/latest"
+response = client.access_secret_version(request={"name": name})
+password = response.payload.data.decode('UTF-8')
+
+# Использовать password для подключения к БД
+```
+
+---
+
+## Проверка аутентификации
+
+### Тест Workload Identity из pod
+
+```bash
+# Войти в pod
+kubectl exec -it -n cdc debezium-server-xxx -- /bin/bash
+
+# 1. Проверить активный GCP account
+gcloud auth list
+# Должен быть активен: debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com
+
+# 2. Проверить доступ к Pub/Sub
+gcloud pubsub topics list --project=PROJECT_ID
+# Должны увидеть список топиков
+
+# 3. Проверить доступ к Secret Manager
+gcloud secrets list --project=PROJECT_ID
+# Должны увидеть секреты (если есть права list, или попробовать access)
+```
+
+### Типичные проблемы
+
+| Ошибка | Причина | Решение |
+|--------|---------|---------|
+| `could not fetch token` | Namespace в binding не совпадает с namespace pod'а | Проверить формат member: `PROJECT_ID.svc.id.goog[NAMESPACE/SA_NAME]` |
+| `Permission denied: pubsub.topics.publish` | GCP SA не имеет роли `pubsub.publisher` | Выполнить `gcloud projects add-iam-policy-binding` |
+| `Annotation not found` | Отсутствует аннотация `iam.gke.io/gcp-service-account` | Добавить аннотацию в K8s ServiceAccount |
+| `Binding not propagated` | IAM binding еще не вступил в силу (до 7 минут) | Подождать 5-10 минут после создания binding |
+
+---
+
+## Anti-Patterns: чего избегать
+
+### 1. Service Account Key Files
+
+```bash
+# ❌ НИКОГДА НЕ ДЕЛАЙТЕ ТАК
+gcloud iam service-accounts keys create key.json \
+  --iam-account=debezium@project.iam.gserviceaccount.com
+
+# ❌ Не коммитить в git
+git add key.json
+
+# ❌ Не монтировать в контейнеры
+-v $(pwd)/key.json:/app/key.json
+```
+
+**Почему:** Ключи — это долгоживущие credentials, которые легко утечь. Workload Identity автоматически ротирует токены каждый час.
+
+### 2. Излишне широкие роли
+
+```bash
+# ❌ НЕ ИСПОЛЬЗУЙТЕ
+roles/owner
+roles/editor
+roles/viewer  # (для сервисов, которые что-то пишут)
+
+# ✅ ИСПОЛЬЗУЙТЕ конкретные роли
+roles/pubsub.publisher
+roles/secretmanager.secretAccessor
+```
+
+**Почему:** Principle of least privilege. Если Debezium Server скомпрометирован, атакующий не должен получить доступ ко всему проекту.
+
+### 3. Shared Service Accounts между окружениями
+
+```bash
+# ❌ Не использовать один SA для dev/staging/prod
+debezium-sa@project.iam.gserviceaccount.com  # (для всех окружений)
+
+# ✅ Создавать отдельные SA
+debezium-dev-sa@dev-project.iam.gserviceaccount.com
+debezium-staging-sa@staging-project.iam.gserviceaccount.com
+debezium-prod-sa@prod-project.iam.gserviceaccount.com
+```
+
+**Почему:** Blast radius. Если dev environment скомпрометирован, production должен оставаться изолированным.
+
+### 4. Хранение credentials в environment variables
+
+```yaml
+# ❌ Не делайте так
+env:
+- name: DB_PASSWORD
+  value: "postgres123"  # Plain text в манифесте
+
+# ✅ Используйте Secret Manager или Kubernetes Secrets
+env:
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: db-creds
+      key: password
+```
+
+---
+
+## Полный пример конфигурации
+
+### Complete GKE Deployment с Workload Identity
+
+```yaml
+# k8s/debezium-complete.yaml
+---
+# 1. Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cdc
+
+---
+# 2. Service Account с аннотацией Workload Identity
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: debezium-server
+  namespace: cdc
+  annotations:
+    iam.gke.io/gcp-service-account: debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com
+
+---
+# 3. PersistentVolumeClaim для offset storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: debezium-offset-storage
+  namespace: cdc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard-rwo
+
+---
+# 4. ConfigMap с Debezium конфигурацией
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: debezium-config
+  namespace: cdc
+data:
+  application.properties: |
+    debezium.sink.type=pubsub
+    debezium.sink.pubsub.project.id=PROJECT_ID
+    debezium.sink.pubsub.ordering.enabled=true
+
+    debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector
+    debezium.source.offset.storage.file.filename=/debezium/data/offsets.dat
+    debezium.source.offset.flush.interval.ms=5000
+
+    debezium.source.database.hostname=10.x.x.x
+    debezium.source.database.port=5432
+    debezium.source.database.user=${DB_USERNAME}
+    debezium.source.database.password=${DB_PASSWORD}
+    debezium.source.database.dbname=production
+
+    debezium.source.topic.prefix=cdc
+    debezium.source.plugin.name=pgoutput
+    debezium.source.publication.name=debezium_publication
+    debezium.source.slot.name=debezium_slot
+
+    debezium.source.table.include.list=public.orders,public.customers
+    debezium.source.heartbeat.interval.ms=10000
+
+---
+# 5. Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: debezium-server
+  namespace: cdc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: debezium-server
+  template:
+    metadata:
+      labels:
+        app: debezium-server
+    spec:
+      serviceAccountName: debezium-server
+      containers:
+      - name: server
+        image: debezium/server:2.5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        env:
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        volumeMounts:
+        - name: config
+          mountPath: /debezium/conf
+        - name: data
+          mountPath: /debezium/data
+        livenessProbe:
+          httpGet:
+            path: /q/health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /q/health/ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: debezium-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: debezium-offset-storage
+```
+
+**Команды для применения:**
+
+```bash
+# 1. Создать GCP Service Account и роли (выполнить ДО применения k8s манифеста)
+gcloud iam service-accounts create debezium-server-sa \
+  --display-name="Debezium Server CDC" \
+  --project=PROJECT_ID
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/pubsub.publisher"
+
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+# 2. Создать Workload Identity binding
+gcloud iam service-accounts add-iam-policy-binding \
+  debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com \
+  --role=roles/iam.workloadIdentityUser \
+  --member="serviceAccount:PROJECT_ID.svc.id.goog[cdc/debezium-server]"
+
+# 3. Создать секреты в Secret Manager
+echo -n "debezium_user" | gcloud secrets create db-username --data-file=-
+echo -n "your_password" | gcloud secrets create db-password --data-file=-
+
+gcloud secrets add-iam-policy-binding db-username \
+  --member="serviceAccount:debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding db-password \
+  --member="serviceAccount:debezium-server-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+# 4. Создать Kubernetes Secret (из Secret Manager для примера)
+kubectl create secret generic db-credentials -n cdc \
+  --from-literal=username=debezium_user \
+  --from-literal=password=your_password
+
+# 5. Применить Kubernetes манифесты
+kubectl apply -f k8s/debezium-complete.yaml
+
+# 6. Проверить статус
+kubectl get pods -n cdc
+kubectl logs -n cdc deployment/debezium-server -f
+```
+
+---
+
+## Что мы узнали
+
+1. **IAM роли:** Каждый компонент CDC должен иметь минимальный набор прав (least privilege)
+2. **Workload Identity для GKE:** K8s Service Account → GCP Service Account binding через аннотацию `iam.gke.io/gcp-service-account`
+3. **Service Account для Cloud Run:** Прямое прикрепление GCP SA к Cloud Run сервису
+4. **Secret Manager:** Централизованное хранение database credentials с аудитом доступа
+5. **Anti-patterns:** Никогда не использовать service account key files, избегать широких ролей, изолировать окружения
+
+## Что дальше?
+
+В следующем уроке мы развернем **Dataflow template для репликации CDC событий в BigQuery** с использованием настроенной аутентификации.
