@@ -30,6 +30,34 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
 
+  mysql:
+    image: mysql:${MYSQL_VERSION}
+    container_name: mysql
+    ports:
+      - "${MYSQL_PORT}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    command:
+      - "mysqld"
+      - "--server-id=1"
+      - "--log-bin=mysql-bin"
+      - "--binlog-format=ROW"
+      - "--binlog-row-image=FULL"
+      - "--gtid-mode=ON"
+      - "--enforce-gtid-consistency=ON"
+      - "--binlog-expire-logs-seconds=604800"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - mysql-data:/var/lib/mysql
+
   kafka:
     image: confluentinc/cp-kafka:${CONFLUENT_VERSION}
     container_name: kafka
@@ -173,3 +201,4 @@ volumes:
   kafka-data:
   prometheus-data:
   grafana-data:
+  mysql-data:
