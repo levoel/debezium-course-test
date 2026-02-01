@@ -1,0 +1,436 @@
+---
+title: "Outbox Pattern: Теория и архитектура"
+description: "Надежный обмен сообщениями в микросервисах через transactional outbox"
+order: 5
+difficulty: "intermediate"
+estimatedTime: 30
+topics: ["outbox", "microservices", "patterns", "transactions"]
+prerequisites: ["module-4/04-content-based-routing"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Outbox Pattern: Теория и архитектура
+
+Вы строите микросервисную архитектуру. Сервис Orders обновляет заказ и должен отправить событие в Kafka для обработки downstream-сервисами. Как гарантировать, что событие отправится, если БД-транзакция зафиксирована?
+
+Классическое решение — "обновить БД, затем отправить в Kafka" — **не работает надежно**. Это dual-write problem, и он приводит к data loss и inconsistency в production.
+
+**Outbox Pattern** — проверенное архитектурное решение для reliable event publishing в микросервисах. В этом уроке мы разберем теорию паттерна, почему он нужен, и какие гарантии он дает (и НЕ дает).
+
+## The Dual-Write Problem
+
+Представьте типичный код микросервиса:
+
+```python
+# Опасный код - dual-write antipattern
+def approve_order(order_id):
+    # Шаг 1: Обновляем БД
+    db.execute("UPDATE orders SET status = 'APPROVED' WHERE id = %s", order_id)
+    db.commit()
+
+    # Шаг 2: Отправляем событие в Kafka
+    kafka_producer.send('order-events', {
+        'event': 'OrderApproved',
+        'orderId': order_id
+    })
+```
+
+**Что может пойти не так?**
+
+<Mermaid chart={`
+flowchart TB
+    START["approve_order(123)"] --> DB["UPDATE orders<br/>SET status = 'APPROVED'"]
+    DB --> COMMIT["COMMIT"]
+    COMMIT --> KAFKA["kafka_producer.send(...)"]
+
+    KAFKA --> OK{"Success?"}
+
+    OK -->|"YES"| SUCCESS["✅ БД обновлена<br/>✅ Событие отправлено<br/>Consistency OK"]
+    OK -->|"NO"| FAIL["✅ БД обновлена<br/>❌ Событие НЕ отправлено<br/>💥 Data loss!"]
+
+    style SUCCESS fill:#10b981
+    style FAIL fill:#ef4444
+    style KAFKA fill:#f59e0b
+`} client:visible />
+
+**Проблемы:**
+
+1. **Network failure между COMMIT и send()** — БД обновлена, Kafka не получил событие
+2. **Kafka недоступен** — транзакция зафиксирована, событие потеряно
+3. **Application crash после COMMIT** — downstream системы не узнают об изменении
+4. **Retry логика сложна** — нужно помнить, какие события отправили, а какие нет
+
+> **Production истина:** Если у вас два independent write operations (БД и message broker), один из них может failить. Распределенные транзакции (2PC) решают проблему, но медленны и сложны в реализации.
+
+**Dual-write = два независимых write, один может failить.**
+
+## Outbox Pattern: Решение через CDC
+
+Outbox Pattern использует фундаментальную идею: **один write operation вместо двух**.
+
+**Ключевая концепция:** Вместо UPDATE + SEND делаем UPDATE + INSERT в одной транзакции. CDC-система (Debezium) автоматически публикует события из outbox-таблицы.
+
+<Mermaid chart={`
+flowchart LR
+    subgraph APP["Application"]
+        direction TB
+        BIZ["Business Logic"]
+        TX["BEGIN TRANSACTION"]
+        UPD["UPDATE orders"]
+        INS["INSERT INTO outbox"]
+        COMMIT["COMMIT"]
+
+        BIZ --> TX
+        TX --> UPD
+        UPD --> INS
+        INS --> COMMIT
+    end
+
+    subgraph DB["PostgreSQL"]
+        ORDERS[("orders table")]
+        OUTBOX[("outbox table")]
+        WAL["Write-Ahead Log"]
+
+        ORDERS -.->|"Atomic write"| WAL
+        OUTBOX -.->|"Atomic write"| WAL
+    end
+
+    subgraph CDC["Debezium"]
+        DBZ["Debezium Connector"]
+        SMT["Outbox Event Router SMT"]
+
+        DBZ -->|"Reads WAL"| SMT
+    end
+
+    subgraph KAFKA["Apache Kafka"]
+        TOPIC["order-events topic"]
+    end
+
+    COMMIT -->|"1. Atomic commit"| ORDERS
+    COMMIT -->|"1. Atomic commit"| OUTBOX
+    WAL -->|"2. CDC capture"| DBZ
+    SMT -->|"3. Publish"| TOPIC
+
+    style APP fill:#8b5cf6
+    style DB fill:#3b82f6
+    style CDC fill:#f59e0b
+    style KAFKA fill:#10b981
+    style TX fill:#ef4444
+`} client:visible />
+
+**Поток данных:**
+
+1. **Application:** UPDATE business data + INSERT outbox event в **одной транзакции**
+2. **PostgreSQL:** Атомарно фиксирует оба write в WAL
+3. **Debezium:** Читает WAL, захватывает изменения outbox-таблицы
+4. **Outbox Event Router SMT:** Трансформирует CDC event в domain event
+5. **Kafka:** Получает финальное событие в topic
+
+**Гарантия:** Если транзакция зафиксирована — событие **гарантированно** попадет в Kafka (at-least-once).
+
+## Outbox Table Schema
+
+Outbox-таблица имеет стандартную структуру, оптимизированную для Event Router SMT.
+
+```sql
+CREATE TABLE public.outbox (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    aggregatetype VARCHAR(255) NOT NULL,
+    aggregateid VARCHAR(255) NOT NULL,
+    type VARCHAR(255) NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX idx_outbox_created ON public.outbox(created_at);
+
+COMMENT ON TABLE public.outbox IS 'Transactional outbox for reliable event publishing via Debezium';
+```
+
+### Назначение полей
+
+| Поле | Описание | Пример |
+|------|----------|--------|
+| **id** | Уникальный идентификатор события | `550e8400-e29b-41d4-a716-446655440000` |
+| **aggregatetype** | Тип domain entity (определяет topic) | `Order`, `Customer`, `Payment` |
+| **aggregateid** | ID entity (используется как Kafka key) | `order-123` |
+| **type** | Тип события | `OrderCreated`, `OrderApproved`, `OrderCancelled` |
+| **payload** | Event data в JSON-формате | `{"orderId": "123", "amount": 299.99}` |
+| **created_at** | Timestamp создания события | `2026-02-01 10:30:15` |
+
+### Как SMT использует эти поля
+
+**Outbox Event Router SMT** преобразует outbox record в domain event:
+
+```
+aggregatetype = "Order" → Topic: outbox.event.Order
+aggregateid = "order-123" → Kafka key: "order-123"
+type = "OrderApproved" → Event header: type = "OrderApproved"
+payload = {...} → Kafka message value: {...}
+id → Kafka header: id = "550e8400..."
+```
+
+**Результат:** Kafka получает clean domain event без CDC metadata.
+
+## Application Pattern: Transactional Event Emission
+
+Вот как выглядит код с Outbox Pattern:
+
+```python
+# Надежный код с Outbox Pattern
+def approve_order(order_id):
+    conn = db.get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # BEGIN TRANSACTION (implicit)
+
+        # Шаг 1: Business logic update
+        cursor.execute("""
+            UPDATE orders
+            SET status = 'APPROVED', updated_at = NOW()
+            WHERE id = %s
+        """, (order_id,))
+
+        # Шаг 2: Emit event to outbox (same transaction!)
+        cursor.execute("""
+            INSERT INTO outbox (id, aggregatetype, aggregateid, type, payload)
+            VALUES (gen_random_uuid(), %s, %s, %s, %s)
+        """, (
+            'Order',                    # aggregatetype
+            order_id,                   # aggregateid
+            'OrderApproved',            # type
+            json.dumps({                # payload
+                'orderId': order_id,
+                'approvedAt': datetime.now().isoformat(),
+                'amount': 299.99
+            })
+        ))
+
+        # COMMIT - оба write атомарны
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        raise
+```
+
+**Ключевое отличие:** События публикуются через INSERT, а не через Kafka producer API.
+
+### С cleanup'ом outbox-таблицы
+
+Чтобы outbox не рос indefinitely, можно удалять события сразу после INSERT:
+
+```python
+# Emit event + cleanup в одной транзакции
+cursor.execute("""
+    WITH inserted AS (
+        INSERT INTO outbox (id, aggregatetype, aggregateid, type, payload)
+        VALUES (gen_random_uuid(), %s, %s, %s, %s)
+        RETURNING id
+    )
+    DELETE FROM outbox WHERE id = (SELECT id FROM inserted)
+""", ('Order', order_id, 'OrderApproved', json.dumps({...})))
+
+conn.commit()
+```
+
+> **Важно:** Debezium обрабатывает INSERT **до** DELETE. DELETE-событие игнорируется Outbox Event Router по умолчанию, так что cleanup безопасен.
+
+## Guarantees и Limitations
+
+Outbox Pattern — не magic. Важно понимать, что он дает, а что нет.
+
+### ✅ Что Outbox ГАРАНТИРУЕТ
+
+| Guarantee | Описание |
+|-----------|----------|
+| **Atomicity (single-database)** | UPDATE + INSERT outbox атомарны (либо оба зафиксированы, либо оба откачены) |
+| **At-least-once delivery** | Если транзакция зафиксирована → событие попадет в Kafka (может дублироваться при retry) |
+| **Ordering per aggregate** | События одного aggregateid доставляются в том же порядке (Kafka partition key = aggregateid) |
+| **Durability** | События в WAL, пережевут crash приложения или Debezium |
+
+### ❌ Что Outbox НЕ ГАРАНТИРУЕТ
+
+| Limitation | Описание |
+|------------|----------|
+| **Exactly-once delivery** | События могут дублироваться при Debezium retry. Consumers должны быть idempotent |
+| **Distributed ACID** | Outbox НЕ дает ACID-гарантии между микросервисами (eventual consistency, не immediate) |
+| **Cross-service rollback** | Если downstream-сервис failнулся, upstream-транзакция НЕ откатывается |
+| **Immediate consistency** | Есть lag между COMMIT и появлением события в Kafka (обычно <1 секунды, но возможно больше при backpressure) |
+
+> **Critical callout:** Outbox Pattern — это НЕ distributed transactions. Это **reliable messaging** с eventual consistency. Если вам нужен distributed ACID — используйте Saga pattern или 2PC (но готовьтесь к сложности).
+
+### Что такое At-Least-Once Delivery?
+
+**At-least-once** означает: событие доставится хотя бы один раз, возможно больше.
+
+<Mermaid chart={`
+flowchart LR
+    subgraph SCENARIO1["Нормальный flow"]
+        A1["INSERT outbox"] --> B1["Debezium читает"] --> C1["Kafka receives"] --> D1["Debezium offset commit"]
+    end
+
+    subgraph SCENARIO2["Retry scenario"]
+        A2["INSERT outbox"] --> B2["Debezium читает"] --> C2["Kafka receives"] --> D2["Debezium crash<br/>(offset не committed)"]
+        D2 --> E2["Debezium restart"] --> F2["Reads SAME event"] --> G2["Kafka receives AGAIN"]
+    end
+
+    style SCENARIO1 fill:#10b981
+    style SCENARIO2 fill:#f59e0b
+`} client:visible />
+
+**Следствие:** Consumers должны обрабатывать duplicate events idempotently.
+
+```python
+# Consumer MUST be idempotent
+def handle_order_approved(event):
+    order_id = event['orderId']
+    event_id = event.headers['id']  # Outbox event ID
+
+    # Deduplication check
+    if already_processed(event_id):
+        print(f"Event {event_id} already processed, skipping")
+        return
+
+    # Process event
+    send_approval_email(order_id)
+
+    # Mark as processed
+    mark_processed(event_id)
+```
+
+## Outbox Cleanup Strategies
+
+Outbox-таблица может расти indefinitely, если не удалять обработанные события.
+
+### Strategy 1: DELETE в той же транзакции (рекомендуется для учебных целей)
+
+```sql
+BEGIN;
+UPDATE orders SET status = 'APPROVED' WHERE id = '123';
+INSERT INTO outbox (...) VALUES (...);
+DELETE FROM outbox WHERE id = '<just-inserted-id>';  -- Cleanup сразу
+COMMIT;
+```
+
+**Плюсы:**
+- Простота
+- Outbox всегда "пустая"
+- Нет дополнительных процессов
+
+**Минусы:**
+- DELETE также генерирует WAL (overhead)
+- Debezium игнорирует DELETE по умолчанию (OK для нас)
+
+### Strategy 2: External Cleanup Job (production альтернатива)
+
+```sql
+-- Периодический cleanup (cron job, scheduled task)
+DELETE FROM outbox
+WHERE created_at < NOW() - INTERVAL '1 hour';
+```
+
+**Плюсы:**
+- Меньше WAL overhead в hot path
+- Можно batch удалять события
+
+**Минусы:**
+- Риск lock contention с INSERTs
+- Нужен отдельный процесс
+
+> **Recommendation для курса:** Используйте Strategy 1 (DELETE в той же транзакции) для простоты. В production оцените volume и выберите подходящую стратегию.
+
+## Когда использовать Outbox Pattern?
+
+### ✅ Use Cases для Outbox
+
+- **Microservices event publishing:** Сервис обновляет свои данные и должен уведомить другие сервисы
+- **CQRS (Command Query Responsibility Segregation):** Write model эмитит события для Read model
+- **Event Sourcing integration:** События из БД попадают в event stream
+- **Audit trail:** Гарантированная запись критичных бизнес-событий
+
+### ❌ Когда Outbox избыточен
+
+- **Request-response communication:** Если downstream система должна ответить синхронно — используйте REST/gRPC
+- **Low-value events:** Если потеря события некритична — используйте direct Kafka send
+- **Single database, no downstream systems:** Если нет внешних потребителей — Outbox не нужен
+
+## Архитектурная диаграмма: Microservices с Outbox
+
+<Mermaid chart={`
+flowchart TB
+    subgraph ORDER_SERVICE["Order Service"]
+        ORDER_API["REST API"]
+        ORDER_DB[("PostgreSQL<br/>orders + outbox")]
+        ORDER_API -->|"UPDATE + INSERT outbox"| ORDER_DB
+    end
+
+    subgraph PAYMENT_SERVICE["Payment Service"]
+        PAYMENT_API["REST API"]
+        PAYMENT_DB[("PostgreSQL<br/>payments + outbox")]
+        PAYMENT_API -->|"UPDATE + INSERT outbox"| PAYMENT_DB
+    end
+
+    subgraph CDC["CDC Infrastructure"]
+        DBZ_ORDER["Debezium Connector<br/>(Order Service)"]
+        DBZ_PAYMENT["Debezium Connector<br/>(Payment Service)"]
+    end
+
+    subgraph KAFKA["Apache Kafka"]
+        TOPIC_ORDER["outbox.event.Order"]
+        TOPIC_PAYMENT["outbox.event.Payment"]
+    end
+
+    subgraph NOTIFICATION["Notification Service"]
+        CONSUMER["Kafka Consumer"]
+        CONSUMER_DB[("PostgreSQL<br/>notifications")]
+        CONSUMER --> CONSUMER_DB
+    end
+
+    ORDER_DB -->|"CDC capture"| DBZ_ORDER
+    PAYMENT_DB -->|"CDC capture"| DBZ_PAYMENT
+
+    DBZ_ORDER -->|"Publish"| TOPIC_ORDER
+    DBZ_PAYMENT -->|"Publish"| TOPIC_PAYMENT
+
+    TOPIC_ORDER --> CONSUMER
+    TOPIC_PAYMENT --> CONSUMER
+
+    style ORDER_SERVICE fill:#8b5cf6
+    style PAYMENT_SERVICE fill:#3b82f6
+    style CDC fill:#f59e0b
+    style KAFKA fill:#10b981
+    style NOTIFICATION fill:#ec4899
+`} client:visible />
+
+**Flow:**
+1. Order Service обновляет orders + INSERT в outbox (атомарно)
+2. Payment Service обновляет payments + INSERT в outbox (атомарно)
+3. Debezium connectors захватывают outbox events из каждой БД
+4. События публикуются в Kafka topics
+5. Notification Service потребляет события и отправляет уведомления
+
+**Eventual consistency:** Order Service не знает, успешно ли Notification Service обработал событие. Это trade-off для decoupling.
+
+## Что дальше?
+
+Вы поняли теорию Outbox Pattern. Теперь ключевой вопрос: **как настроить Debezium Outbox Event Router SMT?**
+
+В следующем уроке мы:
+- Создадим outbox-таблицу в PostgreSQL
+- Настроим Debezium connector с Outbox Event Router SMT
+- Напишем application code для event emission
+- Реализуем idempotent consumer для обработки событий
+
+## Ключевые выводы
+
+1. **Dual-write problem:** UPDATE БД + SEND Kafka = два independent writes, один может failить
+2. **Outbox solution:** UPDATE + INSERT outbox в одной транзакции, CDC публикует события
+3. **At-least-once delivery:** События гарантированно доставляются, но могут дублироваться
+4. **NOT distributed ACID:** Outbox дает eventual consistency, не immediate consistency
+5. **Idempotency required:** Consumers должны обрабатывать duplicate events
+6. **Cleanup strategies:** DELETE в той же транзакции (простота) или external job (production scale)
+7. **Use case:** Microservices event publishing, CQRS, Event Sourcing integration
+8. **Schema:** id, aggregatetype, aggregateid, type, payload — стандартная структура для Event Router SMT
