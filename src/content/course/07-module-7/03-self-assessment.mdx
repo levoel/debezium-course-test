@@ -1,0 +1,575 @@
+---
+title: "Production Readiness Checklist"
+description: "Чеклист для самопроверки capstone проекта"
+order: 3
+difficulty: "advanced"
+estimatedTime: 20
+topics: ["Production Readiness", "Self-Assessment", "Checklist", "Quality"]
+prerequisites: ["module-7/02-architecture-deliverables"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Production Readiness Checklist
+
+Вы построили CDC pipeline: Aurora PostgreSQL захватывает события через outbox таблицу, Debezium с Outbox Event Router SMT публикует их в Kafka, PyFlink трансформирует данные, BigQuery принимает CDC события для аналитики. Но **готов ли ваш проект к production?**
+
+Production-ready система — это не просто "работает на моем ноутбуке". Это система, которую можно **развернуть, мониторить, отлаживать и масштабировать** в production окружении без потери данных и с предсказуемой производительностью.
+
+В этом уроке вы получите **comprehensive checklist** для самопроверки вашего capstone проекта против production-grade стандартов.
+
+## Зачем нужна самопроверка?
+
+### Production != "It Works Locally"
+
+<Mermaid chart={`
+flowchart LR
+    subgraph LOCAL["Локальная разработка"]
+        DEV["Код работает<br/>в Docker Compose"]
+        style DEV fill:#f59e0b
+    end
+
+    subgraph PROD["Production"]
+        MONITOR["Мониторинг"] --> FAULT["Fault Tolerance"]
+        FAULT --> SCALE["Масштабируемость"]
+        SCALE --> OPS["Operational<br/>Procedures"]
+        OPS --> DOC["Документация"]
+        style MONITOR fill:#10b981
+        style FAULT fill:#10b981
+        style SCALE fill:#10b981
+        style OPS fill:#10b981
+        style DOC fill:#10b981
+    end
+
+    DEV -.->|"Production Gap"| MONITOR
+`} client:visible />
+
+**Разница:**
+- **Локально:** Данные небольшие, можно перезапустить вручную, ошибки видны в консоли
+- **Production:** Терабайты данных, автоматическое восстановление, ошибки должны быть в алертах
+
+**Что проверяет checklist:**
+- Может ли система **восстановиться после сбоя** без потери данных?
+- Можно ли **узнать о проблеме до того, как пожалуются пользователи**?
+- Есть ли **runbook** для частых failure scenarios?
+- Документирована ли **schema evolution стратегия**?
+
+> **Production principle:** Если вы не можете ответить на вопрос "что происходит, когда X падает?" — система не готова к production.
+
+## Four Golden Signals
+
+Google SRE определяет **Four Golden Signals** для monitoring любой distributed системы:
+
+<Mermaid chart={`
+flowchart TB
+    subgraph SIGNALS["Four Golden Signals"]
+        LATENCY["1. Latency<br/>Время ответа системы"]
+        TRAFFIC["2. Traffic<br/>Нагрузка на систему"]
+        ERRORS["3. Errors<br/>Частота ошибок"]
+        SATURATION["4. Saturation<br/>Насыщенность ресурсов"]
+    end
+
+    subgraph CDC["Применительно к CDC"]
+        LAG["Replication lag<br/>(ms behind source)"]
+        THROUGHPUT["Events/second<br/>в Kafka"]
+        FAILURES["Connector failures<br/>Error rate > 0"]
+        QUEUE["Kafka consumer lag<br/>CPU/Memory usage"]
+    end
+
+    LATENCY --> LAG
+    TRAFFIC --> THROUGHPUT
+    ERRORS --> FAILURES
+    SATURATION --> QUEUE
+
+    style LATENCY fill:#8b5cf6
+    style TRAFFIC fill:#8b5cf6
+    style ERRORS fill:#8b5cf6
+    style SATURATION fill:#8b5cf6
+`} client:visible />
+
+**Для вашего CDC pipeline:**
+
+1. **Latency:** Replication lag (ms behind source) — как быстро изменения из Aurora попадают в BigQuery?
+2. **Traffic:** Events/second throughput — сколько CDC событий система обрабатывает?
+3. **Errors:** Connector failures, error rate — сколько событий не обработалось из-за ошибок?
+4. **Saturation:** Kafka consumer lag, CPU/memory usage — насколько близка система к пределам?
+
+**Ваш checklist должен подтверждать, что вы можете ответить на эти вопросы.**
+
+> **SRE wisdom:** Если вы не измеряете Four Golden Signals, вы не управляете системой — она управляет вами.
+
+## Чеклист как инструмент обучения
+
+Этот checklist — **не экзамен**, а **learning tool**. Он помогает:
+
+1. **Identify gaps:** Обнаружить, какие production patterns вы не реализовали
+2. **Prioritize work:** Сфокусироваться на критичных аспектах (fault tolerance > красивая документация)
+3. **Self-directed learning:** Понять, где нужно углубиться (например, schema evolution)
+
+**Используйте checklist итеративно:**
+- Первый проход: отметьте, что уже есть
+- Второй проход: добавьте критичные недостающие элементы (Section 1-3)
+- Третий проход: дополните документацию и тесты (Section 6-7)
+
+**Не все пункты обязательны для каждого use case.** Например, если вы не используете Avro, секция Schema Registry не применима. Но вы должны **понимать, почему** пункт не применим.
+
+## Production Readiness Checklist
+
+### Section 1: Functionality (Core Pipeline)
+
+Базовая функциональность: работает ли pipeline end-to-end?
+
+- [ ] **Aurora outbox table** создана с `REPLICA IDENTITY FULL`
+  - Проверка: `SELECT relreplident FROM pg_class WHERE relname = 'outbox';` возвращает `f`
+  - Без этого Debezium не получит полные данные для UPDATE/DELETE событий
+
+- [ ] **Debezium connector** успешно захватывает INSERT события из outbox
+  - Проверка: `curl http://localhost:8083/connectors/your-connector/status` → `state: "RUNNING"`
+  - Убедитесь, что в Kafka topic появляются события после INSERT в outbox
+
+- [ ] **Outbox Event Router SMT** routing работает корректно
+  - Проверка: события из outbox попадают в topic вида `outbox.event.{aggregatetype}`
+  - Поле `aggregatetype` из outbox используется для routing (не все в один topic)
+
+- [ ] **PyFlink job** успешно consume Debezium-форматированные события
+  - Проверка: логи PyFlink показывают `format = 'debezium-json'` source working
+  - Job обрабатывает `op: c/u/r/d` операции корректно
+
+- [ ] **PyFlink transformations** выполняются корректно
+  - Проверка: output topic или console sink показывает transformed data
+  - Тестовые данные: вставьте order в Aurora, проверьте, что в BigQuery topic появилась трансформация
+
+- [ ] **BigQuery table** создана с `PRIMARY KEY` declaration
+  - Проверка: `SHOW CREATE TABLE your_table;` содержит `PRIMARY KEY (col) NOT ENFORCED`
+  - Без primary key BigQuery CDC ingestion не работает
+
+- [ ] **End-to-end latency** < 5 секунд для test событий
+  - Проверка: INSERT в Aurora → появление в BigQuery за < 5 секунд
+  - Измерьте с помощью timestamp сравнения: `created_at` в Aurora vs `processed_at` в BigQuery
+
+**Минимальная планка:** Все 7 пунктов Section 1 должны быть выполнены для "Meets Expectations".
+
+### Section 2: Fault Tolerance
+
+Система восстанавливается после сбоев без потери данных?
+
+- [ ] **Kafka offsets** отслеживаются корректно
+  - Проверка: остановите Debezium connector, вставьте данные, запустите — новые данные обработаются
+  - Используйте `kafka-consumer-groups --describe` для проверки offset lag
+
+- [ ] **PyFlink checkpoints** enabled и завершаются успешно
+  - Проверка: логи PyFlink показывают `Completed checkpoint X`
+  - Конфигурация: `execution.checkpointing.interval` установлен (например, 60 секунд)
+
+- [ ] **Replication slot** переживает restart connector без data loss
+  - Проверка: остановите connector на 1 минуту, вставьте данные в Aurora, запустите — данные захвачены
+  - Убедитесь, что `pg_replication_slots.restart_lsn` не отстаёт критично
+
+- [ ] **Duplicate handling** реализован (idempotent operations)
+  - Проверка: рестарт connector/PyFlink не приводит к дублям в BigQuery
+  - Используйте PRIMARY KEY для автоматического UPSERT вместо INSERT
+
+- [ ] **Snapshot mode** настроен правильно
+  - Рекомендация: `snapshot.mode=when_needed` для production
+  - Проверьте в connector config — избегайте `always` (приводит к full re-snapshot каждый раз)
+
+**Critical for production:** At-least-once delivery + idempotency = no data loss, no duplicates.
+
+> **Warning:** Самая частая ошибка в capstone — не протестировать восстановление после сбоя. Обязательно kill connector/PyFlink в процессе работы и проверьте recovery.
+
+### Section 3: Monitoring & Observability
+
+Можете ли вы ответить на Four Golden Signals?
+
+- [ ] **Prometheus scrapes** JMX metrics from Kafka Connect
+  - Проверка: откройте `http://localhost:9090/targets` — Kafka Connect target `UP`
+  - Используйте JMX Exporter для экспорта Debezium метрик
+
+- [ ] **Grafana dashboard** отображает ключевые метрики:
+  - [ ] **Replication lag** (ms behind source)
+    - Метрика: `debezium_metrics_millisecondsbehind_source`
+    - Threshold: warning > 5s, critical > 30s
+
+  - [ ] **Events/second throughput**
+    - Метрика: `kafka_connect_source_task_poll_batch_avg_time_ms`
+    - Показывает, сколько событий в секунду обрабатывается
+
+  - [ ] **Connector status** (running/failed)
+    - Метрика: `kafka_connect_connector_status` (1 = RUNNING, 0 = FAILED)
+    - Критичный индикатор работоспособности
+
+  - [ ] **PyFlink checkpoint duration**
+    - Метрика из Flink metrics (если экспортируете через Prometheus)
+    - Длинные checkpoints = проблемы с performance
+
+  - [ ] **Kafka consumer lag**
+    - Метрика: `kafka_consumer_group_lag`
+    - Показывает, насколько PyFlink отстаёт от Kafka
+
+- [ ] **Alerts настроены** для критичных сбоев:
+  - [ ] Connector failure (status != RUNNING)
+  - [ ] Replication lag > 10 seconds
+  - [ ] Error rate > 0 (любые ошибки в processing)
+
+  Проверка: создайте Prometheus alert rules, вызовите намеренный сбой (остановите connector), получите alert
+
+- [ ] **Можете ответить на Four Golden Signals:**
+  - **Latency:** Какова текущая replication lag?
+  - **Traffic:** Сколько events/sec обрабатывается?
+  - **Errors:** Сколько событий failed за последний час?
+  - **Saturation:** Какой consumer lag в Kafka? CPU/memory usage?
+
+**Production must-have:** Dashboard + alerts. Без них вы узнаете о проблемах из bug reports пользователей, не из monitoring.
+
+### Section 4: Schema Evolution
+
+Система готова к изменениям schema?
+
+- [ ] **Schema Registry** настроен (если используете Avro)
+  - Проверка: `curl http://localhost:8081/subjects` показывает ваши topics
+  - Avro обеспечивает schema evolution compatibility checks
+
+- [ ] **Tested adding new column** в outbox table
+  - Проверка: `ALTER TABLE outbox ADD COLUMN new_field TEXT;` → events продолжают обрабатываться
+  - PyFlink job должен gracefully игнорировать unknown fields или обрабатывать их
+
+- [ ] **Tested removing optional column**
+  - Проверка: `ALTER TABLE outbox DROP COLUMN optional_field;` → no breaking changes
+  - Backward compatibility: старые события в Kafka ещё содержат поле, новые — нет
+
+- [ ] **PyFlink job** обрабатывает missing fields gracefully
+  - Проверка: если в Debezium event отсутствует поле, PyFlink не падает
+  - Используйте nullable columns или default values
+
+- [ ] **BigQuery schema evolution** задокументирована
+  - Какие изменения schema безопасны? (add column с default — да, change type — нет)
+  - Procedure для schema migration: кто апрувит, как тестируется
+
+**Schema evolution — частая причина production incidents.** Протестируйте хотя бы add/remove column scenario.
+
+> **Open question:** Не все capstone проекты требуют Avro. Если вы используете JSON, Schema Registry не применим, но вы всё равно должны протестировать schema changes вручную.
+
+### Section 5: Operational Readiness
+
+Есть ли runbook для common failures?
+
+- [ ] **Runbook документирует** типичные failure scenarios:
+
+  - [ ] **Connector fails с "too many replication slots"**
+    - Причина: Aurora `max_replication_slots` limit достигнут
+    - Remediation: `SELECT * FROM pg_replication_slots;` → drop неиспользуемые слоты
+
+  - [ ] **WAL segments no longer exist**
+    - Причина: connector был остановлен слишком долго, WAL purged
+    - Remediation: incremental snapshot через signaling table или full re-snapshot
+
+  - [ ] **BigQuery ingestion failures**
+    - Причина: primary key constraint violated, invalid protobuf format
+    - Remediation: проверка source data quality, deduplicate primary keys
+
+  - [ ] **PyFlink job restarts с checkpoint recovery**
+    - Причина: OOM, crash, deployment
+    - Remediation: проверьте checkpoint storage доступен, recovery автоматический
+
+- [ ] **Capacity planning** задокументирован
+  - Expected events/day (current и projected)
+  - Storage growth rate (Kafka retention, BigQuery table size)
+  - Когда нужно scale up? (например, при > 10K events/sec добавить Kafka partitions)
+
+- [ ] **Backup and disaster recovery plan** определён
+  - Как восстановить систему после полной потери Kafka cluster?
+  - Как восстановить BigQuery данные из Kafka replay?
+  - RTO (Recovery Time Objective) и RPO (Recovery Point Objective)
+
+- [ ] **Security:** no hardcoded credentials
+  - Проверка: `grep -r "password" .` не показывает plaintext паролей в коде
+  - Используйте environment variables или secrets management (например, AWS Secrets Manager)
+  - Least-privilege permissions: Debezium user имеет только `REPLICATION` и `SELECT`, не `SUPERUSER`
+
+**Operational readiness = команда знает, что делать при сбое, не паникует и не гуглит.**
+
+### Section 6: Testing & Validation
+
+Как вы подтверждаете корректность pipeline?
+
+- [ ] **Source-to-target validation:** sample data verified в BigQuery
+  - Проверка: вставьте 10 известных orders в Aurora, проверьте, что все 10 появились в BigQuery
+  - Сравните `COUNT(*)` в source и target таблицах
+
+- [ ] **Data quality tests:** no duplicates, no missing required fields
+  - Проверка: `SELECT COUNT(*), COUNT(DISTINCT primary_key) FROM bigquery_table;` — числа равны
+  - Проверьте, что `NOT NULL` поля действительно не null
+
+- [ ] **Negative testing:** pipeline handles malformed input
+  - Проверка: вставьте invalid JSON в outbox.payload, убедитесь, что PyFlink не падает
+  - Dead letter queue или error topic для invalid events
+
+- [ ] **Load testing:** verified throughput under 10x expected load
+  - Проверка: сгенерируйте burst of inserts (например, 1000 orders за 1 секунду)
+  - Проверьте, что replication lag восстанавливается в разумное время (< 1 минута)
+
+- [ ] **Chaos testing:** killed connector during processing, verified recovery
+  - Проверка: `docker stop kafka-connect` во время активной обработки → перезапуск → no data loss
+  - Это самый важный тест для fault tolerance
+
+**Testing strategy document должен включать хотя бы примеры validation queries.**
+
+> **Capstone insight:** Многие студенты пропускают negative testing. Но именно он выявляет production bugs (что происходит, когда что-то идёт не так?).
+
+### Section 7: Documentation
+
+Может ли другой engineer развернуть и поддерживать вашу систему?
+
+- [ ] **README.md** с project overview и setup instructions
+  - Описание проекта: что делает, какие компоненты
+  - Prerequisites: Docker, PostgreSQL client, Python 3.x
+  - Быстрый старт: `docker-compose up` → проверка работоспособности
+
+- [ ] **Architecture diagram** (C4 model)
+  - System Context: users, external systems, boundaries
+  - Container diagram: Aurora, Kafka, Debezium, PyFlink, BigQuery
+  - Используйте Mermaid или draw.io
+
+- [ ] **API documentation** для outbox table schema
+  - Какие поля обязательны? (`aggregatetype`, `aggregateid`, `type`, `payload`)
+  - Пример payload JSON для каждого event type
+  - Какие `aggregatetype` routing rules настроены?
+
+- [ ] **Runbook** с operational procedures
+  - How to deploy changes
+  - How to scale system (add Kafka partitions, increase PyFlink parallelism)
+  - Common troubleshooting scenarios (из Section 5)
+
+- [ ] **Testing strategy** document
+  - Unit tests (если есть transformations logic)
+  - Integration tests (source-to-target validation)
+  - Chaos testing results
+
+- [ ] **Known limitations** и future improvements документированы
+  - Например: "Currently using JSON format; future: migrate to Avro for schema evolution"
+  - "Monitoring alerts send to console; future: integrate with PagerDuty"
+
+**Good documentation = force multiplier.** Время, потраченное на документацию, окупается многократно при onboarding новых людей или troubleshooting через 6 месяцев.
+
+## Scoring Rubric
+
+Используйте эту рубрику для self-assessment:
+
+### Exemplary (90-100%)
+
+**Критерии:**
+- Все 7 секций checklist выполнены **полностью**
+- Демонстрирует **advanced patterns:**
+  - Avro schema evolution с Schema Registry
+  - Custom SMTs или PyFlink UDFs для complex transformations
+  - Comprehensive monitoring с custom dashboards и alerts
+  - Automated testing с CI/CD pipeline
+  - Disaster recovery drill выполнен и задокументирован
+- Documentation профессионального уровня (architectural decision records, runbooks, testing reports)
+- Система **production-ready:** можно развернуть в реальном production без доработок
+
+**Индикаторы:**
+- Monitoring dashboard показывает все Four Golden Signals
+- Runbook покрывает 5+ failure scenarios с проверенными remediation steps
+- Schema evolution протестирована с backward и forward compatibility
+- Chaos testing включает multi-component failures (Kafka + Debezium одновременно)
+
+### Above Average (75-89%)
+
+**Критерии:**
+- Все **critical sections** выполнены (1-6): functionality, fault tolerance, monitoring, schema evolution, operational readiness, testing
+- Minor gaps в documentation (Section 7):
+  - README есть, но architecture diagram упрощён
+  - Runbook покрывает 2-3 scenarios, не 5+
+  - Testing strategy описана, но без detailed test cases
+- Monitoring работает, но dashboard не покрывает все Four Golden Signals
+- Система **near production-ready:** требует minor доработок (например, добавить alerts)
+
+**Индикаторы:**
+- Replication lag мониторится, но saturation metrics отсутствуют
+- Fault tolerance протестирована для connector restart, но не для PyFlink crash
+- Documentation достаточна для развёртывания, но troubleshooting требует дополнительных вопросов
+
+### Meets Expectations (60-74%)
+
+**Критерии:**
+- **Core functionality works** (Section 1, 2): pipeline передаёт данные end-to-end, восстанавливается после connector restart
+- **Monitoring incomplete** (Section 3): metrics собираются, но dashboard minimal или alerts отсутствуют
+- **Testing incomplete** (Section 6): source-to-target validation выполнена, но negative/chaos testing пропущены
+- **Documentation minimal** (Section 7): README с setup instructions есть, но architecture diagram и runbook отсутствуют
+- Система **works locally:** демонстрирует понимание CDC patterns, но не готова к production deployment
+
+**Индикаторы:**
+- Pipeline обрабатывает happy path данные корректно
+- Connector restart восстанавливает processing
+- Prometheus scrapes metrics, но Grafana dashboard отсутствует
+- Нет runbook — troubleshooting методом проб и ошибок
+
+### Below Expectations (<60%)
+
+**Критерии:**
+- Pipeline работает **только в локальном окружении** под контролируемыми условиями
+- Fault tolerance **не протестирована:** не проверен connector restart или checkpoint recovery
+- Monitoring **отсутствует:** нет Prometheus/Grafana, метрики не собираются
+- Documentation **отсутствует или minimal:** нет README или только code comments
+- Система **не готова к production:** требует substantial доработок для deployment
+
+**Индикаторы:**
+- После restart connector/PyFlink данные теряются или дублируются
+- Не можете ответить на вопрос "какова текущая replication lag?"
+- Нет runbook или architecture diagram
+- Schema changes breaking pipeline (не протестированы)
+
+## Common Mistakes (Частые ошибки)
+
+Список частых ошибок, которые студенты допускают в capstone проектах (из опыта и RESEARCH.md):
+
+### 1. Aurora Replication Slot Exhaustion
+
+**Ошибка:** Debezium connector создаёт replication slot, но не настроен heartbeat — slot не освобождается, WAL накапливается, диск заполняется.
+
+**Симптомы:**
+- Aurora disk usage растёт
+- `pg_replication_slots` показывает slot с большим `restart_lsn` lag
+- Connector возвращает "too many replication slots" error
+
+**Fix:**
+- Установите `heartbeat.interval.ms=10000` в connector config
+- Мониторьте `pg_replication_slots.restart_lsn` через custom query
+- Настройте `max_replication_slots` и `max_wal_senders` в Aurora parameter group
+
+**Prevention:** Всегда настраивайте heartbeat для production connectors.
+
+### 2. Missing REPLICA IDENTITY FULL
+
+**Ошибка:** Забыли выполнить `ALTER TABLE outbox REPLICA IDENTITY FULL` — Debezium захватывает только primary key для UPDATE/DELETE событий, не full row.
+
+**Симптомы:**
+- Debezium events для UPDATE содержат только changed columns, не full `before` state
+- PyFlink не может reconstruct full row для transformations
+- DELETE events не содержат deleted data
+
+**Fix:**
+```sql
+ALTER TABLE outbox REPLICA IDENTITY FULL;
+ALTER TABLE [other_cdc_tables] REPLICA IDENTITY FULL;
+```
+
+**Prevention:** Добавьте в setup script и проверьте через `pg_class.relreplident`.
+
+### 3. BigQuery Primary Key Issues
+
+**Ошибка:** BigQuery table создана без `PRIMARY KEY (col) NOT ENFORCED` declaration — CDC ingestion fails.
+
+**Симптомы:**
+- Storage Write API возвращает "primary key required" errors
+- MERGE operations fail silently
+- Queries возвращают duplicate rows с одинаковыми primary keys
+
+**Fix:**
+```sql
+CREATE TABLE orders (
+    order_id INT64 NOT NULL,
+    -- other columns --
+    PRIMARY KEY (order_id) NOT ENFORCED
+);
+```
+
+**Prevention:** Всегда объявляйте primary key для BigQuery CDC tables, даже если он не enforced.
+
+### 4. Snapshot Mode Misunderstanding
+
+**Ошибка:** Использование `snapshot.mode=always` приводит к full re-snapshot при каждом restart connector — duplicates и огромная latency.
+
+**Симптомы:**
+- Connector restart занимает часы (re-snapshot всей таблицы)
+- BigQuery содержит duplicates (snapshot data + CDC events)
+- Massive replication lag spike после restart
+
+**Fix:**
+- Используйте `snapshot.mode=when_needed` для production
+- `initial` только для первого запуска
+- Избегайте `always` — для debug only
+
+**Prevention:** Проверьте connector config перед deployment.
+
+### 5. Missing Idempotency
+
+**Ошибка:** Downstream consumers используют INSERT вместо UPSERT — at-least-once delivery приводит к duplicates.
+
+**Симптомы:**
+- После connector restart BigQuery содержит duplicate rows
+- Aggregations (COUNT, SUM) показывают inflated numbers
+- Metrics spike после restarts
+
+**Fix:**
+- Используйте BigQuery PRIMARY KEY для automatic UPSERT
+- PyFlink: `table.exec.source.cdc-events-duplicate=true`
+- Design all operations to be idempotent
+
+**Prevention:** Default to at-least-once + idempotency, not exactly-once.
+
+### 6. Insufficient Monitoring
+
+**Ошибка:** Система работает, но нет monitoring — проблемы обнаруживаются только через user complaints.
+
+**Симптомы:**
+- Не можете ответить "когда replication lag spike произошёл?"
+- Нет historical metrics для capacity planning
+- Troubleshooting требует manual log search
+
+**Fix:**
+- Настройте Prometheus + Grafana с Four Golden Signals dashboard
+- Добавьте alerts для critical failures (connector down, lag > threshold)
+- Создайте runbook для common scenarios
+
+**Prevention:** Monitoring — first-class deliverable, not afterthought.
+
+## Final Encouragement
+
+Этот checklist представляет **production best practices**, накопленные годами опыта с CDC системами. **Не все пункты обязательны для каждого use case.**
+
+**Например:**
+- Если вы используете JSON вместо Avro, Schema Registry не применим
+- Если система обрабатывает low-volume data, load testing с 10x load может быть overkill
+- Если это proof-of-concept, disaster recovery plan может быть упрощён
+
+**Фокус на демонстрации понимания, не на perfection:**
+- Выполните все critical sections (1-3): functionality, fault tolerance, monitoring
+- Добавьте хотя бы minimal documentation (README, architecture diagram)
+- Протестируйте хотя бы один failure scenario (connector restart)
+
+**Используйте checklist как guide, не как strict requirements.** Важно, чтобы вы могли **объяснить, почему** какой-то пункт не применим или почему вы выбрали упрощённый подход.
+
+> **Capstone goal:** Продемонстрировать, что вы понимаете production CDC patterns и можете применить их в реальной системе — не просто "код работает", а "система готова к deployment".
+
+## Что дальше?
+
+После завершения checklist вы готовы приступить к implementation вашего capstone проекта.
+
+**Recommended workflow:**
+
+1. **Week 1:** Setup infrastructure (Aurora, Kafka, Debezium, PyFlink, BigQuery) → verify Section 1 (Functionality)
+2. **Week 2:** Implement fault tolerance (checkpoints, idempotency) → verify Section 2
+3. **Week 3:** Add monitoring (Prometheus, Grafana, alerts) → verify Section 3
+4. **Week 4:** Testing (source-to-target validation, chaos testing) → verify Section 6
+5. **Week 5:** Documentation (README, architecture, runbook) → verify Section 7
+
+**Sections 4-5 (Schema Evolution, Operational Readiness) можно интегрировать по ходу.**
+
+Используйте этот checklist итеративно — не ждите до конца проекта, чтобы проверить fault tolerance или monitoring.
+
+## Ключевые выводы
+
+1. **Production readiness** — это не просто "код работает", а возможность deploy, monitor, debug, и scale систему
+2. **Four Golden Signals** (latency, traffic, errors, saturation) — foundation для monitoring любой distributed системы
+3. **Fault tolerance** критична: at-least-once delivery + idempotency = no data loss, no duplicates
+4. **Checklist** — learning tool для self-directed improvement, не strict exam
+5. **Common mistakes:** replication slot exhaustion, missing REPLICA IDENTITY FULL, BigQuery primary key issues, snapshot mode misunderstanding
+6. **Monitoring** — first-class deliverable: dashboard + alerts обязательны для production
+7. **Documentation** — force multiplier: good docs окупаются при onboarding и troubleshooting
+8. **Testing strategy:** source-to-target validation, negative testing, chaos testing (kill components)
+9. **Scoring rubric:** Exemplary = all sections + advanced patterns, Meets Expectations = core works + minimal monitoring/docs
+10. **Not all items required:** Adapt checklist to your use case, explain why items skipped
+
+Этот checklist — ваш guide к production-ready CDC pipeline. Используйте его, итерируйте, и продемонстрируйте понимание production patterns. Удачи с capstone проектом!
