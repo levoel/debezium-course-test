@@ -1,0 +1,293 @@
+---
+title: "Capstone: End-to-End CDC Pipeline"
+description: "Проектирование production-ready CDC системы Aurora → Outbox → PyFlink → BigQuery"
+order: 1
+difficulty: "advanced"
+estimatedTime: 30
+topics: ["Capstone", "CDC", "Aurora", "PyFlink", "BigQuery", "Production"]
+prerequisites: ["module-6/06-cloud-monitoring"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Capstone: End-to-End CDC Pipeline
+
+Вы прошли шесть модулей курса: от основ Debezium до production deployment на GCP. Теперь время **применить все знания** в едином capstone проекте — построить production-ready CDC pipeline от начала до конца.
+
+## Что такое Capstone Project?
+
+**Capstone** — это не новые концепции, а **синтез** всего, что вы изучили. Ваша задача:
+- Интегрировать Aurora PostgreSQL, Outbox pattern, PyFlink, BigQuery в единую систему
+- Продемонстрировать production readiness (не просто "работает", а "работает надежно")
+- Создать полную документацию и мониторинг
+
+**Этот проект валидирует:** Вы можете **самостоятельно спроектировать и реализовать** production CDC pipeline с пониманием всех критических нюансов.
+
+---
+
+## Бизнес-сценарий: E-commerce Order Processing
+
+Вы строите **real-time analytics pipeline** для e-commerce платформы.
+
+### Требования бизнеса
+
+1. **Transactional Consistency:** Заказы должны публиковаться в event stream **атомарно** с изменениями в базе данных (никаких потерянных событий)
+2. **Real-time Analytics:** Аналитики хотят видеть метрики заказов в BigQuery с задержкой < 5 секунд
+3. **Data Transformation:** Перед загрузкой в BigQuery нужно обогатить события (например, добавить статус исполнения)
+4. **Production Reliability:** Система должна выдерживать сбои и восстанавливаться без потери данных
+
+### Техническая реализация
+
+Вы используете **Outbox Pattern** для transactional event publishing и **CDC pipeline** для доставки событий в аналитический warehouse.
+
+---
+
+## Архитектура Pipeline
+
+<Mermaid chart={`
+flowchart TB
+    subgraph SOURCE["Source: Aurora PostgreSQL"]
+        APP["Application<br/>(writes orders)"]
+        ORDERS_TABLE["orders table"]
+        OUTBOX_TABLE["outbox table"]
+        APP -->|"INSERT order"| ORDERS_TABLE
+        APP -->|"INSERT event<br/>(same transaction)"| OUTBOX_TABLE
+    end
+
+    subgraph CDC["CDC Layer: Debezium"]
+        DEBEZIUM["Debezium Connector<br/>(Outbox Event Router SMT)"]
+        KAFKA["Kafka Topic<br/>outbox.event.orders"]
+        OUTBOX_TABLE -->|"WAL stream"| DEBEZIUM
+        DEBEZIUM -->|"Route events"| KAFKA
+    end
+
+    subgraph PROCESSING["Stream Processing: PyFlink"]
+        PYFLINK["PyFlink Table API<br/>(transformations)"]
+        KAFKA_SINK["Kafka Topic<br/>bigquery.orders"]
+        KAFKA -->|"Consume CDC"| PYFLINK
+        PYFLINK -->|"Publish enriched"| KAFKA_SINK
+    end
+
+    subgraph WAREHOUSE["Analytics: BigQuery"]
+        BQ_CONNECTOR["BigQuery Connector<br/>(Storage Write API)"]
+        BQ_TABLE["BigQuery Table<br/>project.dataset.orders"]
+        KAFKA_SINK -->|"Stream ingestion"| BQ_CONNECTOR
+        BQ_CONNECTOR -->|"UPSERT/DELETE"| BQ_TABLE
+    end
+
+    subgraph MONITORING["Observability"]
+        PROMETHEUS["Prometheus<br/>(JMX metrics)"]
+        GRAFANA["Grafana<br/>(dashboards)"]
+        DEBEZIUM -.->|"Export metrics"| PROMETHEUS
+        PROMETHEUS --> GRAFANA
+    end
+
+    style APP fill:#339af0
+    style OUTBOX_TABLE fill:#ff6b6b
+    style DEBEZIUM fill:#51cf66
+    style PYFLINK fill:#8b5cf6
+    style BQ_TABLE fill:#f59e0b
+    style GRAFANA fill:#10b981
+`} client:visible />
+
+---
+
+## Technology Stack
+
+Каждый компонент pipeline изучен в предыдущих модулях:
+
+| Component | Purpose | Module Reference |
+|-----------|---------|------------------|
+| **Aurora PostgreSQL** | Source database with logical replication | Module 2: PostgreSQL/Aurora CDC |
+| **Outbox Table** | Transactional event publishing pattern | Module 4: Advanced Patterns |
+| **Debezium Connector** | Capture CDC events from WAL | Module 1: Foundations, Module 2 |
+| **Outbox Event Router SMT** | Transform outbox table to routed events | Module 4: Advanced Patterns |
+| **Kafka** | Event streaming backbone | Module 1: Foundations |
+| **PyFlink Table API** | Stream processing and transformations | Module 5: Data Engineering |
+| **BigQuery** | Cloud data warehouse with CDC support | Module 6: Cloud-Native GCP |
+| **Prometheus + Grafana** | Metrics collection and visualization | Module 3: Production Operations |
+
+**Ваша задача:** Собрать эти компоненты в единую работающую систему.
+
+---
+
+## Что вы будете строить
+
+### Deliverables (что нужно сдать)
+
+1. **Working Infrastructure**
+   - Docker Compose или Kubernetes manifests для локального запуска
+   - Aurora PostgreSQL с logical replication (или PostgreSQL локально для тестирования)
+   - Debezium connector с Outbox Event Router SMT
+   - PyFlink job для stream transformations
+   - BigQuery table с primary key для CDC ingestion
+
+2. **Code & Configuration**
+   - Outbox table schema (SQL DDL)
+   - Debezium connector JSON config
+   - PyFlink Python script с transformations
+   - BigQuery table DDL
+
+3. **Monitoring & Observability**
+   - Prometheus scraping JMX metrics от Debezium
+   - Grafana dashboard с key metrics:
+     - Replication lag (ms behind source)
+     - Events/second throughput
+     - Connector status (running/failed)
+     - PyFlink checkpoint duration
+
+4. **Documentation**
+   - **README.md:** Как запустить весь pipeline
+   - **architecture.md:** C4 diagrams (System Context + Container)
+   - **runbook.md:** Operational procedures (что делать при сбоях)
+
+5. **Testing Evidence**
+   - Screenshots или logs, показывающие:
+     - Событие вставлено в outbox table
+     - Debezium захватил и роутировал событие в Kafka
+     - PyFlink обработал событие
+     - Событие появилось в BigQuery
+
+---
+
+## Success Criteria (когда проект "done")
+
+Ваш capstone проект считается **production-ready**, если:
+
+### Functionality
+- [ ] Outbox table создана с `REPLICA IDENTITY FULL`
+- [ ] Debezium connector успешно захватывает события из outbox
+- [ ] Outbox Event Router SMT роутирует события в правильные Kafka topics
+- [ ] PyFlink job обрабатывает Debezium-formatted events
+- [ ] BigQuery table получает UPSERT/DELETE события
+- [ ] End-to-end latency < 5 секунд (от INSERT в outbox до появления в BigQuery)
+
+### Fault Tolerance
+- [ ] Kafka offsets сохраняются корректно (connector restart не теряет данные)
+- [ ] PyFlink checkpoints включены и работают
+- [ ] Replication slot выживает после connector restart
+- [ ] At-least-once delivery гарантируется
+- [ ] Duplicate handling реализован (idempotent operations в BigQuery)
+
+### Monitoring
+- [ ] Prometheus scrapes JMX metrics от Kafka Connect
+- [ ] Grafana dashboard показывает:
+  - Replication lag
+  - Events/sec throughput
+  - Connector status
+  - PyFlink checkpoint duration
+- [ ] Настроен alert на: connector failure, lag > 10 seconds
+
+### Documentation
+- [ ] README с инструкциями по setup и запуску
+- [ ] Architecture diagram (как минимум System Context + Container)
+- [ ] Runbook с common failure scenarios и remediation steps
+
+### Testing
+- [ ] Source-to-target validation (sample data появляется в BigQuery)
+- [ ] Negative testing (pipeline handles malformed JSON)
+- [ ] Chaos testing (killed connector during processing, verified recovery)
+
+**Цель:** Не просто "работает на моем laptop", а **"готово к production deployment"**.
+
+---
+
+## Рекомендуемый подход
+
+### Phase 1: Local Infrastructure Setup (2-3 hours)
+1. Создайте `docker-compose.yml` с PostgreSQL, Kafka, Kafka Connect, Debezium, Prometheus, Grafana
+2. Проверьте connectivity между компонентами
+
+### Phase 2: Outbox + Debezium Configuration (2-3 hours)
+1. Создайте outbox table с правильной schema
+2. Настройте Debezium connector с Outbox Event Router SMT
+3. Проверьте, что события роутируются в Kafka topics
+
+### Phase 3: PyFlink Stream Processing (3-4 hours)
+1. Создайте PyFlink job с Table API
+2. Подключите Kafka source с `format = 'debezium-json'`
+3. Добавьте transformations (enrichment, filtering)
+4. Выведите результат в Kafka sink
+
+### Phase 4: BigQuery Integration (2-3 hours)
+1. Создайте BigQuery table с PRIMARY KEY
+2. Настройте BigQuery connector для ingestion из Kafka
+3. Проверьте, что UPSERT/DELETE работают корректно
+
+### Phase 5: Monitoring & Testing (3-4 hours)
+1. Настройте JMX export от Debezium
+2. Создайте Grafana dashboard
+3. Проведите end-to-end testing
+4. Chaos testing (kill connector, verify recovery)
+
+### Phase 6: Documentation (2-3 hours)
+1. Напишите README
+2. Создайте architecture diagrams (Mermaid или draw.io)
+3. Напишите runbook
+
+**Total time estimate:** 15-20 hours (растяните на 2-3 недели для качественного выполнения)
+
+---
+
+## Ключевые паттерны из предыдущих модулей
+
+Повторите эти уроки перед началом работы:
+
+1. **Outbox Pattern:** [Module 4 - Outbox Pattern](/course/module-4/03-outbox-pattern)
+2. **Outbox Event Router SMT:** [Module 4 - Outbox Pattern](/course/module-4/03-outbox-pattern)
+3. **PyFlink Table API:** [Module 5 - PyFlink Basics](/course/module-5/02-pyflink-basics)
+4. **Debezium Format:** [Module 5 - PyFlink Basics](/course/module-5/02-pyflink-basics)
+5. **BigQuery CDC:** [Module 6 - Dataflow CDC to BigQuery](/course/module-6/02-dataflow-cdc-bigquery)
+6. **Monitoring Setup:** [Module 3 - Metrics and Monitoring](/course/module-3/01-metrics-monitoring)
+
+---
+
+## Production Insights
+
+### Что отличает capstone от учебных labs?
+
+| Aspect | Learning Labs | Capstone Project |
+|--------|---------------|------------------|
+| Scope | Single component | End-to-end integration |
+| Failure Handling | Assume happy path | Test failure scenarios |
+| Documentation | Code comments | Full architecture + runbook |
+| Monitoring | Optional | Mandatory |
+| Testing | Manual verification | Automated + chaos testing |
+
+**Capstone проверяет:** Вы можете **самостоятельно спроектировать** систему, а не просто следовать инструкциям.
+
+### Типичные ошибки (чего избегать)
+
+1. **Забыли `REPLICA IDENTITY FULL`** → UPDATE/DELETE события не содержат полных данных
+2. **Нет primary key в BigQuery** → CDC ingestion fails
+3. **snapshot.mode неправильный** → Connector дублирует все данные при restart
+4. **Нет мониторинга replication slot** → WAL bloat заполняет диск
+5. **Не тестировали failure scenarios** → Connector restart теряет данные
+
+---
+
+## Что дальше?
+
+В следующем уроке **Architecture & Deliverables** мы детально разберем:
+- C4 architecture diagrams для capstone
+- Требования к каждому компоненту (Aurora, Debezium, PyFlink, BigQuery)
+- Detailed deliverables checklist
+- Anti-patterns и common pitfalls
+- Production patterns для каждого слоя
+
+После этого — **вы начинаете самостоятельную работу над capstone проектом**.
+
+---
+
+## Ключевые выводы
+
+1. **Capstone = Synthesis:** Применяете все 6 модулей в едином проекте
+2. **Production readiness критичен:** Не просто "работает", а "работает надежно с monitoring и recovery"
+3. **Deliverables четкие:** Working code + monitoring + documentation + testing evidence
+4. **Time estimate:** 15-20 hours растянуть на 2-3 недели
+5. **Success criteria:** Functionality + fault tolerance + monitoring + documentation
+6. **Architecture:** Aurora → Outbox → Debezium (SMT) → Kafka → PyFlink → BigQuery
+7. **Key technologies:** Debezium Outbox Event Router SMT, PyFlink Table API, BigQuery Storage Write API
+8. **Validation:** End-to-end latency < 5s, survives connector restart, handles failures gracefully
+9. **Documentation:** README + architecture.md + runbook.md обязательны
+10. **Проверка мастерства:** Можете ли вы **самостоятельно спроектировать** CDC pipeline без step-by-step инструкций?
