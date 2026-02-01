@@ -1,0 +1,989 @@
+---
+title: "End-to-End Мониторинг CDC Pipeline"
+description: "Cloud Monitoring для всех компонентов: Cloud SQL, Debezium, Pub/Sub, Dataflow, Cloud Run"
+order: 6
+difficulty: "advanced"
+estimatedTime: 45
+topics: ["Cloud Monitoring", "Alerting", "Metrics", "Dashboards", "SRE"]
+prerequisites: ["module-6/01-cloud-sql-setup", "module-6/02-debezium-server-pubsub", "module-6/04-dataflow-bigquery", "module-6/05-cloud-run-event-driven"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# End-to-End Мониторинг CDC Pipeline
+
+В предыдущих уроках мы построили полноценный CDC pipeline на GCP: Cloud SQL → Debezium Server → Pub/Sub → Dataflow/Cloud Run. Теперь критически важно настроить **observability** для всего pipeline.
+
+## Зачем нужен мониторинг CDC pipeline?
+
+CDC pipeline — это **критичная инфраструктура** для синхронизации данных. Любой сбой может привести к:
+
+- **Data loss** (потеря событий при переполнении WAL)
+- **Data inconsistency** (BigQuery replica отстает от источника)
+- **SLA нарушения** (задержка репликации > допустимого порога)
+
+**Проактивный мониторинг** позволяет обнаружить проблемы до их влияния на бизнес.
+
+### Компоненты для мониторинга
+
+<Mermaid chart={`
+graph TD
+    subgraph "Source"
+        CS[Cloud SQL<br/>PostgreSQL]
+    end
+
+    subgraph "CDC Engine"
+        DBS[Debezium<br/>Server]
+    end
+
+    subgraph "Messaging"
+        PS[Pub/Sub<br/>Topics]
+    end
+
+    subgraph "Consumers"
+        DF[Dataflow<br/>BigQuery]
+        CR[Cloud Run<br/>Processors]
+    end
+
+    subgraph "Monitoring Points"
+        M1[CPU/Disk/WAL<br/>Replication Slots]
+        M2[Lag/Throughput<br/>Queue Capacity]
+        M3[Backlog/DLQ<br/>Publish Rate]
+        M4[System Lag<br/>vCPU Usage]
+        M5[Request Count<br/>Error Rate]
+    end
+
+    CS -.->|Monitor| M1
+    DBS -.->|Monitor| M2
+    PS -.->|Monitor| M3
+    DF -.->|Monitor| M4
+    CR -.->|Monitor| M5
+
+    style M1 fill:#ff6b6b
+    style M2 fill:#ff6b6b
+    style M3 fill:#ff6b6b
+    style M4 fill:#ff6b6b
+    style M5 fill:#ff6b6b
+`} client:visible />
+
+В этом уроке мы разберем метрики, alerts, dashboards и runbooks для каждого компонента.
+
+### Связь с Module 3
+
+В [Module 3 Production Operations](/course/module-3) мы работали с Prometheus и Grafana для локального мониторинга Debezium. Здесь мы применяем те же концепции, но используем **Cloud Monitoring** — управляемый сервис GCP с интеграцией всех компонентов.
+
+---
+
+## Cloud SQL PostgreSQL Monitoring
+
+### Built-in метрики
+
+Cloud SQL автоматически экспортирует метрики в Cloud Monitoring:
+
+| Метрика | Тип | Описание |
+|---------|-----|----------|
+| `cloudsql.googleapis.com/database/cpu/utilization` | Gauge | CPU утилизация (0.0-1.0) |
+| `cloudsql.googleapis.com/database/disk/utilization` | Gauge | Disk утилизация (0.0-1.0) |
+| `cloudsql.googleapis.com/database/disk/bytes_used` | Gauge | Использованный disk в байтах |
+| `cloudsql.googleapis.com/database/postgresql/num_backends` | Gauge | Количество подключений |
+| `cloudsql.googleapis.com/database/memory/utilization` | Gauge | Memory утилизация |
+
+### Replication Slot Monitoring (Custom Query)
+
+**Проблема:** Cloud SQL не экспортирует метрики replication slots по умолчанию.
+
+**Решение:** Использовать Cloud SQL Insights для custom query или создать Cloud Function для периодического опроса.
+
+#### Monitoring Query
+
+```sql
+-- Выполнять каждые 60 секунд через Cloud Function или Cloud Scheduler
+SELECT
+    slot_name,
+    slot_type,
+    plugin,
+    active,
+    restart_lsn,
+    confirmed_flush_lsn,
+    -- Байты отставания от текущего WAL
+    pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) AS lag_bytes,
+    -- Человеко-читаемый формат
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) AS lag_size
+FROM pg_replication_slots
+WHERE slot_name = 'debezium_slot';
+```
+
+#### Cloud Function для экспорта метрики
+
+```python
+from google.cloud import monitoring_v3
+import pg8000
+import time
+
+def export_replication_lag(request):
+    """Cloud Function для экспорта replication slot lag в Cloud Monitoring."""
+
+    # Подключение к Cloud SQL через Unix socket (Cloud SQL Proxy)
+    conn = pg8000.connect(
+        database="production",
+        user="monitoring_user",
+        password="...",
+        host="/cloudsql/PROJECT:REGION:INSTANCE"
+    )
+
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) AS lag_bytes
+        FROM pg_replication_slots
+        WHERE slot_name = 'debezium_slot' AND active = true;
+    """)
+
+    result = cursor.fetchone()
+    lag_bytes = result[0] if result else 0
+
+    # Экспорт в Cloud Monitoring как custom metric
+    client = monitoring_v3.MetricServiceClient()
+    project_name = f"projects/YOUR_PROJECT_ID"
+
+    series = monitoring_v3.TimeSeries()
+    series.metric.type = "custom.googleapis.com/cloudsql/replication_lag_bytes"
+    series.resource.type = "global"
+
+    now = time.time()
+    seconds = int(now)
+    nanos = int((now - seconds) * 10**9)
+    interval = monitoring_v3.TimeInterval(
+        {"end_time": {"seconds": seconds, "nanos": nanos}}
+    )
+    point = monitoring_v3.Point(
+        {"interval": interval, "value": {"int64_value": lag_bytes}}
+    )
+    series.points = [point]
+
+    client.create_time_series(name=project_name, time_series=[series])
+
+    return f"Exported lag_bytes: {lag_bytes}"
+```
+
+### Alert: WAL Disk Bloat
+
+```yaml
+# Создать через gcloud или Console
+displayName: "Cloud SQL - Disk Utilization High (WAL Bloat)"
+conditions:
+  - displayName: "Disk > 80%"
+    conditionThreshold:
+      filter: |
+        resource.type="cloudsql_database"
+        metric.type="cloudsql.googleapis.com/database/disk/utilization"
+      comparison: COMPARISON_GT
+      thresholdValue: 0.8
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MEAN
+
+notificationChannels:
+  - projects/YOUR_PROJECT/notificationChannels/email-oncall
+
+documentation:
+  content: |
+    Cloud SQL disk utilization exceeded 80%.
+
+    **Возможная причина:** WAL bloat из-за неактивного replication slot.
+
+    **Runbook:**
+    1. Проверить pg_replication_slots: `SELECT * FROM pg_replication_slots;`
+    2. Если slot неактивен и lag_bytes > 10GB → проверить Debezium Server logs
+    3. Если Debezium Server упал → перезапустить pod
+    4. Если slot orphaned → удалить: `SELECT pg_drop_replication_slot('slot_name');`
+```
+
+---
+
+## Debezium Server Metrics
+
+Debezium Server экспортирует JMX метрики, которые можно собирать через Prometheus JMX exporter.
+
+### Ключевые метрики
+
+| Метрика (JMX) | Cloud Monitoring Type | Описание |
+|---------------|----------------------|----------|
+| `MilliSecondsBehindSource` | Gauge | Задержка репликации в миллисекундах |
+| `QueueRemainingCapacity` | Gauge | Свободное место в internal queue |
+| `TotalNumberOfEventsSeen` | Counter | Всего событий обработано |
+| `NumberOfEventsFiltered` | Counter | События отфильтрованные (не опубликованные) |
+| `SnapshotRunning` | Gauge | 1 если snapshot идет, 0 если нет |
+
+### GKE Integration: Google Cloud Managed Service for Prometheus
+
+```yaml
+# PodMonitoring CRD для сбора метрик с Debezium Server
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: debezium-server
+  namespace: cdc
+spec:
+  selector:
+    matchLabels:
+      app: debezium-server
+  endpoints:
+  - port: metrics  # JMX exporter порт (обычно 8080)
+    interval: 30s
+    path: /q/metrics  # Quarkus metrics endpoint
+```
+
+### Custom Metric Export в Cloud Monitoring
+
+Debezium Server Quarkus экспортирует метрики в формате Prometheus. GKE с Managed Service for Prometheus автоматически преобразует их в Cloud Monitoring формат:
+
+```
+# Prometheus format (JMX exporter)
+debezium_metrics_MilliSecondsBehindSource{...} 5432
+
+# Cloud Monitoring format (auto-converted)
+metric.type="prometheus.googleapis.com/debezium_metrics_MilliSecondsBehindSource/gauge"
+```
+
+### Alert: High Replication Lag
+
+```yaml
+displayName: "Debezium - Replication Lag High"
+conditions:
+  - displayName: "Lag > 60 seconds"
+    conditionThreshold:
+      filter: |
+        resource.type="k8s_pod"
+        resource.labels.namespace_name="cdc"
+        metric.type="prometheus.googleapis.com/debezium_metrics_MilliSecondsBehindSource/gauge"
+      comparison: COMPARISON_GT
+      thresholdValue: 60000  # 60 seconds in milliseconds
+      duration: 300s  # 5 минут подряд
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MEAN
+
+notificationChannels:
+  - projects/YOUR_PROJECT/notificationChannels/pagerduty-oncall
+
+alertStrategy:
+  autoClose: 1800s  # Auto-resolve если метрика нормализовалась
+
+documentation:
+  content: |
+    Debezium replication lag exceeded 60 seconds.
+
+    **Impact:** Data в BigQuery/Pub/Sub отстает от источника на 60+ секунд.
+
+    **Runbook:**
+    1. Проверить Cloud SQL CPU/memory utilization
+    2. Выполнить replication slot query: SELECT * FROM pg_replication_slots;
+    3. Проверить Debezium Server logs: kubectl logs -n cdc debezium-server-xxx
+    4. Проверить Pub/Sub publish throughput
+    5. Если lag не уменьшается → рассмотреть scale up Cloud SQL tier
+```
+
+### Alert: Queue Backpressure
+
+```yaml
+displayName: "Debezium - Queue Remaining Capacity Low"
+conditions:
+  - displayName: "Queue < 20% capacity"
+    conditionThreshold:
+      filter: |
+        resource.type="k8s_pod"
+        metric.type="prometheus.googleapis.com/debezium_metrics_QueueRemainingCapacity/gauge"
+      comparison: COMPARISON_LT
+      thresholdValue: 1638  # 20% of default 8192
+      duration: 120s
+
+documentation:
+  content: |
+    Debezium internal queue has < 20% remaining capacity.
+
+    **Причина:** Pub/Sub sink не успевает publish события (backpressure).
+
+    **Runbook:**
+    1. Проверить Pub/Sub errors в Debezium logs
+    2. Проверить Pub/Sub quota limits
+    3. Проверить Pub/Sub topic publish rate metrics
+    4. Рассмотреть увеличение max.queue.size в конфиге
+```
+
+---
+
+## Pub/Sub Metrics
+
+### Built-in метрики
+
+| Метрика | Тип | Описание |
+|---------|-----|----------|
+| `pubsub.googleapis.com/subscription/oldest_unacked_message_age` | Gauge | Возраст старейшего необработанного сообщения (секунды) |
+| `pubsub.googleapis.com/subscription/num_undelivered_messages` | Gauge | Количество необработанных сообщений |
+| `pubsub.googleapis.com/topic/send_message_operation_count` | Counter | Количество publish операций |
+| `pubsub.googleapis.com/subscription/pull_request_count` | Counter | Количество pull requests от subscribers |
+| `pubsub.googleapis.com/subscription/dead_letter_message_count` | Counter | Сообщения в Dead Letter Queue |
+
+### Alert: Pub/Sub Backlog Growing
+
+```yaml
+displayName: "Pub/Sub - Subscription Backlog High"
+conditions:
+  - displayName: "Oldest unacked message > 5 minutes"
+    conditionThreshold:
+      filter: |
+        resource.type="pubsub_subscription"
+        metric.type="pubsub.googleapis.com/subscription/oldest_unacked_message_age"
+      comparison: COMPARISON_GT
+      thresholdValue: 300  # 5 minutes
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MAX
+
+documentation:
+  content: |
+    Pub/Sub subscription backlog exceeds 5 minutes.
+
+    **Impact:** Consumers (Dataflow, Cloud Run) не успевают обрабатывать события.
+
+    **Runbook:**
+    1. Проверить Dataflow job status и worker count
+    2. Проверить Cloud Run error rate (5xx responses)
+    3. Проверить dead_letter_message_count
+    4. Если consumer health OK → увеличить Dataflow workers или Cloud Run max-instances
+```
+
+### Alert: Dead Letter Queue Messages
+
+```yaml
+displayName: "Pub/Sub - Dead Letter Messages Detected"
+conditions:
+  - displayName: "DLQ message count > 0"
+    conditionThreshold:
+      filter: |
+        resource.type="pubsub_subscription"
+        metric.type="pubsub.googleapis.com/subscription/dead_letter_message_count"
+      comparison: COMPARISON_GT
+      thresholdValue: 0
+      duration: 60s
+
+documentation:
+  content: |
+    Messages detected in Dead Letter Queue.
+
+    **Причина:** Consumer вернул 4xx или исчерпал max delivery attempts.
+
+    **Runbook:**
+    1. Pull сообщения из DLQ: gcloud pubsub subscriptions pull cdc-dead-letter-sub --limit=10
+    2. Проанализировать содержимое (некорректная структура Debezium event?)
+    3. Проверить consumer logs на ошибки парсинга
+    4. Если bug в consumer → fix и redeploy
+    5. Если bad data → skip или manual replay
+```
+
+---
+
+## Dataflow Metrics
+
+### Built-in метрики
+
+| Метрика | Тип | Описание |
+|---------|-----|----------|
+| `dataflow.googleapis.com/job/system_lag` | Gauge | System lag (секунды) — задержка обработки |
+| `dataflow.googleapis.com/job/elements_produced_count` | Counter | Элементов обработано |
+| `dataflow.googleapis.com/job/current_num_vcpus` | Gauge | Количество vCPU в использовании |
+| `dataflow.googleapis.com/job/is_failed` | Gauge | 1 если job failed, 0 если running |
+| `dataflow.googleapis.com/job/current_vCPU_time` | Counter | vCPU time для cost tracking |
+
+### Alert: Dataflow System Lag
+
+```yaml
+displayName: "Dataflow - System Lag High"
+conditions:
+  - displayName: "System lag > 60 seconds"
+    conditionThreshold:
+      filter: |
+        resource.type="dataflow_job"
+        metric.type="dataflow.googleapis.com/job/system_lag"
+      comparison: COMPARISON_GT
+      thresholdValue: 60
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MAX
+
+documentation:
+  content: |
+    Dataflow job system lag exceeds 60 seconds.
+
+    **Impact:** BigQuery replica отстает от Pub/Sub на 60+ секунд.
+
+    **Runbook:**
+    1. Проверить current_num_vcpus — достигнут ли max workers?
+    2. Проверить BigQuery streaming insert quota
+    3. Проверить Pub/Sub backlog (upstream проблема?)
+    4. Если недостаточно workers → увеличить maxNumWorkers в job параметрах
+    5. Если BigQuery throttling → увеличить quota
+```
+
+### Cost Monitoring
+
+```yaml
+# Мониторинг стоимости Dataflow job
+displayName: "Dataflow - Monthly Cost Alert"
+conditions:
+  - displayName: "vCPU hours > budget"
+    conditionThreshold:
+      filter: |
+        resource.type="dataflow_job"
+        metric.type="dataflow.googleapis.com/job/current_vCPU_time"
+      comparison: COMPARISON_GT
+      thresholdValue: 720000  # 720k секунд = 200 vCPU-hours
+      duration: 86400s  # Daily check
+      aggregations:
+        - alignmentPeriod: 3600s
+          perSeriesAligner: ALIGN_RATE
+
+documentation:
+  content: |
+    Dataflow job vCPU usage exceeded budget.
+
+    **Рекомендации:**
+    1. Проверить autoscaling параметры
+    2. Использовать at-least-once mode вместо exactly-once (2x cost reduction)
+    3. Увеличить updateFrequencySecs для снижения частоты MERGE
+```
+
+---
+
+## Cloud Run Metrics
+
+### Built-in метрики
+
+| Метрика | Тип | Описание |
+|---------|-----|----------|
+| `run.googleapis.com/request_count` | Counter | Количество HTTP requests |
+| `run.googleapis.com/request_latencies` | Distribution | Latency распределение |
+| `run.googleapis.com/container/instance_count` | Gauge | Количество активных контейнеров |
+| `run.googleapis.com/container/billable_instance_time` | Counter | Billable time (для cost tracking) |
+| `run.googleapis.com/request_count` (response_code) | Counter | Requests по HTTP коду |
+
+### Alert: Cloud Run Error Rate
+
+```yaml
+displayName: "Cloud Run - High Error Rate"
+conditions:
+  - displayName: "5xx error rate > 5%"
+    conditionThreshold:
+      filter: |
+        resource.type="cloud_run_revision"
+        metric.type="run.googleapis.com/request_count"
+        metric.labels.response_code_class="5xx"
+      comparison: COMPARISON_GT
+      thresholdValue: 0.05  # 5% of requests
+      duration: 180s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_RATE
+        - crossSeriesReducer: REDUCE_SUM
+          groupByFields: ["resource.service_name"]
+
+documentation:
+  content: |
+    Cloud Run service returning > 5% 5xx errors.
+
+    **Impact:** CDC events не обрабатываются, Pub/Sub будет retry.
+
+    **Runbook:**
+    1. Проверить Cloud Run logs: gcloud logging read --limit 50 --format json
+    2. Поиск exceptions в application logs
+    3. Проверить dependency services (Elasticsearch, Redis, Slack API)
+    4. Если external service down → implement circuit breaker
+    5. Если code bug → rollback to previous revision
+```
+
+### Alert: Cloud Run High Latency
+
+```yaml
+displayName: "Cloud Run - Request Latency High"
+conditions:
+  - displayName: "P99 latency > 5 seconds"
+    conditionThreshold:
+      filter: |
+        resource.type="cloud_run_revision"
+        metric.type="run.googleapis.com/request_latencies"
+      comparison: COMPARISON_GT
+      thresholdValue: 5000  # 5 seconds in milliseconds
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_DELTA
+        - crossSeriesReducer: REDUCE_PERCENTILE_99
+
+documentation:
+  content: |
+    Cloud Run P99 latency exceeds 5 seconds.
+
+    **Причина:** Медленная обработка событий (вызовы API, DB queries).
+
+    **Runbook:**
+    1. Проверить Cloud Run logs для slow requests
+    2. Проверить external API latency (Elasticsearch, Redis)
+    3. Добавить таймауты на вызовы external services
+    4. Рассмотреть увеличение CPU/memory для Cloud Run
+```
+
+---
+
+## Unified Dashboard
+
+### Dashboard Structure
+
+```
+╔════════════════════════════════════════════════════════════╗
+║         CDC Pipeline Health Dashboard                       ║
+╠════════════════════════════════════════════════════════════╣
+║ Row 1: High-Level Health                                    ║
+║  [Cloud SQL Status] [Debezium Status] [Pub/Sub Status]     ║
+║  [Dataflow Status]  [Cloud Run Status]                     ║
+╠════════════════════════════════════════════════════════════╣
+║ Row 2: Source Metrics (Cloud SQL)                          ║
+║  [CPU Utilization] [Disk Utilization] [Active Connections] ║
+║  [WAL Size] [Replication Slot Lag]                         ║
+╠════════════════════════════════════════════════════════════╣
+║ Row 3: CDC Engine (Debezium)                               ║
+║  [MilliSecondsBehindSource] [Events Processed/sec]         ║
+║  [Queue Remaining Capacity]                                 ║
+╠════════════════════════════════════════════════════════════╣
+║ Row 4: Messaging (Pub/Sub)                                 ║
+║  [Oldest Unacked Message Age] [Num Undelivered Messages]   ║
+║  [Dead Letter Queue Count]                                  ║
+╠════════════════════════════════════════════════════════════╣
+║ Row 5: Consumers (Dataflow + Cloud Run)                    ║
+║  [Dataflow System Lag] [Dataflow vCPUs]                    ║
+║  [Cloud Run Request Rate] [Cloud Run Error Rate]           ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+<Mermaid chart={`
+graph TD
+    subgraph "Dashboard Layout"
+        subgraph "Row 1: Health Indicators"
+            H1[🟢 Cloud SQL<br/>Healthy]
+            H2[🟢 Debezium<br/>Healthy]
+            H3[🟡 Pub/Sub<br/>Warning]
+            H4[🟢 Dataflow<br/>Healthy]
+            H5[🔴 Cloud Run<br/>Critical]
+        end
+
+        subgraph "Row 2: Source"
+            S1[CPU: 45%]
+            S2[Disk: 62%]
+            S3[WAL Lag: 2.5GB]
+        end
+
+        subgraph "Row 3: CDC"
+            C1[Lag: 12s]
+            C2[Throughput: 350 evt/s]
+            C3[Queue: 75% free]
+        end
+
+        subgraph "Row 4: Messaging"
+            M1[Oldest Msg: 45s]
+            M2[Backlog: 1250]
+            M3[DLQ: 0]
+        end
+
+        subgraph "Row 5: Consumers"
+            D1[System Lag: 8s]
+            D2[Workers: 5]
+            R1[Req/s: 120]
+            R2[Error Rate: 12%]
+        end
+    end
+
+    style H5 fill:#ff6b6b
+    style H3 fill:#ffd93d
+    style R2 fill:#ff6b6b
+`} client:visible />
+
+### JSON Dashboard Definition (Excerpt)
+
+```json
+{
+  "displayName": "CDC Pipeline - End to End",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "width": 4,
+        "height": 4,
+        "widget": {
+          "title": "Debezium Replication Lag",
+          "xyChart": {
+            "dataSets": [{
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"prometheus.googleapis.com/debezium_metrics_MilliSecondsBehindSource/gauge\" resource.type=\"k8s_pod\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_MEAN"
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "targetAxis": "Y1"
+            }],
+            "thresholds": [
+              {
+                "value": 30000,
+                "color": "YELLOW",
+                "label": "Warning (30s)"
+              },
+              {
+                "value": 60000,
+                "color": "RED",
+                "label": "Critical (60s)"
+              }
+            ],
+            "yAxis": {
+              "label": "Milliseconds",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 4,
+        "height": 4,
+        "widget": {
+          "title": "Pub/Sub Subscription Backlog",
+          "xyChart": {
+            "dataSets": [{
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\" resource.type=\"pubsub_subscription\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_MEAN",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": ["resource.subscription_id"]
+                  }
+                }
+              }
+            }]
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+**Создание dashboard через gcloud:**
+
+```bash
+# Экспорт dashboard в JSON
+gcloud monitoring dashboards create --config-from-file=cdc-dashboard.json
+
+# Обновление существующего dashboard
+gcloud monitoring dashboards update DASHBOARD_ID --config-from-file=cdc-dashboard.json
+```
+
+---
+
+## Alerting Policies
+
+### Alert Hierarchy
+
+| Severity | Notification Channel | Response Time |
+|----------|---------------------|---------------|
+| **CRITICAL** | PagerDuty (on-call) | Immediate (page) |
+| **WARNING** | Email, Slack | Within 1 hour |
+| **INFO** | Slack only | Next business day |
+
+### Example: Complete Alert Policy YAML
+
+```yaml
+# alert-debezium-lag.yaml
+displayName: "CDC Pipeline - Debezium Lag High"
+combiner: OR
+conditions:
+  - displayName: "Lag > 60 seconds (CRITICAL)"
+    conditionThreshold:
+      filter: |
+        resource.type="k8s_pod"
+        resource.labels.namespace_name="cdc"
+        metric.type="prometheus.googleapis.com/debezium_metrics_MilliSecondsBehindSource/gauge"
+      comparison: COMPARISON_GT
+      thresholdValue: 60000
+      duration: 300s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MEAN
+
+notificationChannels:
+  - projects/YOUR_PROJECT/notificationChannels/pagerduty-oncall
+  - projects/YOUR_PROJECT/notificationChannels/slack-cdc-alerts
+
+alertStrategy:
+  autoClose: 1800s  # Auto-resolve after 30 min if metric normalizes
+  notificationRateLimit:
+    period: 3600s  # Max 1 notification per hour (prevent alert storm)
+
+documentation:
+  content: |
+    # Debezium Replication Lag Exceeded 60 Seconds
+
+    ## Impact
+    - Data в BigQuery отстает от Cloud SQL на 60+ секунд
+    - Potential WAL bloat if lag continues growing
+
+    ## Runbook
+
+    ### 1. Check Cloud SQL Health
+    ```bash
+    gcloud sql instances describe INSTANCE_NAME
+    ```
+    - CPU utilization > 80%? → Scale up instance tier
+    - Disk utilization > 80%? → Check replication slot lag
+
+    ### 2. Query Replication Slot
+    ```sql
+    SELECT slot_name, active,
+      pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) AS lag
+    FROM pg_replication_slots;
+    ```
+    - Slot inactive? → Check Debezium Server logs
+    - Lag growing continuously? → Pub/Sub publish backpressure
+
+    ### 3. Check Debezium Server Logs
+    ```bash
+    kubectl logs -n cdc deployment/debezium-server --tail=100
+    ```
+    - Look for: Pub/Sub publish errors, connection timeouts, OOM
+
+    ### 4. Check Pub/Sub Publish Throughput
+    - Console → Pub/Sub → Topics → cdc.public.* → Metrics
+    - Publish rate dropping? → Debezium Server issue
+    - Publish rate high but subscription backlog growing? → Consumer issue
+
+    ### 5. Mitigation Actions
+    - **Short-term:** Restart Debezium Server pod
+    - **Medium-term:** Scale Cloud SQL instance tier
+    - **Long-term:** Optimize table filtering, reduce max.batch.size
+
+    ## Escalation
+    If lag > 300 seconds (5 minutes): Page senior SRE
+```
+
+**Создание alert policy:**
+
+```bash
+gcloud alpha monitoring policies create --policy-from-file=alert-debezium-lag.yaml
+```
+
+---
+
+## Runbooks
+
+### Runbook 1: High Replication Lag
+
+**Trigger:** Debezium `MilliSecondsBehindSource` > 60 seconds
+
+**Steps:**
+
+1. **Check Cloud SQL CPU/Memory**
+   ```bash
+   gcloud sql instances describe INSTANCE_NAME --format="value(settings.tier, state)"
+   ```
+   - If CPU > 80% → Scale up instance tier
+
+2. **Query `pg_replication_slots`**
+   ```sql
+   SELECT * FROM pg_replication_slots WHERE slot_name = 'debezium_slot';
+   ```
+   - Check `active` field
+   - Check `confirmed_flush_lsn` lag
+
+3. **Check Debezium Server Logs**
+   ```bash
+   kubectl logs -n cdc deployment/debezium-server --tail=200
+   ```
+   - Search for: "Failed to publish", "Connection refused", "OutOfMemoryError"
+
+4. **Verify Pub/Sub Publish Throughput**
+   - Cloud Console → Pub/Sub → Topics → cdc.public.orders
+   - Check "Publish message operations" metric
+
+5. **Mitigation:**
+   - Restart Debezium Server: `kubectl rollout restart -n cdc deployment/debezium-server`
+   - If persistent → Scale Cloud SQL tier or reduce `max.batch.size`
+
+---
+
+### Runbook 2: Pub/Sub Backlog Growing
+
+**Trigger:** `oldest_unacked_message_age` > 300 seconds
+
+**Steps:**
+
+1. **Check Cloud Run Error Rate**
+   ```bash
+   gcloud monitoring time-series list \
+     --filter='metric.type="run.googleapis.com/request_count" AND metric.label.response_code_class="5xx"' \
+     --interval-start-time="2024-01-01T00:00:00Z"
+   ```
+   - If error rate > 5% → Check Cloud Run logs
+
+2. **Check Dataflow Worker Health**
+   ```bash
+   gcloud dataflow jobs describe JOB_ID --region=us-central1
+   ```
+   - Check `currentState`: RUNNING, FAILED, CANCELLED
+   - Check `currentWorkerCount` vs `maxWorkerCount`
+
+3. **Review Dead Letter Queue**
+   ```bash
+   gcloud pubsub subscriptions pull cdc-dead-letter-sub --limit=10 --auto-ack
+   ```
+   - Analyze message structure for parsing errors
+
+4. **Mitigation:**
+   - **Cloud Run:** Increase `--max-instances`
+   - **Dataflow:** Increase `maxNumWorkers` in job parameters
+   - **DLQ messages:** Fix consumer code bug and redeploy
+
+---
+
+### Runbook 3: Cloud SQL Disk Full
+
+**Trigger:** `disk/utilization` > 90%
+
+**Steps:**
+
+1. **Check WAL Size**
+   ```sql
+   SELECT pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), '0/0')) AS current_wal_size;
+   ```
+
+2. **Check Inactive Replication Slots**
+   ```sql
+   SELECT slot_name, active, pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS lag
+   FROM pg_replication_slots
+   WHERE active = false;
+   ```
+
+3. **Drop Orphaned Slots**
+   ```sql
+   SELECT pg_drop_replication_slot('orphaned_slot_name');
+   ```
+
+4. **Emergency Disk Expansion**
+   ```bash
+   gcloud sql instances patch INSTANCE_NAME --storage-size=200GB
+   ```
+
+---
+
+## Cost Optimization
+
+### 1. Metrics Sampling
+
+**Trade-off:** Менее частый сбор метрик → ниже стоимость, но выше latency обнаружения проблем.
+
+```yaml
+# PodMonitoring для Debezium
+spec:
+  endpoints:
+  - port: metrics
+    interval: 60s  # 60s вместо 30s = 50% cost reduction
+```
+
+### 2. Log Exclusion Filters
+
+Debezium Server генерирует verbose логи. Исключить неважные уровни:
+
+```bash
+gcloud logging sinks create exclude-debug-logs \
+  logging.googleapis.com/projects/YOUR_PROJECT/logs \
+  --log-filter='resource.type="k8s_pod" AND severity<"INFO"'
+```
+
+### 3. Alert Aggregation
+
+Используйте `notificationRateLimit` для предотвращения alert storms:
+
+```yaml
+alertStrategy:
+  notificationRateLimit:
+    period: 3600s  # Max 1 notification per hour
+```
+
+---
+
+## Monitoring Points Diagram
+
+<Mermaid chart={`
+graph LR
+    subgraph "Source"
+        CS[Cloud SQL] -->|Monitor| M1[fa:fa-chart-line<br/>CPU/Disk<br/>Connections<br/>WAL]
+    end
+
+    subgraph "CDC Engine"
+        DBS[Debezium<br/>Server] -->|Monitor| M2[fa:fa-chart-line<br/>Lag<br/>Throughput<br/>Queue]
+    end
+
+    subgraph "Messaging"
+        PS[Pub/Sub] -->|Monitor| M3[fa:fa-chart-line<br/>Backlog<br/>DLQ<br/>Publish Rate]
+    end
+
+    subgraph "Consumers"
+        DF[Dataflow] -->|Monitor| M4[fa:fa-chart-line<br/>System Lag<br/>Workers<br/>Cost]
+        CR[Cloud Run] -->|Monitor| M5[fa:fa-chart-line<br/>Requests<br/>Errors<br/>Latency]
+    end
+
+    M1 --> CM[Cloud<br/>Monitoring]
+    M2 --> CM
+    M3 --> CM
+    M4 --> CM
+    M5 --> CM
+
+    CM --> DASH[Unified<br/>Dashboard]
+    CM --> ALERT[Alert<br/>Policies]
+    CM --> RB[Runbooks]
+
+    style CM fill:#4285f4
+    style DASH fill:#34a853
+    style ALERT fill:#ea4335
+`} client:visible />
+
+---
+
+## Что мы узнали
+
+1. **Cloud SQL Monitoring:** Built-in метрики + custom replication slot queries для WAL bloat detection
+2. **Debezium Metrics:** JMX экспорт через Prometheus, GKE Managed Service для auto-collection
+3. **Pub/Sub Monitoring:** Backlog age, DLQ count, publish rate для early detection
+4. **Dataflow Metrics:** System lag, worker count, cost tracking для performance и budget
+5. **Cloud Run Monitoring:** Error rate, latency distribution для consumer health
+6. **Unified Dashboard:** Single pane of glass для всех компонентов pipeline
+7. **Alerting Policies:** CRITICAL/WARNING hierarchy с runbooks для быстрой реакции
+8. **Runbooks:** Step-by-step troubleshooting guides для типичных проблем
+
+## Что дальше?
+
+Вы завершили **Module 6 - Cloud-Native GCP**! Следующий шаг — **Capstone Project**, где вы объедините все знания для построения production-ready CDC pipeline от начала до конца.
+
+**Ключевые достижения Module 6:**
+
+- Cloud SQL logical replication setup
+- Debezium Server Kafka-less architecture
+- IAM и Workload Identity security
+- BigQuery replication через Dataflow
+- Event-driven processing с Cloud Run
+- End-to-end monitoring и observability
+
+Готовы применить все это на практике?
