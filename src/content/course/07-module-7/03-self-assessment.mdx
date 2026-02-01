@@ -525,6 +525,76 @@ CREATE TABLE orders (
 
 **Prevention:** Monitoring — first-class deliverable, not afterthought.
 
+## Multi-Database Capstone Extension (Optional)
+
+Если вы прошли Module 8 (MySQL) и хотите расширить ваш capstone проект добавлением второго источника данных (MySQL), эта секция предоставляет checklist для multi-database CDC pipeline.
+
+**Контекст:** Основной capstone проект использует PostgreSQL как единственный источник. Multi-database extension добавляет MySQL как второй источник для демонстрации heterogeneous CDC pipeline (PostgreSQL + MySQL → unified Kafka topics → PyFlink → BigQuery).
+
+**Полезные ресурсы:**
+- [Multi-Database Architecture](/course/module-7/04-multi-database-architecture) — сравнение separate topics vs unified topics patterns
+- [Multi-Database Configuration](/course/module-7/05-multi-database-configuration) — практическая имплементация
+
+**Зачем это делать?**
+- Демонстрирует понимание connector-specific различий (WAL vs binlog, replication slots vs schema history topic)
+- Показывает навык работы с multi-source stream processing (UNION ALL в PyFlink)
+- Production-relevant: в реальных системах часто несколько источников данных
+
+### Section 8: Multi-Database Integration (Extension)
+
+Эта секция применима, если вы расширяете capstone проект с добавлением MySQL как второго источника.
+
+- [ ] **MySQL outbox table** создана с аналогичной схемой PostgreSQL
+  - Проверка: MySQL outbox содержит `id`, `aggregatetype`, `aggregateid`, `type`, `payload`, `created_at`
+  - Тип `payload`: JSON (не JSONB как в PostgreSQL)
+
+- [ ] **MySQL connector** настроен с уникальными идентификаторами:
+  - [ ] `database.server.id` уникален (не конфликтует с MySQL server_id)
+    - Рекомендация: диапазон 184000-184999 для Debezium коннекторов
+  - [ ] `database.server.name` уникален (отличается от PostgreSQL коннектора)
+    - Пример: `mysql_prod` vs `postgres_prod`
+  - [ ] `schema.history.internal.kafka.topic` уникален
+    - Пример: `schema-changes.mysql-outbox`
+    - **CRITICAL:** Никогда не используйте общий topic между MySQL коннекторами
+
+- [ ] **Topic naming scheme** унифицирована:
+  - PostgreSQL: `outbox.event.postgres.{aggregate}`
+  - MySQL: `outbox.event.mysql.{aggregate}`
+  - Проверка: `kafka-topics --list` показывает топики от обоих источников
+
+- [ ] **PyFlink consumer** обрабатывает события от обоих источников:
+  - [ ] Две Kafka source таблицы (PostgreSQL + MySQL)
+  - [ ] `UNION ALL` для объединения потоков
+  - [ ] `source_database` колонка для трассировки происхождения
+  - Проверка: downstream sink содержит события от обоих источников
+
+- [ ] **Мониторинг** включает метрики от обоих коннекторов:
+  - PostgreSQL: WAL lag через `pg_replication_slots`
+  - MySQL: `MilliSecondsBehindSource` через JMX
+  - Grafana dashboard показывает оба источника
+
+- [ ] **Trade-offs документированы:**
+  - [ ] Выбор между separate topics и unified topics обоснован
+  - [ ] Schema evolution strategy для каждого источника описана
+  - [ ] Runbook включает recovery procedures для обоих типов коннекторов
+
+### Multi-Database Extension Scoring
+
+Если вы реализуете multi-database extension:
+
+**Exemplary Multi-Database:**
+- Оба коннектора работают стабильно с unique identifiers
+- PyFlink consumer корректно обрабатывает оба потока
+- Monitoring dashboard показывает метрики от обоих источников
+- Documentation включает architecture diagram с обоими источниками
+- Tested: failover одного источника не влияет на другой
+
+**Meets Expectations Multi-Database:**
+- Оба коннектора deployed и RUNNING
+- Events от обоих источников попадают в unified consumer
+- Basic monitoring работает
+- Documentation упоминает multi-database setup
+
 ## Final Encouragement
 
 Этот checklist представляет **production best practices**, накопленные годами опыта с CDC системами. **Не все пункты обязательны для каждого use case.**
