@@ -1,0 +1,531 @@
+---
+title: "MySQL Binary Log: Архитектура и форматы"
+description: "Глубокое погружение в MySQL binlog: форматы ROW/STATEMENT/MIXED, структура событий, ротация логов и сравнение с PostgreSQL WAL"
+order: 1
+difficulty: "intermediate"
+estimatedTime: 30
+topics: ["mysql", "binlog", "replication", "cdc"]
+prerequisites: ["module-2/01-logical-decoding-deep-dive"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# MySQL Binary Log: Архитектура и форматы
+
+В Модуле 2 мы изучали PostgreSQL WAL и logical decoding — механизм преобразования физического лога транзакций в логические события. MySQL использует другой подход: **binary log (binlog)** изначально создавался для репликации и уже содержит логические изменения данных.
+
+В этом уроке мы глубоко погрузимся в архитектуру MySQL binlog, разберём три формата записи (ROW, STATEMENT, MIXED), поймём структуру событий и научимся работать с ротацией логов. Это фундамент для понимания Debezium MySQL connector.
+
+## Binary Log vs Write-Ahead Log
+
+PostgreSQL и MySQL решают задачу репликации по-разному. Понимание этих различий критически важно для настройки CDC.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph POSTGRESQL["PostgreSQL: WAL → Logical Decoding"]
+        direction TB
+        WAL[(WAL<br/>Физический лог)] -->|"wal_level=logical"| LD[Logical Decoding]
+        LD -->|"pgoutput plugin"| CDC1[CDC Events]
+        Note1["Изначально физический формат<br/>Требует декодирования<br/>Оптимизирован для durability"]
+    end
+
+    subgraph MYSQL["MySQL: Binary Log"]
+        direction TB
+        BINLOG[(Binary Log<br/>Логический лог)] -->|"binlog_format=ROW"| CDC2[CDC Events]
+        Note2["Изначально логический формат<br/>Готов для репликации<br/>Оптимизирован для replication"]
+    end
+
+    style POSTGRESQL fill:#1e3a5f,stroke:#3b82f6
+    style MYSQL fill:#14532d,stroke:#22c55e
+    style LD fill:#f59e0b
+    style BINLOG fill:#10b981
+`} client:visible />
+
+| Характеристика | PostgreSQL WAL | MySQL Binary Log |
+|----------------|----------------|------------------|
+| **Изначальное назначение** | Durability (crash recovery) | Replication |
+| **Формат по умолчанию** | Физический (блоки страниц) | Логический (SQL или строки) |
+| **Для CDC требуется** | Logical decoding (pgoutput) | Только binlog_format=ROW |
+| **Overhead для CDC** | Дополнительная информация в WAL | Уже включена |
+| **Managed services** | Требует wal_level=logical | Binlog включен по умолчанию |
+
+**Ключевое отличие:** PostgreSQL WAL изначально физический и требует преобразования через logical decoding. MySQL binlog изначально логический и готов для CDC при правильном формате.
+
+## Binlog Formats: ROW, STATEMENT, MIXED
+
+MySQL поддерживает три формата записи в binlog. Выбор формата критически влияет на возможность использования CDC.
+
+### ROW формат (Required for CDC)
+
+**ROW формат** записывает фактические изменения строк — до и после модификации. Это единственный формат, подходящий для CDC.
+
+```sql
+-- При INSERT в таблицу customers
+INSERT INTO customers (id, name, email) VALUES (1, 'Alice', 'alice@example.com');
+
+-- Binlog ROW формат записывает:
+-- WRITE_ROWS_EVENT:
+-- Table: customers
+-- Row: {id: 1, name: 'Alice', email: 'alice@example.com'}
+```
+
+**Преимущества:**
+- Детерминированность — одинаковый результат на реплике
+- Полная информация о значениях строк
+- Работает с недетерминированными функциями (NOW(), RAND(), UUID())
+- **Единственный формат, совместимый с CDC**
+
+**Недостатки:**
+- Больший размер binlog
+- Массовые UPDATE могут генерировать огромные события
+
+<Mermaid chart={`
+flowchart LR
+    subgraph APP["Приложение"]
+        SQL["UPDATE products<br/>SET price = price * 1.1<br/>WHERE category = 'electronics'"]
+    end
+
+    subgraph ROW["ROW формат"]
+        E1["UPDATE_ROWS_EVENT<br/>Row 1: before={id:1, price:100}<br/>after={id:1, price:110}"]
+        E2["Row 2: before={id:2, price:200}<br/>after={id:2, price:220}"]
+        E3["Row N: ..."]
+    end
+
+    APP --> ROW
+
+    style ROW fill:#10b981,stroke:#22c55e
+`} client:visible />
+
+### STATEMENT формат (Legacy, NOT for CDC)
+
+**STATEMENT формат** записывает SQL запросы, как есть.
+
+```sql
+-- При INSERT в таблицу orders
+INSERT INTO orders (id, customer_id, created_at)
+VALUES (1, 42, NOW());
+
+-- Binlog STATEMENT формат записывает:
+-- QUERY_EVENT:
+-- Query: INSERT INTO orders (id, customer_id, created_at) VALUES (1, 42, NOW());
+```
+
+**Проблема для CDC:**
+```sql
+-- На мастере NOW() вернул: 2026-02-01 10:30:00
+-- На реплике NOW() вернёт: 2026-02-01 10:30:05
+-- Результат: РАЗНЫЕ данные на мастере и реплике!
+```
+
+**Недетерминированные функции, ломающие STATEMENT:**
+- `NOW()`, `CURDATE()`, `CURRENT_TIMESTAMP()` — время выполнения
+- `RAND()` — случайные числа
+- `UUID()` — уникальные идентификаторы
+- `LAST_INSERT_ID()` — зависит от контекста
+
+**Когда был полезен:**
+- Старые версии MySQL (до 5.1)
+- Экономия места на binlog
+- Репликация только между идентичными MySQL серверами
+
+**Вердикт:** STATEMENT формат НЕ подходит для CDC. Не используйте.
+
+### MIXED формат (Unpredictable, Avoid)
+
+**MIXED формат** — MySQL автоматически выбирает ROW или STATEMENT в зависимости от запроса.
+
+```sql
+-- Детерминированный запрос → STATEMENT
+INSERT INTO customers (id, name) VALUES (1, 'Bob');
+
+-- Недетерминированный запрос → ROW
+INSERT INTO orders (id, created_at) VALUES (1, NOW());
+```
+
+**Проблема для CDC:**
+- **Непредсказуемость** — вы не контролируете формат
+- Разные события имеют разную структуру
+- Debezium должен обрабатывать оба формата
+- Усложняет отладку и мониторинг
+
+**Вердикт:** MIXED формат избегайте. Используйте только ROW для CDC.
+
+### Сравнительная таблица форматов
+
+| Характеристика | ROW | STATEMENT | MIXED |
+|----------------|-----|-----------|-------|
+| **Детерминизм** | Детерминированный | Недетерминированный | Переменный |
+| **Размер binlog** | Большой | Маленький | Переменный |
+| **CDC совместимость** | ✅ Да | ❌ Нет | ⚠️ Не рекомендуется |
+| **Debezium поддержка** | Полная | Нет | Ограниченная |
+| **Рекомендация** | **Используйте для CDC** | Только legacy | Избегайте |
+
+> **Критическое требование для Debezium:** Установите `binlog_format=ROW`. Без этого Debezium MySQL connector не сможет корректно работать.
+
+## Binlog Event Types: Структура событий
+
+Каждое изменение в MySQL записывается как последовательность **binlog events**. Понимание типов событий необходимо для отладки и мониторинга CDC.
+
+### Основные типы событий
+
+<Mermaid chart={`
+sequenceDiagram
+    participant App as Приложение
+    participant MySQL as MySQL Server
+    participant Binlog as Binary Log
+    participant Debezium as Debezium
+
+    App->>MySQL: BEGIN TRANSACTION
+
+    MySQL->>Binlog: GTID_EVENT<br/>(transaction ID)
+    Note over Binlog: Уникальный идентификатор<br/>транзакции для GTID mode
+
+    App->>MySQL: CREATE TABLE products (...)
+    MySQL->>Binlog: QUERY_EVENT<br/>(DDL statement)
+
+    App->>MySQL: INSERT INTO customers VALUES (1, 'Alice')
+    MySQL->>Binlog: TABLE_MAP_EVENT<br/>(schema metadata)
+    MySQL->>Binlog: WRITE_ROWS_EVENT<br/>(row data)
+
+    App->>MySQL: UPDATE customers SET name='Bob' WHERE id=1
+    MySQL->>Binlog: TABLE_MAP_EVENT
+    MySQL->>Binlog: UPDATE_ROWS_EVENT<br/>(before + after)
+
+    App->>MySQL: DELETE FROM customers WHERE id=1
+    MySQL->>Binlog: TABLE_MAP_EVENT
+    MySQL->>Binlog: DELETE_ROWS_EVENT<br/>(deleted row)
+
+    App->>MySQL: COMMIT
+    MySQL->>Binlog: XID_EVENT<br/>(transaction commit)
+
+    Debezium->>Binlog: Read events
+    Binlog-->>Debezium: Stream of events
+`} client:visible />
+
+### Описание ключевых событий
+
+**GTID_EVENT (Global Transaction ID Event)**
+- Уникальный идентификатор транзакции в формате `server_uuid:transaction_id`
+- Используется только при `gtid_mode=ON`
+- Позволяет точное отслеживание позиции репликации
+- Debezium использует GTID для fault tolerance
+
+**QUERY_EVENT**
+- Записывает DDL операции: CREATE, ALTER, DROP
+- Записывает BEGIN (начало транзакции)
+- Содержит полный SQL текст запроса
+
+**TABLE_MAP_EVENT**
+- Связывает table ID с именем таблицы и схемой
+- Предшествует каждому WRITE/UPDATE/DELETE событию
+- Содержит метаданные: имена колонок, типы данных
+- Критичен для Debezium: без него невозможно декодировать row events
+
+**WRITE_ROWS_EVENT (INSERT)**
+```
+TABLE_MAP_EVENT: customers (id INT, name VARCHAR, email VARCHAR)
+WRITE_ROWS_EVENT:
+  Row 1: {id: 1, name: 'Alice', email: 'alice@example.com'}
+  Row 2: {id: 2, name: 'Bob', email: 'bob@example.com'}
+```
+
+**UPDATE_ROWS_EVENT**
+```
+TABLE_MAP_EVENT: customers
+UPDATE_ROWS_EVENT:
+  Row: before={id: 1, name: 'Alice'}, after={id: 1, name: 'Alice Updated'}
+```
+
+**DELETE_ROWS_EVENT**
+```
+TABLE_MAP_EVENT: customers
+DELETE_ROWS_EVENT:
+  Row: {id: 1, name: 'Alice', email: 'alice@example.com'}
+```
+
+**XID_EVENT (Transaction Commit)**
+- Фиксирует успешное завершение транзакции
+- Содержит XID (transaction ID) для InnoDB
+- Debezium использует для группировки событий одной транзакции
+
+### Пример последовательности событий
+
+```sql
+-- SQL транзакция
+BEGIN;
+INSERT INTO customers (id, name) VALUES (1, 'Alice');
+UPDATE customers SET name='Alice Updated' WHERE id=1;
+COMMIT;
+```
+
+**Binlog последовательность:**
+```
+1. GTID_EVENT:         server_uuid:1
+2. QUERY_EVENT:        BEGIN
+3. TABLE_MAP_EVENT:    customers (id, name)
+4. WRITE_ROWS_EVENT:   {id: 1, name: 'Alice'}
+5. TABLE_MAP_EVENT:    customers (id, name)
+6. UPDATE_ROWS_EVENT:  before={id:1, name:'Alice'}, after={id:1, name:'Alice Updated'}
+7. XID_EVENT:          Transaction commit
+```
+
+## Binlog Rotation: Управление файлами логов
+
+MySQL не хранит весь binlog в одном файле. Вместо этого используется **ротация** — создание новых файлов по достижении определённых условий.
+
+### Именование файлов binlog
+
+```
+mysql-bin.000001
+mysql-bin.000002
+mysql-bin.000003
+...
+mysql-bin.999999
+```
+
+**Формат:** `{basename}.{sequence_number}`
+
+- `basename` — настраивается через `log-bin` параметр (по умолчанию `mysql-bin`)
+- `sequence_number` — 6-значный номер, инкрементируется при каждой ротации
+
+### Когда происходит ротация?
+
+1. **Достигнут max_binlog_size** (по умолчанию 1GB)
+   ```sql
+   SHOW VARIABLES LIKE 'max_binlog_size';
+   -- 1073741824 (1GB)
+   ```
+
+2. **Перезапуск MySQL сервера**
+   - При старте всегда создаётся новый файл
+   - Гарантирует чистое начало
+
+3. **Команда FLUSH LOGS**
+   ```sql
+   FLUSH BINARY LOGS;
+   -- Принудительная ротация
+   ```
+
+4. **Команда RESET MASTER** (опасно!)
+   ```sql
+   RESET MASTER;
+   -- Удаляет ВСЕ binlog файлы и начинает с .000001
+   -- Используйте ТОЛЬКО в dev/test окружении!
+   ```
+
+### Индексный файл mysql-bin.index
+
+MySQL поддерживает список всех активных binlog файлов в индексном файле.
+
+```bash
+# Содержимое mysql-bin.index
+/var/lib/mysql/mysql-bin.000001
+/var/lib/mysql/mysql-bin.000002
+/var/lib/mysql/mysql-bin.000003
+```
+
+**Назначение:**
+- Быстрый поиск всех binlog файлов
+- Используется при репликации для навигации между файлами
+- Debezium читает индекс для отслеживания доступных логов
+
+### Binlog Position Tracking
+
+Каждая запись в binlog имеет точную позицию, состоящую из двух частей:
+
+```
+Position = (binlog_file, binlog_offset)
+```
+
+**Пример:**
+```
+(mysql-bin.000003, 154)
+      ↑                ↑
+   filename         offset (байты)
+```
+
+**Для чего нужна позиция:**
+- Debezium отслеживает текущую позицию чтения
+- При перезапуске Debezium продолжает с сохранённой позиции
+- Реплики используют позицию для синхронизации с мастером
+
+<Mermaid chart={`
+flowchart TB
+    subgraph BINLOG["Binlog файлы"]
+        B1["mysql-bin.000001<br/>0-1073741824 bytes<br/>Status: CLOSED"]
+        B2["mysql-bin.000002<br/>0-1073741824 bytes<br/>Status: CLOSED"]
+        B3["mysql-bin.000003<br/>0-524288 bytes<br/>Status: ACTIVE"]
+    end
+
+    subgraph DEBEZIUM["Debezium Connector"]
+        POS["Current Position:<br/>mysql-bin.000003<br/>Offset: 154"]
+    end
+
+    B3 -.->|"Reading"| POS
+
+    style B3 fill:#10b981,stroke:#22c55e
+    style POS fill:#8b5cf6,stroke:#a855f7
+`} client:visible />
+
+### Автоматическая очистка старых binlog
+
+Старые binlog файлы занимают место на диске. MySQL автоматически удаляет файлы старше определённого времени.
+
+```sql
+-- Проверить настройку auto-purge
+SHOW VARIABLES LIKE 'binlog_expire_logs_seconds';
+-- 2592000 (30 дней по умолчанию)
+
+-- Изменить retention период (7 дней)
+SET GLOBAL binlog_expire_logs_seconds = 604800;
+```
+
+**Важно для Debezium:**
+- Если Debezium остановлен дольше, чем `binlog_expire_logs_seconds`, старые binlog будут удалены
+- При возобновлении Debezium не сможет прочитать пропущенные изменения
+- Решение: установите достаточно большой retention период или используйте binlog backups
+
+> **Предупреждение:** Установка слишком большого `binlog_expire_logs_seconds` может заполнить диск. Мониторьте используемое пространство.
+
+## Verification Commands: Проверка binlog настроек
+
+### Проверить binlog format
+
+```sql
+SHOW VARIABLES LIKE 'binlog_format';
+```
+
+**Ожидаемый результат:**
+```
++---------------+-------+
+| Variable_name | Value |
++---------------+-------+
+| binlog_format | ROW   |
++---------------+-------+
+```
+
+Если видите `STATEMENT` или `MIXED` — измените:
+
+```sql
+-- Глобальное изменение (требует SUPER привилегии)
+SET GLOBAL binlog_format = 'ROW';
+
+-- Для текущей сессии
+SET SESSION binlog_format = 'ROW';
+```
+
+Для постоянного изменения добавьте в `my.cnf`:
+```ini
+[mysqld]
+binlog_format = ROW
+```
+
+### Проверить список binlog файлов
+
+```sql
+SHOW BINARY LOGS;
+```
+
+**Пример вывода:**
+```
++------------------+-----------+-----------+
+| Log_name         | File_size | Encrypted |
++------------------+-----------+-----------+
+| mysql-bin.000001 | 177       | No        |
+| mysql-bin.000002 | 1074      | No        |
+| mysql-bin.000003 | 524       | No        |
++------------------+-----------+-----------+
+```
+
+### Проверить текущую позицию мастера
+
+```sql
+SHOW MASTER STATUS;
+```
+
+**Пример вывода:**
+```
++------------------+----------+--------------+------------------+-------------------+
+| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++------------------+----------+--------------+------------------+-------------------+
+| mysql-bin.000003 |      524 |              |                  |                   |
++------------------+----------+--------------+------------------+-------------------+
+```
+
+**Интерпретация:**
+- `File` — текущий активный binlog файл
+- `Position` — текущий offset в байтах
+- `Executed_Gtid_Set` — для GTID mode (следующий урок)
+
+### Просмотреть события в binlog
+
+```sql
+-- Показать первые 20 событий
+SHOW BINLOG EVENTS IN 'mysql-bin.000003' LIMIT 20;
+```
+
+**Пример вывода:**
+```
++------------------+------+----------------+-----------+-------------+---------------------------------------+
+| Log_name         | Pos  | Event_type     | Server_id | End_log_pos | Info                                  |
++------------------+------+----------------+-----------+-------------+---------------------------------------+
+| mysql-bin.000003 |    4 | Format_desc    |         1 |         126 | Server ver: 8.0.40, Binlog ver: 4     |
+| mysql-bin.000003 |  126 | Previous_gtids |         1 |         157 |                                       |
+| mysql-bin.000003 |  157 | Anonymous_Gtid |         1 |         236 | SET @@SESSION.GTID_NEXT= 'ANONYMOUS'  |
+| mysql-bin.000003 |  236 | Query          |         1 |         322 | BEGIN                                 |
+| mysql-bin.000003 |  322 | Table_map      |         1 |         385 | table_id: 108 (test.customers)        |
+| mysql-bin.000003 |  385 | Write_rows     |         1 |         441 | table_id: 108 flags: STMT_END_F       |
+| mysql-bin.000003 |  441 | Xid            |         1 |         472 | COMMIT /* xid=47 */                   |
++------------------+------+----------------+-----------+-------------+---------------------------------------+
+```
+
+**Ключевые колонки:**
+- `Pos` — позиция начала события
+- `Event_type` — тип события (Table_map, Write_rows, Xid)
+- `End_log_pos` — позиция конца события
+- `Info` — дополнительная информация
+
+### Проверить binlog retention
+
+```sql
+SHOW VARIABLES LIKE 'binlog_expire_logs_seconds';
+```
+
+**Рекомендация:** Для CDC окружения с Debezium установите минимум 7 дней (604800 секунд):
+
+```sql
+SET GLOBAL binlog_expire_logs_seconds = 604800;
+```
+
+## Сравнение с PostgreSQL WAL
+
+Для тех, кто прошёл Модуль 2, вот прямое сравнение подходов PostgreSQL и MySQL.
+
+| Аспект | PostgreSQL WAL + Logical Decoding | MySQL Binary Log |
+|--------|-----------------------------------|------------------|
+| **Формат по умолчанию** | Физический (блоки страниц) | Логический (ROW/STATEMENT) |
+| **Включение CDC** | `wal_level=logical` | `binlog_format=ROW` |
+| **Плагин декодирования** | pgoutput (или wal2json) | Не требуется |
+| **Replication Slot** | Обязателен для CDC | Не используется (position tracking) |
+| **Publications** | Фильтрация таблиц | `binlog-do-db` / `binlog-ignore-db` |
+| **REPLICA IDENTITY** | DEFAULT / FULL / INDEX | Всегда полные данные в ROW |
+| **Позиция репликации** | LSN (Log Sequence Number) | (binlog_file, offset) |
+| **GTID поддержка** | Нет | Да (опционально) |
+| **Автоочистка** | По LSN replication slot | По времени (expire_logs_seconds) |
+
+**Ключевой вывод:** MySQL binlog проще для CDC, потому что уже содержит логические изменения. PostgreSQL требует дополнительный слой (logical decoding), но даёт более гибкий контроль через publications и REPLICA IDENTITY.
+
+## Ключевые выводы
+
+1. **MySQL binlog изначально логический** — предназначен для репликации, не требует декодирования как PostgreSQL WAL
+2. **ROW формат обязателен для CDC** — STATEMENT недетерминированный, MIXED непредсказуемый
+3. **Binlog события структурированы** — TABLE_MAP + WRITE/UPDATE/DELETE + XID образуют транзакцию
+4. **Ротация binlog автоматическая** — новый файл при достижении max_binlog_size или перезапуске
+5. **Position tracking** — Debezium отслеживает (binlog_file, offset) для fault tolerance
+6. **Автоочистка критична** — установите `binlog_expire_logs_seconds` больше максимального downtime Debezium
+
+## Что дальше?
+
+Мы разобрались с binlog форматами и структурой событий. Но для production CDC недостаточно знать позицию в файле — нужна **глобальная идентификация транзакций**.
+
+В следующем уроке мы изучим **GTID (Global Transaction ID)** — систему уникальных идентификаторов транзакций, которая делает MySQL репликацию и CDC fault-tolerant и масштабируемой. Вы узнаете, почему GTID критичен для AWS Aurora MySQL и как настроить GTID mode для Debezium.
