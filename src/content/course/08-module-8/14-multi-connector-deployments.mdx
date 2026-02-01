@@ -1,0 +1,1397 @@
+---
+title: "Multi-Connector Deployments: Server ID Registry и Топологические Конфликты"
+description: "Безопасное развертывание множества Debezium MySQL connectors к одному кластеру: server.id registry pattern, topic isolation rules, и verification procedures"
+order: 14
+difficulty: "advanced"
+estimatedTime: 35
+topics: ["mysql", "debezium", "multi-connector", "server-id", "topology"]
+prerequisites: ["module-8/04-mysql-connector-configuration", "module-8/06-schema-history-recovery"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+import Callout from '../../../components/Callout.tsx';
+
+# Multi-Connector Deployments: Server ID Registry и Топологические Конфликты
+
+## Почему множественные коннекторы?
+
+В production системах один Debezium connector на MySQL кластер — это редкий сценарий. Гораздо чаще вам нужно развернуть **несколько независимых CDC connectors** к одной и той же базе данных.
+
+### Типичные use cases для multi-connector deployments
+
+**Use Case 1: Разные команды/приложения**
+```
+Team Orders:  MySQL → Debezium Connector A → orders.* topics → Orders microservice
+Team Users:   MySQL → Debezium Connector B → users.* topics → Auth microservice
+Team Payment: MySQL → Debezium Connector C → payment.* topics → Payment gateway
+```
+
+Каждая команда управляет своим коннектором независимо: отдельная конфигурация, отдельные трансформации, отдельные deployment schedules.
+
+**Use Case 2: Разные топик naming conventions**
+```
+// Connector 1: Legacy system (flat topic structure)
+database.server.name: mysql_legacy
+Topics: mysql_legacy.ecommerce.orders
+
+// Connector 2: New architecture (domain-prefixed topics)
+database.server.name: orders_domain
+Topics: orders_domain.ecommerce.orders
+```
+
+Невозможно использовать два `database.server.name` в одном коннекторе — нужны два отдельных connector instance.
+
+**Use Case 3: Isolation for failure domains**
+```
+Connector A: Critical tables (orders, payments) → High priority Kafka Connect workers
+Connector B: Analytics tables (logs, metrics) → Lower priority workers
+```
+
+Если Connector B падает из-за проблем с аналитическими таблицами, Connector A продолжает работать для критических данных.
+
+**Use Case 4: Parallel snapshots для больших баз**
+```
+Connector A: Snapshot tables 1-100 (products, inventory)
+Connector B: Snapshot tables 101-200 (orders history)
+Connector C: Snapshot tables 201-300 (audit logs)
+```
+
+Три коннектора делают snapshot параллельно → 3x speedup для initial load.
+
+<Callout type="note">
+**Когда НЕ нужны множественные коннекторы:**
+
+Если вам просто нужно фильтровать таблицы или изменять имена топиков — используйте `table.include.list` и Single Message Transforms в **одном** коннекторе. Multiple connectors нужны только для реальной изоляции ownership, deployment, или failure domains.
+</Callout>
+
+## The Server ID Problem
+
+Вот главная проблема: MySQL использует **`server_id`** для идентификации replication clients. Когда Debezium connector подключается к MySQL для чтения binlog, он регистрируется как реплика с уникальным `server_id`.
+
+### Что происходит при дубликате server_id?
+
+```sql
+-- Connector A уже подключён с server_id=184001
+-- Connector B пытается подключиться с server_id=184001
+
+-- MySQL выдаёт ошибку:
+ERROR 1236 (HY000): A slave with the same server_uuid/server_id as this slave has connected to the master
+```
+
+**Почему это фатально:**
+
+1. **MySQL блокирует подключение** — второй коннектор с дубликатом `server_id` не может стартовать
+2. **Даже остановленные коннекторы держат session** — MySQL не убивает replication connection мгновенно (timeout delays)
+3. **Conflict не разрешается автоматически** — нужно вручную kill connection или изменить `server_id`
+
+<Mermaid chart={`
+sequenceDiagram
+    participant ConnA as Connector A<br/>server_id: 184001
+    participant MySQL as MySQL Master
+    participant ConnB as Connector B<br/>server_id: 184001
+
+    ConnA->>MySQL: Register as slave 184001
+    MySQL-->>ConnA: ✅ Connected
+
+    Note over MySQL: Connector A active<br/>server_id 184001 registered
+
+    ConnB->>MySQL: Register as slave 184001
+    MySQL-->>ConnB: ❌ ERROR 1236<br/>Duplicate server_id!
+
+    Note over ConnB: Connector B stuck<br/>Cannot start
+
+    ConnA->>MySQL: Stop connector
+    Note over MySQL: Session timeout (30s-60s)<br/>184001 still registered
+
+    ConnB->>MySQL: Retry connection
+    MySQL-->>ConnB: ❌ Still registered!
+
+    Note over MySQL: Must wait for timeout<br/>or manually kill connection
+`} client:visible />
+
+**Проверка активных replication connections:**
+
+```sql
+-- Посмотреть все подключённые replicas
+SHOW SLAVE HOSTS;
+
+-- Пример вывода:
++-------------+------+------+-----------+
+| Server_id   | Host | Port | Master_id |
++-------------+------+------+-----------+
+|      184001 |      | 3306 |         1 |
+|      184002 |      | 3306 |         1 |
++-------------+------+------+-----------+
+```
+
+Если вы видите два одинаковых `Server_id` — это проблема. Но `SHOW SLAVE HOSTS` показывает только **активные** подключения. Используйте более детальный запрос:
+
+```sql
+-- Проверить на дубликаты в активных соединениях
+SELECT Server_id, COUNT(*) as count
+FROM performance_schema.replication_connection_configuration
+GROUP BY Server_id
+HAVING COUNT(*) > 1;
+
+-- Должен вернуть пустой результат (no duplicates)
+```
+
+<Callout type="danger">
+**Duplicate server_id blocks connector startup completely**
+
+В production это означает downtime. Если вы деплоите новый коннектор с конфликтующим `server_id`, он не стартует. Если вы деплоите update существующего коннектора с случайно изменённым `server_id`, конфликт может возникнуть при failover или restart.
+
+**Prevention — единственное решение.** Используйте server.id registry pattern (ниже).
+</Callout>
+
+## Server ID Registry Pattern
+
+Решение — централизованное отслеживание всех `server_id` allocations с чёткими правилами.
+
+### Range Allocation Strategy
+
+**Проблема координации:** MySQL cluster уже использует диапазон `server_id` для реальных MySQL replicas (обычно 1-1000). Debezium connectors должны использовать **separate range** чтобы не конфликтовать.
+
+**Решение из проектных решений (State.md):**
+
+```
+MySQL Cluster Range:   1 - 183999   (реальные MySQL replicas)
+Debezium Connectors:   184000 - 184999  (Debezium CDC connectors only)
+```
+
+**Почему 184000-184999?**
+- Не пересекается с типичными MySQL cluster deployments (обычно менее 1000 server_id values)
+- Достаточно большой диапазон для 999 коннекторов (избыточно для большинства организаций)
+- Легко идентифицировать Debezium connector по `server_id` (184xxx = Debezium)
+
+### Registry Template
+
+Создайте файл в вашем проекте: `server-id-registry.md`
+
+```markdown
+# Server ID Registry
+
+## Allocation Rules
+
+- **Range:** 184000-184999 (Debezium connectors only)
+- **Increment:** Sequentially from 184000
+- **Documentation:** REQUIRED before deployment
+- **Reuse embargo:** 30 days minimum after connector decommission
+
+## Why 30-day embargo?
+
+MySQL replication sessions не убиваются мгновенно после остановки коннектора. Timeout delays, stale connections, и failover scenarios могут привести к тому, что старый server_id остаётся зарегистрированным в MySQL.
+
+**Rule:** Не используйте server_id повторно в течение 30 дней после удаления коннектора.
+
+## Active Allocations
+
+| Connector Name       | Server ID | Database     | Status     | Owner    | Deployed    | Notes                          |
+|----------------------|-----------|--------------|------------|----------|-------------|--------------------------------|
+| orders-cdc           | 184001    | ecommerce    | Active     | Team A   | 2026-01-15  | Production orders CDC          |
+| users-cdc            | 184002    | ecommerce    | Active     | Team A   | 2026-01-15  | Production users/auth CDC      |
+| inventory-cdc        | 184003    | warehouse    | Active     | Team B   | 2026-01-20  | Warehouse inventory tracking   |
+| analytics-cdc        | 184004    | ecommerce    | Testing    | Team C   | 2026-01-28  | Analytics tables (staging)     |
+| payment-cdc          | 184005    | payment      | Active     | Team D   | 2026-02-01  | Payment gateway CDC            |
+
+## Decommissioned (Reuse After)
+
+| Connector Name       | Server ID | Decommissioned | Reuse After | Reason                          |
+|----------------------|-----------|----------------|-------------|---------------------------------|
+| old-orders-v1        | 184000    | 2025-12-20     | 2026-01-19  | Replaced by orders-cdc          |
+| test-connector       | 184006    | 2026-01-10     | 2026-02-09  | Temporary testing connector     |
+
+## Team Sub-Ranges (Optional for large organizations)
+
+For organizations with many teams, pre-allocate sub-ranges:
+
+| Team      | Range            | Used  | Available |
+|-----------|------------------|-------|-----------|
+| Team A    | 184000 - 184099  | 2     | 98        |
+| Team B    | 184100 - 184199  | 1     | 99        |
+| Team C    | 184200 - 184299  | 1     | 99        |
+| Team D    | 184300 - 184399  | 1     | 99        |
+
+Teams allocate server_id within their range independently (no cross-team coordination needed).
+```
+
+<Callout type="tip">
+**Store registry in version control**
+
+Commit `server-id-registry.md` to your infrastructure repository. Treat server_id allocations like IP addresses or port assignments — critical infrastructure configuration that must be tracked.
+
+**Pre-deployment check:** Before deploying connector, verify server_id is documented in registry.
+</Callout>
+
+### Registry Workflow
+
+**Step 1: Request server_id allocation**
+```bash
+# Developer wants to deploy new connector
+# Check registry for next available ID
+grep "184" server-id-registry.md | tail -1
+# Last used: 184005
+
+# Next available: 184006 (check decommissioned list first!)
+```
+
+**Step 2: Add to registry BEFORE deployment**
+```markdown
+| new-connector-name   | 184006    | mydb         | Deploying  | Team X   | 2026-02-01  | Description here    |
+```
+
+**Step 3: Deploy connector with allocated server_id**
+```json
+{
+  "name": "new-connector-name",
+  "config": {
+    "database.server.id": "184006",
+    ...
+  }
+}
+```
+
+**Step 4: Update registry status to Active after successful deployment**
+```markdown
+| new-connector-name   | 184006    | mydb         | Active     | Team X   | 2026-02-01  | Description here    |
+```
+
+<Callout type="warning">
+**30-day reuse embargo критичен**
+
+Если вы удалили connector 10 января, не используйте его `server_id` до 10 февраля. Даже если MySQL показывает, что connection больше нет в `SHOW SLAVE HOSTS`, internal state может сохраниться (особенно если MySQL перезапускался, делал failover, или connector crash вместо graceful shutdown).
+
+**Best practice:** Просто increment sequentially. Диапазон 184000-184999 даёт вам 999 allocations — избыточно для большинства организаций.
+</Callout>
+
+## Topic Isolation Rules
+
+Server ID — не единственная проблема при multi-connector deployments. **Topic naming conflicts** могут привести к data corruption.
+
+### Три обязательных уникальных значения
+
+Каждый connector MUST иметь уникальные значения для:
+
+**1. `database.server.name` (topic prefix)**
+
+Это префикс для **всех** топиков, создаваемых коннектором.
+
+```json
+// Connector A
+"database.server.name": "mysql_orders"
+
+// Топики, созданные Connector A:
+// - mysql_orders.ecommerce.orders
+// - mysql_orders.ecommerce.order_items
+```
+
+```json
+// Connector B
+"database.server.name": "mysql_users"
+
+// Топики, созданные Connector B:
+// - mysql_users.ecommerce.users
+// - mysql_users.ecommerce.profiles
+```
+
+**Почему critical:** Если два коннектора используют одинаковый `database.server.name`, они **пишут в одни и те же топики** → data corruption (events from different connectors mixed in same topic).
+
+---
+
+**2. `schema.history.internal.kafka.topic`**
+
+Каждый connector должен иметь **свой собственный** schema history topic.
+
+```json
+// Connector A
+"schema.history.internal.kafka.topic": "schema-history.mysql_orders"
+
+// Connector B
+"schema.history.internal.kafka.topic": "schema-history.mysql_users"
+```
+
+<Callout type="danger">
+**NEVER share schema history topic between connectors**
+
+Shared schema history topic — это катастрофическая ошибка:
+
+1. Connector A записывает DDL для `ecommerce.orders` table
+2. Connector B читает этот DDL во время restart
+3. Connector B думает, что `ecommerce.orders` table существует в его database scope
+4. Connector B пытается обработать события для таблицы, которую он не должен мониторить
+5. **Schema mismatch errors, data corruption, connector crashes**
+
+**Правило:** `schema.history.internal.kafka.topic` MUST быть уникальным для каждого коннектора.
+</Callout>
+
+**Naming convention:**
+```
+schema-history.{database.server.name}
+```
+
+Примеры:
+- `schema-history.mysql_orders`
+- `schema-history.mysql_users`
+- `schema-history.aurora_production`
+
+---
+
+**3. Offset storage key (automatic via connector name)**
+
+Kafka Connect хранит offsets (binlog positions) в `connect-offsets` топике с ключом = `{connector-name}`.
+
+```json
+// Connector A
+"name": "orders-cdc"
+// Offset key: ["orders-cdc", {...}]
+
+// Connector B
+"name": "users-cdc"
+// Offset key: ["users-cdc", {...}]
+```
+
+**Это автоматически уникально если connector names уникальны.** Просто убедитесь, что `name` property в connector config разные для каждого коннектора.
+
+### Topic Isolation Visual
+
+<Mermaid chart={`
+flowchart TB
+    subgraph MYSQL["MySQL Cluster (ecommerce database)"]
+        direction TB
+        T1["Table: orders"]
+        T2["Table: order_items"]
+        T3["Table: users"]
+        T4["Table: profiles"]
+    end
+
+    subgraph CONN_A["Debezium Connector A<br/>(orders-cdc)"]
+        direction TB
+        CA_CONFIG["database.server.id: 184001<br/>database.server.name: mysql_orders<br/>table.include.list: orders, order_items<br/>schema.history: schema-history.mysql_orders"]
+    end
+
+    subgraph CONN_B["Debezium Connector B<br/>(users-cdc)"]
+        direction TB
+        CB_CONFIG["database.server.id: 184002<br/>database.server.name: mysql_users<br/>table.include.list: users, profiles<br/>schema.history: schema-history.mysql_users"]
+    end
+
+    subgraph KAFKA_A["Kafka Topics (Connector A)"]
+        direction TB
+        KA1["mysql_orders.ecommerce.orders"]
+        KA2["mysql_orders.ecommerce.order_items"]
+        KA3["schema-history.mysql_orders"]
+    end
+
+    subgraph KAFKA_B["Kafka Topics (Connector B)"]
+        direction TB
+        KB1["mysql_users.ecommerce.users"]
+        KB2["mysql_users.ecommerce.profiles"]
+        KB3["schema-history.mysql_users"]
+    end
+
+    T1 --> CONN_A
+    T2 --> CONN_A
+    T3 --> CONN_B
+    T4 --> CONN_B
+
+    CONN_A --> KA1
+    CONN_A --> KA2
+    CONN_A --> KA3
+
+    CONN_B --> KB1
+    CONN_B --> KB2
+    CONN_B --> KB3
+
+    style CONN_A fill:#1e3a5f,stroke:#3b82f6
+    style CONN_B fill:#14532d,stroke:#22c55e
+    style KA3 fill:#f59e0b,stroke:#fb923c
+    style KB3 fill:#f59e0b,stroke:#fb923c
+`} client:visible />
+
+**Key takeaway:** Два коннектора к одному MySQL cluster — это нормально. Но они MUST иметь:
+- Уникальные `server_id` (Registry pattern)
+- Уникальные `database.server.name` (Topic prefix separation)
+- Уникальные `schema.history.internal.kafka.topic` (Schema isolation)
+
+## Configuration Examples: Two Connectors to Same MySQL
+
+Разберём реальный пример: два коннектора к `ecommerce` database.
+
+### Connector 1: Orders Team
+
+```json
+{
+  "name": "orders-cdc",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "dbz",
+
+    // Unique server_id (from registry)
+    "database.server.id": "184001",
+
+    // Unique topic prefix
+    "database.server.name": "mysql_orders",
+
+    // Unique schema history topic
+    "schema.history.internal.kafka.topic": "schema-history.mysql_orders",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+
+    // Filter tables: only orders-related
+    "table.include.list": "ecommerce.orders,ecommerce.order_items",
+
+    // Standard configuration
+    "snapshot.mode": "when_needed",
+    "snapshot.locking.mode": "minimal",
+    "gtid.source.includes": ".*",
+    "heartbeat.interval.ms": "30000",
+    "heartbeat.topics.prefix": "__debezium-heartbeat"
+  }
+}
+```
+
+**Topics created:**
+- `mysql_orders.ecommerce.orders`
+- `mysql_orders.ecommerce.order_items`
+- `schema-history.mysql_orders`
+
+---
+
+### Connector 2: Users Team
+
+```json
+{
+  "name": "users-cdc",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "dbz",
+
+    // Different server_id (from registry)
+    "database.server.id": "184002",
+
+    // Different topic prefix
+    "database.server.name": "mysql_users",
+
+    // Different schema history topic
+    "schema.history.internal.kafka.topic": "schema-history.mysql_users",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+
+    // Filter tables: only user-related
+    "table.include.list": "ecommerce.users,ecommerce.profiles",
+
+    // Standard configuration
+    "snapshot.mode": "when_needed",
+    "snapshot.locking.mode": "minimal",
+    "gtid.source.includes": ".*",
+    "heartbeat.interval.ms": "30000",
+    "heartbeat.topics.prefix": "__debezium-heartbeat"
+  }
+}
+```
+
+**Topics created:**
+- `mysql_users.ecommerce.users`
+- `mysql_users.ecommerce.profiles`
+- `schema-history.mysql_users`
+
+---
+
+### Comparison Table
+
+| Property                                | Connector A (Orders)             | Connector B (Users)              | Must Be Unique? |
+|-----------------------------------------|----------------------------------|----------------------------------|-----------------|
+| `name`                                  | `orders-cdc`                     | `users-cdc`                      | ✅ YES          |
+| `database.server.id`                    | `184001`                         | `184002`                         | ✅ YES          |
+| `database.server.name`                  | `mysql_orders`                   | `mysql_users`                    | ✅ YES          |
+| `schema.history.internal.kafka.topic`   | `schema-history.mysql_orders`    | `schema-history.mysql_users`     | ✅ YES          |
+| `table.include.list`                    | `ecommerce.orders,order_items`   | `ecommerce.users,profiles`       | ⚠️ Recommended  |
+| `database.hostname`                     | `mysql`                          | `mysql`                          | ❌ Can be same  |
+| `database.user`                         | `debezium`                       | `debezium`                       | ❌ Can be same  |
+| `snapshot.mode`                         | `when_needed`                    | `when_needed`                    | ❌ Can be same  |
+
+<Callout type="note">
+**Можно использовать один и тот же MySQL user**
+
+Debezium connector не требует отдельного MySQL user для каждого коннектора. Можно использовать одного `debezium` user с правами на все таблицы.
+
+**Но для production рекомендуется раздельные users:**
+- Security: Least privilege principle (orders-cdc user имеет права только на orders tables)
+- Auditing: Легко отследить, какой connector выполнял какие операции
+- Quotas/Limits: Можно установить отдельные connection limits per user
+</Callout>
+
+## Verification Procedures
+
+После развертывания множественных коннекторов нужно проверить, что всё работает правильно.
+
+### Check 1: Verify Active Replication Connections on MySQL
+
+```sql
+-- Проверить все подключённые Debezium connectors
+SHOW SLAVE HOSTS;
+```
+
+**Expected output:**
+
+```
++-------------+------+------+-----------+
+| Server_id   | Host | Port | Master_id |
++-------------+------+------+-----------+
+|      184001 |      | 3306 |         1 |
+|      184002 |      | 3306 |         1 |
++-------------+------+------+-----------+
+```
+
+**Что проверять:**
+- ✅ Каждый connector появляется с уникальным `Server_id`
+- ✅ `Server_id` values совпадают с registry
+- ✅ Количество rows = количество активных connectors
+
+**Если не видите connectors:**
+```sql
+-- Проверить активные connections (более детальная информация)
+SELECT * FROM performance_schema.replication_connection_configuration\G
+```
+
+---
+
+### Check 2: Verify No Duplicate server_id
+
+```sql
+-- Искать дубликаты server_id
+SELECT Server_id, COUNT(*) as count
+FROM performance_schema.replication_connection_configuration
+GROUP BY Server_id
+HAVING COUNT(*) > 1;
+```
+
+**Expected output:**
+```
+Empty set (0.00 sec)
+```
+
+**Если найдены дубликаты:**
+- ❌ Два коннектора используют одинаковый `server_id`
+- ❌ Один из них НЕ может работать
+- Fix: Изменить `database.server.id` в одном из коннекторов, обновить registry
+
+---
+
+### Check 3: List All Connectors in Kafka Connect
+
+```bash
+# Получить список всех connectors
+curl -s http://localhost:8083/connectors | jq .
+
+# Expected output:
+# [
+#   "orders-cdc",
+#   "users-cdc"
+# ]
+```
+
+```bash
+# Проверить статус каждого connector
+curl -s http://localhost:8083/connectors/orders-cdc/status | jq .
+curl -s http://localhost:8083/connectors/users-cdc/status | jq .
+```
+
+**Expected status:**
+```json
+{
+  "name": "orders-cdc",
+  "connector": {
+    "state": "RUNNING",
+    "worker_id": "connect:8083"
+  },
+  "tasks": [
+    {
+      "id": 0,
+      "state": "RUNNING",
+      "worker_id": "connect:8083"
+    }
+  ]
+}
+```
+
+---
+
+### Check 4: Verify Separate Kafka Topics Created
+
+```bash
+# Список всех топиков
+kafka-topics --bootstrap-server kafka:9092 --list | grep -E "mysql_orders|mysql_users|schema-history"
+
+# Expected output:
+# mysql_orders.ecommerce.orders
+# mysql_orders.ecommerce.order_items
+# mysql_users.ecommerce.users
+# mysql_users.ecommerce.profiles
+# schema-history.mysql_orders
+# schema-history.mysql_users
+```
+
+**Что проверять:**
+- ✅ Topics prefix совпадает с `database.server.name`
+- ✅ Schema history topics уникальны для каждого connector
+- ✅ Нет общих топиков между connectors (кроме internal Kafka Connect topics)
+
+---
+
+### Check 5: Verify Schema History Topic Configurations
+
+```bash
+# Проверить retention settings для schema history topics
+kafka-topics --bootstrap-server kafka:9092 \
+  --describe \
+  --topic schema-history.mysql_orders
+
+kafka-topics --bootstrap-server kafka:9092 \
+  --describe \
+  --topic schema-history.mysql_users
+```
+
+**Expected output:**
+
+```
+Topic: schema-history.mysql_orders
+PartitionCount: 1
+ReplicationFactor: 1
+Configs: retention.ms=-1,retention.bytes=-1
+
+Topic: schema-history.mysql_users
+PartitionCount: 1
+ReplicationFactor: 1
+Configs: retention.ms=-1,retention.bytes=-1
+```
+
+**Что проверять:**
+- ✅ `retention.ms=-1` (infinite retention)
+- ✅ `retention.bytes=-1` (no size limit)
+- ✅ `PartitionCount: 1` (single partition for ordering)
+
+## Troubleshooting Server ID Conflicts
+
+Рассмотрим типичные проблемы и их решения.
+
+### Symptom: Connector Fails on Startup with Slave Error
+
+**Error message:**
+```
+ERROR io.debezium.connector.mysql.BinlogReader: Error during binlog processing.
+Caused by: java.io.IOException: Error on COM_REGISTER_SLAVE:
+A slave with the same server_uuid/server_id as this slave has connected to the master
+```
+
+---
+
+### Diagnosis Step 1: Check Active Connections
+
+```sql
+-- Посмотреть активные replication connections
+SHOW SLAVE HOSTS;
+
+-- Если видите duplicate server_id:
++-------------+------+------+-----------+
+| Server_id   | Host | Port | Master_id |
++-------------+------+------+-----------+
+|      184001 |      | 3306 |         1 |
+|      184001 |      | 3306 |         1 |  ← DUPLICATE!
++-------------+------+------+-----------+
+```
+
+---
+
+### Diagnosis Step 2: Check Registry for Allocation Conflict
+
+```bash
+# Проверить server-id-registry.md
+grep "184001" server-id-registry.md
+
+# Если два connector имеют одинаковый server_id:
+| old-connector    | 184001 | ... | Active | ...
+| new-connector    | 184001 | ... | Active | ...  ← CONFLICT!
+```
+
+---
+
+### Diagnosis Step 3: Check for Stale MySQL Connection
+
+```sql
+-- Посмотреть все MySQL connections от Debezium user
+SHOW PROCESSLIST;
+
+-- Пример вывода:
++-----+----------+-----------+------+---------+------+-------+------------------+
+| Id  | User     | Host      | db   | Command | Time | State | Info             |
++-----+----------+-----------+------+---------+------+-------+------------------+
+| 123 | debezium | 10.0.1.5  | NULL | Binlog  | 3600 | ...   | NULL             |
+| 456 | debezium | 10.0.1.6  | NULL | Sleep   | 1800 | ...   | NULL             |
++-----+----------+-----------+------+---------+------+-------+------------------+
+
+-- Connection 123: Active connector (Time=3600 seconds = 1 hour)
+-- Connection 456: Stale connection (Command=Sleep, но 30 минут idle)
+```
+
+**Stale connection indicators:**
+- `Command = Sleep` но `Time` большой (>300 seconds)
+- `User = debezium` но connector уже остановлен
+- `State` показывает idle но processlist entry не удаляется
+
+---
+
+### Resolution Option 1: Change server_id in Conflicting Connector
+
+**Fastest solution если вы деплоите новый connector:**
+
+```bash
+# Step 1: Update server-id-registry.md
+# Allocate next available server_id (184002)
+
+# Step 2: Update connector configuration
+curl -X PUT http://localhost:8083/connectors/new-connector/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "database.server.id": "184002",
+    ...
+  }'
+
+# Step 3: Restart connector
+curl -X POST http://localhost:8083/connectors/new-connector/restart
+```
+
+---
+
+### Resolution Option 2: Kill Stale MySQL Connection
+
+**If old connector stopped but connection not released:**
+
+```sql
+-- Step 1: Identify stale connection ID
+SHOW PROCESSLIST;
+-- Find connection with User='debezium' and old Time
+
+-- Step 2: Kill connection
+KILL CONNECTION 456;  -- Replace with actual connection ID
+
+-- Step 3: Verify connection removed
+SHOW SLAVE HOSTS;
+-- Should no longer show duplicate server_id
+```
+
+<Callout type="warning">
+**Wait 30-60 seconds before retry**
+
+После kill connection MySQL может потребовать время для cleanup internal state. Если connector retry немедленно, может получить тот же error.
+
+**Best practice:** Kill connection → Wait 60 seconds → Restart connector.
+</Callout>
+
+---
+
+### Resolution Option 3: Wait for Timeout (If Not Urgent)
+
+MySQL replication connections имеют timeout (обычно `slave_net_timeout = 3600` seconds = 1 hour).
+
+**Если не срочно:**
+- Остановить conflicting connector
+- Подождать 1-2 hours
+- MySQL автоматически убьёт stale connection
+- Restart connector с правильным `server_id`
+
+**Это медленно, но безопасно.** Используйте если вы не уверены, какую connection kill безопасно.
+
+## Scaling Considerations
+
+Multi-connector deployments влияют на resource planning.
+
+### Resource Planning: Каждый Connector = MySQL Connection + JVM Memory
+
+**MySQL side:**
+```sql
+-- Check current connections
+SHOW STATUS LIKE 'Threads_connected';
+
+-- Check max_connections limit
+SHOW VARIABLES LIKE 'max_connections';
+```
+
+**Если у вас 10 connectors:**
+- Минимум 10 MySQL connections (1 per connector)
+- Во время snapshot: 10 + 10 = 20 connections (snapshot + binlog reader)
+- Плюс connections от приложений, monitoring tools, etc.
+
+**Best practice:** Установить `max_connections` с достаточным margin:
+```sql
+SET GLOBAL max_connections = 500;  -- For 10 connectors + application load
+```
+
+---
+
+**Kafka Connect side:**
+
+Каждый connector task требует JVM heap memory.
+
+**Rough estimates:**
+- Connector без snapshot: ~256 MB heap per connector
+- Connector во время snapshot: ~512 MB - 1 GB heap (зависит от row size)
+
+**Для 10 connectors:**
+- Minimum heap: 10 × 256 MB = 2.5 GB
+- Recommended heap: 10 × 512 MB = 5 GB
+- With snapshots: 10 × 1 GB = 10 GB
+
+**Kafka Connect JVM configuration:**
+```bash
+# docker-compose.yml или Kubernetes pod spec
+KAFKA_HEAP_OPTS: "-Xms8G -Xmx8G"
+```
+
+---
+
+### Connection Limits: Check max_connections on MySQL
+
+```sql
+-- Текущие connections vs limit
+SELECT
+  (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Threads_connected') AS current_connections,
+  (SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME='max_connections') AS max_connections,
+  ROUND((SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Threads_connected') /
+        (SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME='max_connections') * 100, 2) AS usage_percent;
+
+-- Example output:
++---------------------+-----------------+---------------+
+| current_connections | max_connections | usage_percent |
++---------------------+-----------------+---------------+
+|                  45 |             151 |         29.80 |
++---------------------+-----------------+---------------+
+```
+
+**Alert threshold:** Если `usage_percent > 80%`, увеличьте `max_connections` или оптимизируйте connection pooling.
+
+---
+
+### Snapshot Parallelism: Multiple Connectors Can Snapshot Simultaneously
+
+**Use case:** У вас database с 500 таблицами. Full snapshot одним connector займёт 10 hours.
+
+**Solution:** Деплой 5 connectors, каждый snapshot 100 tables параллельно.
+
+```json
+// Connector 1
+"table.include.list": "mydb.table_001,mydb.table_002,...,mydb.table_100"
+
+// Connector 2
+"table.include.list": "mydb.table_101,mydb.table_102,...,mydb.table_200"
+
+// ... Connector 5
+"table.include.list": "mydb.table_401,mydb.table_402,...,mydb.table_500"
+```
+
+**Speedup:** 5x faster (10 hours → 2 hours) **if MySQL I/O not bottleneck.**
+
+**Tradeoff:**
+- ✅ Faster initial load
+- ✅ Parallel snapshots independent (failure isolation)
+- ❌ More complex configuration management
+- ❌ Higher MySQL load (5 concurrent reads)
+- ❌ More JVM memory required
+
+<Callout type="tip">
+**After snapshot completes: Consolidate or keep separate?**
+
+После parallel snapshot вы можете:
+
+**Option A:** Keep separate connectors (если teams разные, ownership разный)
+**Option B:** Delete 4 connectors, оставить один для streaming changes
+
+Выбор зависит от вашего use case. Если таблицы логически принадлежат разным командам — keep separate. Если это просто optimization для initial load — consolidate после snapshot.
+</Callout>
+
+---
+
+### Monitoring: Each Connector Exposes Separate JMX Metrics
+
+Каждый connector имеет свой namespace в JMX metrics.
+
+**Prometheus scrape config example:**
+
+```yaml
+scrape_configs:
+  - job_name: 'debezium-orders-cdc'
+    static_configs:
+      - targets: ['kafka-connect:8083']
+    metrics_path: '/metrics'
+    params:
+      name: ['orders-cdc']  # Connector name
+
+  - job_name: 'debezium-users-cdc'
+    static_configs:
+      - targets: ['kafka-connect:8083']
+    metrics_path: '/metrics'
+    params:
+      name: ['users-cdc']  # Connector name
+```
+
+**Key metrics per connector:**
+- `MilliSecondsBehindSource` (lag metric)
+- `NumberOfEventsFiltered` (transformation statistics)
+- `SnapshotRunning` (snapshot status)
+- `Connected` (connection health)
+
+**Grafana dashboard:** Create separate panels per connector или используйте connector name label для фильтрации.
+
+## Hands-on Exercise: Deploy Two Connectors
+
+Теперь попрактикуемся в deployment двух connectors к одному MySQL.
+
+### Setup: Prerequisites
+
+Убедитесь, что у вас запущены:
+- MySQL (порт 3307 externally, 3306 internally в Docker)
+- Kafka (порт 9092)
+- Kafka Connect (порт 8083)
+
+```bash
+# Verify services running
+docker compose ps
+```
+
+---
+
+### Exercise Part 1: Deploy First Connector (orders-cdc)
+
+**Step 1: Create server-id-registry.md**
+
+```bash
+# Create registry file
+cat > server-id-registry.md <<EOF
+# Server ID Registry
+
+| Connector Name | Server ID | Database  | Status    | Owner  | Deployed   | Notes                |
+|----------------|-----------|-----------|-----------|--------|------------|----------------------|
+| orders-cdc     | 184001    | ecommerce | Deploying | Lab    | 2026-02-01 | Lab exercise orders  |
+EOF
+```
+
+---
+
+**Step 2: Create schema history topic**
+
+```bash
+docker compose exec kafka kafka-topics \
+  --bootstrap-server localhost:9092 \
+  --create \
+  --topic schema-history.mysql_orders \
+  --partitions 1 \
+  --replication-factor 1 \
+  --config retention.ms=-1 \
+  --config retention.bytes=-1
+```
+
+---
+
+**Step 3: Deploy orders-cdc connector**
+
+```bash
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "orders-cdc",
+    "config": {
+      "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+      "database.hostname": "mysql",
+      "database.port": "3306",
+      "database.user": "debezium",
+      "database.password": "dbz",
+      "database.server.id": "184001",
+      "database.server.name": "mysql_orders",
+      "table.include.list": "inventory.orders",
+      "schema.history.internal.kafka.topic": "schema-history.mysql_orders",
+      "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+      "snapshot.mode": "initial"
+    }
+  }'
+```
+
+---
+
+**Step 4: Verify connector running**
+
+```bash
+curl -s http://localhost:8083/connectors/orders-cdc/status | jq .
+```
+
+Expected: `"state": "RUNNING"`
+
+---
+
+**Step 5: Verify MySQL replication connection**
+
+```bash
+docker compose exec mysql mysql -u root -pmysql \
+  -e "SHOW SLAVE HOSTS"
+```
+
+Expected output:
+```
++-------------+------+------+-----------+
+| Server_id   | Host | Port | Master_id |
++-------------+------+------+-----------+
+|      184001 |      | 3306 |         1 |
++-------------+------+------+-----------+
+```
+
+✅ **First connector deployed successfully!**
+
+---
+
+### Exercise Part 2: Deploy Second Connector (users-cdc)
+
+**Step 1: Update registry**
+
+```bash
+# Add second connector to registry
+cat >> server-id-registry.md <<EOF
+| users-cdc      | 184002    | ecommerce | Deploying | Lab    | 2026-02-01 | Lab exercise users   |
+EOF
+```
+
+---
+
+**Step 2: Create schema history topic for second connector**
+
+```bash
+docker compose exec kafka kafka-topics \
+  --bootstrap-server localhost:9092 \
+  --create \
+  --topic schema-history.mysql_users \
+  --partitions 1 \
+  --replication-factor 1 \
+  --config retention.ms=-1 \
+  --config retention.bytes=-1
+```
+
+---
+
+**Step 3: Deploy users-cdc connector**
+
+```bash
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "users-cdc",
+    "config": {
+      "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+      "database.hostname": "mysql",
+      "database.port": "3306",
+      "database.user": "debezium",
+      "database.password": "dbz",
+      "database.server.id": "184002",
+      "database.server.name": "mysql_users",
+      "table.include.list": "inventory.customers",
+      "schema.history.internal.kafka.topic": "schema-history.mysql_users",
+      "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+      "snapshot.mode": "initial"
+    }
+  }'
+```
+
+---
+
+**Step 4: Verify both connectors running**
+
+```bash
+curl -s http://localhost:8083/connectors | jq .
+```
+
+Expected:
+```json
+[
+  "orders-cdc",
+  "users-cdc"
+]
+```
+
+---
+
+**Step 5: Verify TWO replication connections in MySQL**
+
+```bash
+docker compose exec mysql mysql -u root -pmysql \
+  -e "SHOW SLAVE HOSTS"
+```
+
+Expected output:
+```
++-------------+------+------+-----------+
+| Server_id   | Host | Port | Master_id |
++-------------+------+------+-----------+
+|      184001 |      | 3306 |         1 |
+|      184002 |      | 3306 |         1 |
++-------------+------+------+-----------+
+```
+
+✅ **Both connectors active!**
+
+---
+
+**Step 6: Verify separate Kafka topics created**
+
+```bash
+docker compose exec kafka kafka-topics \
+  --bootstrap-server localhost:9092 \
+  --list | grep -E "mysql_orders|mysql_users|schema-history"
+```
+
+Expected output:
+```
+mysql_orders.inventory.orders
+mysql_users.inventory.customers
+schema-history.mysql_orders
+schema-history.mysql_users
+```
+
+✅ **Topics isolated correctly!**
+
+---
+
+### Exercise Part 3 (Bonus): Trigger Duplicate server_id Conflict
+
+**Objective:** Observe error when deploying connector with duplicate `server_id`.
+
+**Step 1: Try to deploy third connector with duplicate server_id**
+
+```bash
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "conflict-cdc",
+    "config": {
+      "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+      "database.hostname": "mysql",
+      "database.port": "3306",
+      "database.user": "debezium",
+      "database.password": "dbz",
+      "database.server.id": "184001",
+      "database.server.name": "mysql_conflict",
+      "table.include.list": "inventory.products",
+      "schema.history.internal.kafka.topic": "schema-history.mysql_conflict",
+      "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+      "snapshot.mode": "initial"
+    }
+  }'
+```
+
+---
+
+**Step 2: Check connector status**
+
+```bash
+curl -s http://localhost:8083/connectors/conflict-cdc/status | jq .
+```
+
+Expected: Connector created, но task fails:
+
+```json
+{
+  "name": "conflict-cdc",
+  "connector": {
+    "state": "RUNNING"
+  },
+  "tasks": [
+    {
+      "id": 0,
+      "state": "FAILED",
+      "trace": "...A slave with the same server_uuid/server_id as this slave has connected to the master..."
+    }
+  ]
+}
+```
+
+---
+
+**Step 3: Fix by changing server_id**
+
+```bash
+# Update connector config with correct server_id
+curl -X PUT http://localhost:8083/connectors/conflict-cdc/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "dbz",
+    "database.server.id": "184003",
+    "database.server.name": "mysql_conflict",
+    "table.include.list": "inventory.products",
+    "schema.history.internal.kafka.topic": "schema-history.mysql_conflict",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+    "snapshot.mode": "initial"
+  }'
+
+# Restart connector
+curl -X POST http://localhost:8083/connectors/conflict-cdc/restart
+```
+
+---
+
+**Step 4: Verify fixed**
+
+```bash
+curl -s http://localhost:8083/connectors/conflict-cdc/status | jq .
+```
+
+Expected: `"state": "RUNNING"` for both connector and task.
+
+```bash
+docker compose exec mysql mysql -u root -pmysql \
+  -e "SHOW SLAVE HOSTS"
+```
+
+Expected: Three connectors now visible:
+```
++-------------+------+------+-----------+
+| Server_id   | Host | Port | Master_id |
++-------------+------+------+-----------+
+|      184001 |      | 3306 |         1 |
+|      184002 |      | 3306 |         1 |
+|      184003 |      | 3306 |         1 |
++-------------+------+------+-----------+
+```
+
+✅ **Conflict resolved!**
+
+---
+
+**Cleanup (optional):**
+
+```bash
+# Delete test connector
+curl -X DELETE http://localhost:8083/connectors/conflict-cdc
+```
+
+## Summary: Multi-Connector Checklist
+
+### Pre-Deployment Checklist
+
+- [ ] **Allocate server_id in registry**
+  - Next available ID in range 184000-184999
+  - Document connector name, database, owner, deployment date
+  - Verify no conflicts with existing connectors
+
+- [ ] **Define unique topic naming**
+  - Choose `database.server.name` (topic prefix)
+  - Must be unique across all connectors
+  - Follows naming convention (e.g., `mysql_{domain}`)
+
+- [ ] **Define schema history topic name**
+  - Pattern: `schema-history.{database.server.name}`
+  - Must be unique per connector
+
+- [ ] **Create schema history topic in Kafka**
+  - `--partitions 1` (single partition for ordering)
+  - `--config retention.ms=-1` (infinite retention)
+  - `--config retention.bytes=-1` (no size limit)
+
+---
+
+### During Deployment Checklist
+
+- [ ] **Verify connector config properties unique**
+  - `name` (connector name)
+  - `database.server.id` (from registry)
+  - `database.server.name` (topic prefix)
+  - `schema.history.internal.kafka.topic` (schema history)
+
+- [ ] **Deploy connector via REST API**
+  ```bash
+  curl -X POST http://localhost:8083/connectors -d @connector-config.json
+  ```
+
+- [ ] **Check connector status**
+  ```bash
+  curl http://localhost:8083/connectors/{name}/status
+  ```
+
+- [ ] **Verify MySQL replication connection**
+  ```sql
+  SHOW SLAVE HOSTS;
+  ```
+
+- [ ] **Verify no duplicate server_id**
+  ```sql
+  SELECT Server_id, COUNT(*) FROM performance_schema.replication_connection_configuration GROUP BY Server_id HAVING COUNT(*) > 1;
+  ```
+
+---
+
+### Post-Deployment Checklist
+
+- [ ] **Monitor each connector separately**
+  - JMX metrics per connector
+  - Kafka lag per topic
+  - MySQL connection health
+
+- [ ] **Update registry status to Active**
+  - Change status from "Deploying" to "Active"
+  - Add actual deployment timestamp
+
+- [ ] **Verify topic creation and retention**
+  ```bash
+  kafka-topics --list | grep {database.server.name}
+  kafka-topics --describe --topic schema-history.{database.server.name}
+  ```
+
+- [ ] **Test connector functionality**
+  - INSERT/UPDATE/DELETE in MySQL
+  - Verify events in Kafka topics
+  - Check schema evolution (ALTER TABLE)
+
+---
+
+### Maintenance Checklist
+
+- [ ] **Keep registry updated**
+  - Mark decommissioned connectors with date
+  - Enforce 30-day reuse embargo on server_id
+  - Document connector ownership changes
+
+- [ ] **Monitor resource usage**
+  - MySQL connections vs `max_connections`
+  - Kafka Connect JVM heap usage
+  - Connector lag and throughput
+
+- [ ] **Coordinate schema changes**
+  - Plan DDL migrations with connector owners
+  - Test schema changes in staging
+  - Monitor schema history topic growth
+
+## Ключевые выводы
+
+1. **Multiple connectors to same MySQL cluster — нормальная практика** для разных teams, domains, или failure isolation
+2. **Server ID conflicts блокируют connector startup** — требуется централизованный registry для отслеживания allocations
+3. **Range allocation (184000-184999)** избегает конфликтов с MySQL cluster server_id values
+4. **30-day reuse embargo** на decommissioned server_id values предотвращает stale connection conflicts
+5. **Three properties MUST be unique** per connector: `database.server.id`, `database.server.name`, `schema.history.internal.kafka.topic`
+6. **Shared schema history topic = data corruption** — каждый connector требует свой уникальный schema history topic
+7. **Verification procedures критичны** — SHOW SLAVE HOSTS, duplicate check queries, topic listing
+8. **Resource planning масштабируется линейно** — N connectors = N MySQL connections + N × 256MB JVM heap (minimum)
+9. **Parallel snapshots возможны** — multiple connectors могут snapshot разные таблицы одновременно для ускорения
+10. **Registry в version control** — server-id-registry.md должен быть committed и treated как critical infrastructure config
+
+## Что дальше?
+
+Мы разобрали multi-connector deployment patterns и conflict prevention. В следующем уроке мы перейдём к **recovery scenarios** и **disaster recovery procedures**:
+
+- Recovery from binlog purge (snapshot.mode=when_needed)
+- Recovery from schema history topic corruption (snapshot.mode=recovery)
+- Backup and restore procedures для schema history topics
+- Incremental snapshot для добавления новых таблиц без downtime
+
+Multi-connector knowledge готовит вас к operational complexity production CDC systems. Recovery procedures дополнят вашу operational toolkit для handling catastrophic failures.
