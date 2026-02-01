@@ -1,0 +1,594 @@
+---
+title: "Debezium Server с Pub/Sub Sink"
+description: "Kafka-less CDC архитектура: Debezium Server публикует события напрямую в Google Cloud Pub/Sub"
+order: 2
+difficulty: "intermediate"
+estimatedTime: 45
+topics: ["Debezium Server", "Pub/Sub", "Kafka-less", "GCP", "CDC"]
+prerequisites: ["module-6/01-cloud-sql-setup"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Debezium Server с Pub/Sub Sink
+
+В предыдущих модулях мы работали с классической архитектурой: **PostgreSQL → Debezium Connector → Kafka Connect → Kafka**. Эта архитектура мощная и гибкая, но требует развертывания и поддержки Kafka кластера.
+
+В этом уроке мы изучим **Kafka-less архитектуру** с использованием Debezium Server — standalone приложения, которое публикует CDC события напрямую в Google Cloud Pub/Sub.
+
+---
+
+## Kafka-less CDC: зачем?
+
+### Традиционная архитектура (Kafka Connect)
+
+<Mermaid chart={`
+graph LR
+    A[PostgreSQL] --> B[Debezium Connector]
+    B --> C[Kafka Connect]
+    C --> D[Kafka Cluster]
+    D --> E[Consumer 1]
+    D --> F[Consumer 2]
+    D --> G[Kafka Streams]
+
+    style D fill:#ff6b6b
+    style C fill:#ff6b6b
+`} client:visible />
+
+**Компоненты:**
+- PostgreSQL как источник данных
+- Debezium Connector (плагин для Kafka Connect)
+- Kafka Connect (runtime для коннекторов)
+- Kafka Cluster (брокеры для хранения и распределения событий)
+
+**Преимущества:**
+- Богатая экосистема (Kafka Streams, ksqlDB, 100+ sink connectors)
+- Высокая пропускная способность и масштабируемость
+- Multi-sink паттерн (одни данные → много consumers)
+
+**Недостатки:**
+- Сложная инфраструктура (Zookeeper/KRaft + Kafka brokers + Kafka Connect workers)
+- Высокие операционные затраты (мониторинг, апгрейды, rebalancing)
+- Избыточно для простых CDC пайплайнов
+
+### Kafka-less архитектура (Debezium Server)
+
+<Mermaid chart={`
+graph LR
+    A[PostgreSQL] --> B[Debezium Server]
+    B --> C[Google Pub/Sub]
+    C --> D[Cloud Run Consumer]
+    C --> E[Dataflow Job]
+    C --> F[BigQuery Subscription]
+
+    style B fill:#51cf66
+    style C fill:#339af0
+`} client:visible />
+
+**Компоненты:**
+- PostgreSQL как источник данных
+- Debezium Server (standalone Quarkus приложение)
+- Google Pub/Sub (управляемый message broker)
+- Любые Pub/Sub consumers
+
+**Преимущества:**
+- Простая инфраструктура (один контейнер Debezium Server)
+- GCP-native интеграция (Pub/Sub, Dataflow, Cloud Run)
+- Низкие операционные затраты (serverless Pub/Sub)
+- Автоматическое масштабирование Pub/Sub
+
+**Недостатки:**
+- Нет экосистемы Kafka (Streams, ksqlDB)
+- Ограничение на один sink (Pub/Sub)
+- Зависимость от GCP (vendor lock-in)
+
+**Когда использовать Kafka-less:**
+- CDC пайплайн с одним или небольшим количеством consumers
+- Уже используете GCP инфраструктуру
+- Нужна простота развертывания и поддержки
+- Нет требований к Kafka Streams или ksqlDB
+
+**Когда использовать Kafka:**
+- Многосервисная архитектура с десятками consumers
+- Требуется stream processing (Kafka Streams, ksqlDB)
+- Multi-cloud или on-premise развертывание
+- Уже есть Kafka expertise в команде
+
+---
+
+## Debezium Server: архитектура
+
+Debezium Server — это **standalone приложение на базе Quarkus**, которое объединяет:
+
+1. **Source connector** — Debezium PostgreSQL connector для чтения WAL
+2. **Sink adapter** — адаптер для публикации в различные системы
+
+<Mermaid chart={`
+graph TD
+    subgraph "Debezium Server (Quarkus App)"
+        A[PostgreSQL Connector] --> B[Event Buffer]
+        B --> C[Sink Adapter]
+    end
+
+    D[Cloud SQL PostgreSQL] --> A
+    C --> E[Google Pub/Sub]
+
+    subgraph "Offset Storage"
+        F[File: offsets.dat]
+        G[Redis]
+    end
+
+    A -.->|save position| F
+    A -.->|save position| G
+
+    style A fill:#339af0
+    style C fill:#51cf66
+    style F fill:#ffd43b
+`} client:visible />
+
+**Поддерживаемые sink адаптеры:**
+- **Google Pub/Sub** (для GCP)
+- **Amazon Kinesis** (для AWS)
+- **HTTP / Webhook** (универсальный)
+- **Redis Streams** (для кеширования)
+- **Apache Pulsar** (альтернатива Kafka)
+
+**Offset storage стратегии:**
+- **File-based** (`/debezium/data/offsets.dat`) — для single instance
+- **Redis** — для HA deployment (несколько реплик)
+
+---
+
+## Конфигурация application.properties
+
+Debezium Server настраивается через файл `application.properties`. Рассмотрим полную production-ready конфигурацию.
+
+### Полная конфигурация
+
+```properties
+# ==============================================================================
+# Sink Configuration: Google Cloud Pub/Sub
+# ==============================================================================
+debezium.sink.type=pubsub
+debezium.sink.pubsub.project.id=your-gcp-project-id
+debezium.sink.pubsub.ordering.enabled=true
+
+# Региональный endpoint для снижения latency (опционально)
+debezium.sink.pubsub.region=us-central1
+
+# Retry конфигурация для устойчивости к сбоям
+debezium.sink.pubsub.retry.total.timeout.ms=600000
+debezium.sink.pubsub.retry.max.rpc.timeout.ms=30000
+debezium.sink.pubsub.retry.initial.delay.ms=100
+debezium.sink.pubsub.retry.delay.multiplier=2.0
+
+# ==============================================================================
+# Source Configuration: PostgreSQL
+# ==============================================================================
+debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector
+
+# Offset storage (critical!)
+debezium.source.offset.storage.file.filename=/debezium/data/offsets.dat
+debezium.source.offset.flush.interval.ms=5000
+
+# Database connection (из предыдущего урока)
+debezium.source.database.hostname=10.x.x.x
+debezium.source.database.port=5432
+debezium.source.database.user=debezium_user
+debezium.source.database.password=your-secure-password
+debezium.source.database.dbname=production
+
+# ==============================================================================
+# Logical Replication Settings
+# ==============================================================================
+debezium.source.topic.prefix=cdc
+debezium.source.plugin.name=pgoutput
+debezium.source.publication.name=debezium_publication
+debezium.source.slot.name=debezium_slot
+
+# Table filtering
+debezium.source.table.include.list=public.orders,public.customers
+debezium.source.tombstones.on.delete=false
+
+# ==============================================================================
+# Performance Tuning
+# ==============================================================================
+debezium.source.max.batch.size=2048
+debezium.source.poll.interval.ms=100
+debezium.source.max.queue.size=8192
+
+# ==============================================================================
+# Heartbeat (CRITICAL!)
+# ==============================================================================
+debezium.source.heartbeat.interval.ms=10000
+debezium.source.heartbeat.topics.prefix=__debezium-heartbeat
+
+# ==============================================================================
+# Quarkus Configuration
+# ==============================================================================
+quarkus.log.level=INFO
+quarkus.log.console.json=false
+quarkus.http.port=8080
+```
+
+### Объяснение ключевых параметров
+
+#### Sink: Pub/Sub
+
+| Параметр | Значение | Назначение |
+|----------|----------|-----------|
+| `debezium.sink.type` | `pubsub` | Тип sink адаптера |
+| `debezium.sink.pubsub.project.id` | `your-project` | GCP Project ID |
+| `debezium.sink.pubsub.ordering.enabled` | `true` | Сохранение порядка сообщений (важно для CDC) |
+
+**Ordering enabled:** Гарантирует, что события одной таблицы обрабатываются в порядке их записи в WAL. Это критично для CDC — UPDATE должен прийти после INSERT.
+
+#### Source: PostgreSQL
+
+| Параметр | Значение | Назначение |
+|----------|----------|-----------|
+| `topic.prefix` | `cdc` | Префикс для Pub/Sub topics |
+| `plugin.name` | `pgoutput` | Logical decoding plugin (встроенный в PostgreSQL 10+) |
+| `publication.name` | `debezium_publication` | Имя publication из предыдущего урока |
+| `slot.name` | `debezium_slot` | Имя replication slot |
+
+#### Offset Storage (критически важно!)
+
+| Параметр | Значение | Назначение |
+|----------|----------|-----------|
+| `offset.storage.file.filename` | `/debezium/data/offsets.dat` | Путь к файлу с позицией чтения WAL |
+| `offset.flush.interval.ms` | `5000` | Частота сохранения offset (каждые 5 секунд) |
+
+**Критически важно:** Без persistent storage для offset файла при перезапуске pod Debezium потеряет позицию и начнет с начала (дубликаты) или с текущей позиции (пропуск данных).
+
+**Решения:**
+- **Kubernetes:** PersistentVolumeClaim для `/debezium/data`
+- **Cloud Run:** Не поддерживает persistent volumes — используйте Redis offset storage
+- **Docker:** Volume mount `-v $(pwd)/data:/debezium/data`
+
+#### Heartbeat (предотвращение WAL bloat)
+
+| Параметр | Значение | Назначение |
+|----------|----------|-----------|
+| `heartbeat.interval.ms` | `10000` | Генерация heartbeat события каждые 10 секунд |
+
+**Зачем heartbeat?** Если таблица не изменяется, replication slot не продвигается. WAL файлы накапливаются и не удаляются. Heartbeat генерирует искусственные события для продвижения slot position.
+
+---
+
+## Pub/Sub Topic Naming Convention
+
+Debezium автоматически генерирует имена топиков по паттерну:
+
+```
+{topic.prefix}.{schema}.{table}
+```
+
+**Примеры:**
+
+| Таблица в БД | Pub/Sub Topic |
+|--------------|---------------|
+| `public.orders` | `cdc.public.orders` |
+| `public.customers` | `cdc.public.customers` |
+| `inventory.products` | `cdc.inventory.products` |
+
+**Важно:** Топики должны быть **созданы заранее** в Pub/Sub. Debezium Server не создает топики автоматически.
+
+### Скрипт создания топиков
+
+```bash
+#!/bin/bash
+# create-pubsub-topics.sh
+
+PROJECT_ID="your-gcp-project-id"
+PREFIX="cdc"
+
+# Список таблиц из table.include.list
+TABLES=(
+  "public.orders"
+  "public.customers"
+)
+
+echo "Creating Pub/Sub topics for CDC..."
+
+for table in "${TABLES[@]}"; do
+  topic="${PREFIX}.${table}"
+
+  gcloud pubsub topics create "$topic" \
+    --project="$PROJECT_ID" \
+    --message-retention-duration=7d
+
+  echo "✓ Created topic: $topic"
+done
+
+echo "Done!"
+```
+
+**Параметры топика:**
+- `--message-retention-duration=7d` — сообщения хранятся 7 дней (для recovery)
+
+### Частая ошибка: Case Sensitivity
+
+PostgreSQL по умолчанию приводит имена таблиц к lowercase, но если таблица создана с кавычками:
+
+```sql
+CREATE TABLE "Orders" (...);
+```
+
+То топик будет: `cdc.public.Orders` (с заглавной буквы)
+
+**Рекомендация:** Используйте lowercase имена таблиц для консистентности.
+
+---
+
+## Running Debezium Server
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  debezium-server:
+    image: debezium/server:2.5
+    container_name: debezium-server
+    volumes:
+      - ./config:/debezium/conf
+      - ./data:/debezium/data
+      - ./secrets:/secrets
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-key.json
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+```
+
+**Volume mapping:**
+- `./config:/debezium/conf` — `application.properties` файл
+- `./data:/debezium/data` — persistent storage для `offsets.dat`
+- `./secrets:/secrets` — GCP service account key (альтернатива: Workload Identity)
+
+### Docker Run Command
+
+```bash
+docker run -d \
+  --name debezium-server \
+  -v $(pwd)/config:/debezium/conf \
+  -v $(pwd)/data:/debezium/data \
+  -v $(pwd)/secrets:/secrets \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-key.json \
+  -p 8080:8080 \
+  debezium/server:2.5
+```
+
+### Health Check
+
+Debezium Server предоставляет health endpoint:
+
+```bash
+curl http://localhost:8080/q/health
+```
+
+**Ожидаемый ответ:**
+
+```json
+{
+  "status": "UP",
+  "checks": [
+    {
+      "name": "debezium",
+      "status": "UP"
+    }
+  ]
+}
+```
+
+**Если `status: DOWN`:**
+- Проверьте логи: `docker logs debezium-server`
+- Частые причины: ошибка подключения к БД, неверный GCP credentials, топик не создан
+
+---
+
+## Offset Storage Strategies
+
+### Strategy 1: File-based (Single Instance)
+
+**Конфигурация:**
+
+```properties
+debezium.source.offset.storage.file.filename=/debezium/data/offsets.dat
+debezium.source.offset.flush.interval.ms=5000
+```
+
+**Kubernetes PersistentVolumeClaim:**
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: debezium-offset-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard-rwo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: debezium-server
+spec:
+  replicas: 1  # Single replica для file-based storage
+  selector:
+    matchLabels:
+      app: debezium-server
+  template:
+    metadata:
+      labels:
+        app: debezium-server
+    spec:
+      containers:
+      - name: server
+        image: debezium/server:2.5
+        volumeMounts:
+        - name: offset-storage
+          mountPath: /debezium/data
+      volumes:
+      - name: offset-storage
+        persistentVolumeClaim:
+          claimName: debezium-offset-storage
+```
+
+**Ограничения:**
+- Только **один pod** (replicas: 1)
+- При удалении PVC → потеря offset → повторная обработка или data loss
+
+### Strategy 2: Redis (High Availability)
+
+**Конфигурация:**
+
+```properties
+# Offset storage в Redis
+debezium.source.offset.storage=io.debezium.storage.redis.offset.RedisOffsetBackingStore
+debezium.source.offset.storage.redis.address=redis-master:6379
+debezium.source.offset.storage.redis.password=${REDIS_PASSWORD}
+debezium.source.offset.storage.redis.ssl.enabled=false
+
+# Опционально: ключ для namespace
+debezium.source.offset.storage.redis.key=debezium:offsets:postgres-cdc
+```
+
+**Преимущества:**
+- Поддержка **multiple replicas** для HA
+- Автоматическая репликация offset через Redis
+- Быстрое восстановление при pod restart
+
+**Недостатки:**
+- Зависимость от Redis инфраструктуры
+- Дополнительная сложность
+
+**Рекомендация:** Для production используйте Redis offset storage с GKE. Для development и single-instance развертываний file-based storage достаточно.
+
+---
+
+## Verifying CDC Events in Pub/Sub
+
+После запуска Debezium Server проверьте, что события публикуются в Pub/Sub.
+
+### Создание subscription для тестирования
+
+```bash
+gcloud pubsub subscriptions create test-orders-sub \
+  --topic=cdc.public.orders \
+  --project=your-gcp-project-id
+```
+
+### Pulling сообщений
+
+```bash
+gcloud pubsub subscriptions pull test-orders-sub \
+  --limit=5 \
+  --auto-ack \
+  --project=your-gcp-project-id
+```
+
+**Ожидаемый формат Debezium события:**
+
+```json
+{
+  "before": null,
+  "after": {
+    "id": 123,
+    "customer_id": 456,
+    "product_id": 789,
+    "quantity": 2,
+    "created_at": "2026-02-01T12:34:56Z"
+  },
+  "source": {
+    "version": "2.5.4.Final",
+    "connector": "postgresql",
+    "name": "cdc",
+    "ts_ms": 1738413296000,
+    "snapshot": "false",
+    "db": "production",
+    "schema": "public",
+    "table": "orders",
+    "txId": 1234,
+    "lsn": 23456789
+  },
+  "op": "c",
+  "ts_ms": 1738413296123
+}
+```
+
+**Поля события:**
+
+| Поле | Описание |
+|------|----------|
+| `before` | Состояние записи до изменения (для UPDATE/DELETE) |
+| `after` | Состояние записи после изменения (для CREATE/UPDATE) |
+| `source.table` | Имя таблицы источника |
+| `source.lsn` | WAL LSN позиция (для отладки) |
+| `op` | Операция: `c` (create), `u` (update), `d` (delete), `r` (read/snapshot) |
+| `ts_ms` | Timestamp в миллисекундах |
+
+**Тестирование:**
+
+1. Вставьте запись в Cloud SQL:
+   ```sql
+   INSERT INTO orders (customer_id, product_id, quantity)
+   VALUES (1, 100, 5);
+   ```
+
+2. Pull сообщение из Pub/Sub:
+   ```bash
+   gcloud pubsub subscriptions pull test-orders-sub --limit=1
+   ```
+
+3. Проверьте, что событие содержит вставленные данные
+
+---
+
+## Debezium Connect vs Debezium Server
+
+| Аспект | Debezium Connect | Debezium Server |
+|--------|------------------|-----------------|
+| **Runtime** | Kafka Connect framework | Standalone Quarkus app |
+| **Зависимости** | Kafka cluster обязателен | Kafka не требуется |
+| **Sink options** | Только Kafka | Pub/Sub, Kinesis, HTTP, Redis, Pulsar |
+| **Deployment** | Distributed workers + Kafka brokers | Один контейнер |
+| **Масштабирование** | Kafka partitions + Connect tasks | Pub/Sub automatic scaling |
+| **Операционная сложность** | Высокая (Kafka + Zookeeper/KRaft + Connect) | Низкая (один сервис) |
+| **Экосистема** | Kafka Streams, ksqlDB, 100+ connectors | GCP Dataflow, Cloud Run, BigQuery |
+| **Multi-sink** | Да (один source → много Kafka consumers) | Нет (один sink) |
+| **Best for** | Сложные stream processing пайплайны | Простые CDC → cloud-native consumers |
+
+**Когда использовать Debezium Connect:**
+- Требуется Kafka Streams или ksqlDB для обработки
+- Много downstream consumers с разной логикой
+- Multi-cloud или on-premise deployment
+- Уже есть Kafka инфраструктура
+
+**Когда использовать Debezium Server:**
+- Простой CDC пайплайн (source → sink)
+- GCP-native инфраструктура (Pub/Sub, Dataflow, BigQuery)
+- Нет Kafka expertise или инфраструктуры
+- Приоритет: простота развертывания и поддержки
+
+---
+
+## Что мы узнали
+
+1. **Kafka-less архитектура:** Debezium Server + Pub/Sub как альтернатива Kafka Connect
+2. **Debezium Server:** Standalone Quarkus приложение с source connector + sink adapter
+3. **application.properties:** Конфигурация source (PostgreSQL) и sink (Pub/Sub) в одном файле
+4. **Pub/Sub topic naming:** Паттерн `{prefix}.{schema}.{table}`, топики создаются заранее
+5. **Offset storage:** File-based для single instance, Redis для HA deployment
+6. **Heartbeat critical:** Предотвращает WAL bloat на low-traffic таблицах
+7. **Health endpoint:** `/q/health` для мониторинга статуса Debezium Server
+
+## Что дальше?
+
+В следующем уроке мы развернем **Debezium Server на Google Kubernetes Engine (GKE)** с использованием **Workload Identity** для безопасной аутентификации в GCP и настроим **Cloud Monitoring** для observability.
