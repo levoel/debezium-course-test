@@ -1,0 +1,1222 @@
+---
+title: "Интеграция с gh-ost и pt-online-schema-change"
+description: "Паттерны интеграции онлайн-инструментов DDL с Debezium MySQL CDC: gh-ost и pt-online-schema-change для zero-downtime миграций схем"
+order: 15
+difficulty: "advanced"
+estimatedTime: 35
+topics: ["mysql", "debezium", "ddl", "gh-ost", "pt-osc", "schema-migration"]
+prerequisites: ["module-8/01-binlog-architecture", "module-8/06-schema-history-recovery"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+import Callout from '../../../components/Callout.tsx';
+
+# Интеграция с gh-ost и pt-online-schema-change
+
+В production-окружениях выполнение `ALTER TABLE` на больших таблицах — это риск. Стандартный `ALTER TABLE` блокирует таблицу, что означает downtime приложения на время выполнения операции. Для таблицы на 100GB это могут быть часы.
+
+**Онлайн-инструменты DDL** (gh-ost, pt-online-schema-change) решают эту проблему, выполняя schema migrations без блокировки таблицы. Но они создают временные helper-таблицы, которые Debezium захватывает в binlog. Неправильная обработка этих таблиц приводит к дублированию данных в CDC-пайплайне или падению коннектора.
+
+В этом уроке мы изучим, как безопасно интегрировать gh-ost и pt-online-schema-change с Debezium MySQL CDC, настроим фильтрацию helper-таблиц и разберём паттерны для zero-downtime DDL миграций.
+
+## Проблема DDL в CDC-окружениях
+
+### Standard ALTER TABLE: блокировка и downtime
+
+```sql
+-- Простая операция: добавление колонки
+ALTER TABLE orders ADD COLUMN status VARCHAR(20);
+```
+
+**Что происходит в MySQL:**
+
+1. **Создание временной таблицы** с новой схемой
+2. **Копирование всех строк** из оригинальной таблицы
+3. **Table lock** — приложение не может писать в таблицу
+4. **Rename** — временная таблица заменяет оригинальную
+
+<Mermaid chart={`
+flowchart TB
+    START["ALTER TABLE orders<br/>ADD COLUMN status"] --> LOCK["🔒 LOCK TABLE<br/>(write lock)"]
+    LOCK --> CREATE["CREATE TABLE orders_tmp<br/>(new schema)"]
+    CREATE --> COPY["COPY 10M rows<br/>(может занять часы)"]
+    COPY --> RENAME["RENAME orders TO orders_old<br/>RENAME orders_tmp TO orders"]
+    RENAME --> UNLOCK["🔓 UNLOCK TABLE"]
+    UNLOCK --> DROP["DROP TABLE orders_old"]
+    DROP --> DONE["✅ Migration complete"]
+
+    style LOCK fill:#dc2626,stroke:#991b1b,color:#fff
+    style COPY fill:#ea580c,stroke:#c2410c,color:#fff
+    style UNLOCK fill:#10b981,stroke:#059669
+`} client:visible />
+
+**Проблемы:**
+
+- **Downtime:** Для таблицы на 100GB — 1-2 часа блокировки
+- **Replication lag:** Slave реплики отстают на время миграции
+- **Binlog flood:** Огромный объём событий за короткое время
+- **Application errors:** Timeout, connection pool exhaustion
+
+<Callout type="danger">
+**Production incident: ALTER TABLE на 500GB таблице**
+
+Разработчик запустил `ALTER TABLE` в production без согласования. Миграция заняла 6 часов. Приложение было недоступно всё это время. Итог: $500K потерь выручки, увольнение.
+
+**Урок:** Всегда используйте онлайн-инструменты DDL для таблиц >10GB в production.
+</Callout>
+
+### Online DDL: zero-downtime альтернатива
+
+Онлайн-инструменты DDL выполняют миграцию **без блокировки** таблицы:
+
+1. **Создают копию таблицы** с новой схемой (ghost/helper table)
+2. **Копируют данные порциями** (chunked copy)
+3. **Синхронизируют изменения** во время копирования
+4. **Атомарный rename** в конце (блокировка на миллисекунды)
+
+**Результат:** Приложение работает нормально, users не замечают миграцию.
+
+## Онлайн-инструменты DDL: gh-ost vs pt-osc
+
+### gh-ost (GitHub Online Schema Change Tool)
+
+**Архитектура:** Triggerless, основан на чтении binlog.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph ORIGINAL["Оригинальная таблица"]
+        ORDERS["orders<br/>(id, customer_id, created_at)"]
+    end
+
+    subgraph GHOST["Ghost таблица (новая схема)"]
+        GHO["_orders_gho<br/>(id, customer_id, created_at, status)"]
+    end
+
+    subgraph CHANGELOG["Changelog таблица (метаданные)"]
+        GHC["_orders_ghc<br/>(id, last_update)"]
+    end
+
+    APP["Приложение<br/>INSERT/UPDATE/DELETE"] --> ORDERS
+    ORDERS --> BINLOG["MySQL Binlog"]
+
+    GHOST_PROCESS["gh-ost процесс"] --> |"1. Copy rows<br/>(chunked)"| GHO
+    BINLOG --> |"2. Read changes"| GHOST_PROCESS
+    GHOST_PROCESS --> |"3. Apply changes"| GHO
+    GHC --> |"Track progress"| GHOST_PROCESS
+
+    GHO -.->|"4. Atomic rename<br/>orders ↔ _orders_gho"| ORDERS
+
+    style ORDERS fill:#3b82f6,stroke:#1e40af
+    style GHO fill:#8b5cf6,stroke:#6d28d9
+    style GHC fill:#f59e0b,stroke:#d97706
+    style GHOST_PROCESS fill:#10b981,stroke:#059669
+`} client:visible />
+
+**Принцип работы:**
+
+1. **Создаёт `_orders_gho`** (ghost table) с новой схемой
+2. **Создаёт `_orders_ghc`** (changelog table) для метаданных миграции
+3. **Копирует данные** из `orders` в `_orders_gho` порциями (по умолчанию 1000 строк)
+4. **Читает binlog** параллельно с копированием
+5. **Применяет изменения** из binlog к ghost table
+6. **Атомарный rename** в конце: `orders` ↔ `_orders_gho`
+
+**Пример команды:**
+
+```bash
+gh-ost \
+  --host=mysql \
+  --user=gh-ost \
+  --password=ghp \
+  --database=mydb \
+  --table=orders \
+  --alter="ADD COLUMN status VARCHAR(20)" \
+  --assume-rbr \
+  --allow-on-master \
+  --exact-rowcount \
+  --concurrent-rowcount \
+  --chunk-size=1000 \
+  --max-load=Threads_running=25 \
+  --critical-load=Threads_running=50 \
+  --default-retries=120 \
+  --execute
+```
+
+**Плюсы:**
+
+- ✅ Triggerless — не добавляет overhead на каждую запись
+- ✅ Throttling — автоматическое замедление при высокой нагрузке
+- ✅ Replica-aware — может читать binlog с реплики
+- ✅ Pausable — можно приостановить и возобновить
+
+**Минусы:**
+
+- ❌ **Не поддерживает foreign keys** (нужно временно удалить)
+- ❌ Читает тот же binlog, что и Debezium (удвоенная нагрузка)
+- ❌ Требует binlog format ROW
+
+### pt-online-schema-change (Percona Toolkit)
+
+**Архитектура:** Trigger-based.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph ORIGINAL["Оригинальная таблица"]
+        ORDERS["orders<br/>(id, customer_id, created_at)"]
+    end
+
+    subgraph NEW["Новая таблица"]
+        NEW_TBL["_orders_new<br/>(id, customer_id, created_at, status)"]
+    end
+
+    APP["Приложение<br/>INSERT/UPDATE/DELETE"] --> ORDERS
+    ORDERS --> |"AFTER INSERT trigger"| TRIGGER_INSERT["Copy to _orders_new"]
+    ORDERS --> |"AFTER UPDATE trigger"| TRIGGER_UPDATE["Update in _orders_new"]
+    ORDERS --> |"AFTER DELETE trigger"| TRIGGER_DELETE["Delete from _orders_new"]
+
+    TRIGGER_INSERT --> NEW_TBL
+    TRIGGER_UPDATE --> NEW_TBL
+    TRIGGER_DELETE --> NEW_TBL
+
+    PT_OSC["pt-online-schema-change<br/>процесс"] --> |"1. Copy rows<br/>(chunked)"| NEW_TBL
+
+    NEW_TBL -.->|"2. Atomic rename<br/>orders → _orders_old<br/>_orders_new → orders"| ORDERS
+
+    style ORDERS fill:#3b82f6,stroke:#1e40af
+    style NEW_TBL fill:#8b5cf6,stroke:#6d28d9
+    style PT_OSC fill:#10b981,stroke:#059669
+`} client:visible />
+
+**Принцип работы:**
+
+1. **Создаёт `_orders_new`** с новой схемой
+2. **Создаёт триггеры** на оригинальной таблице (INSERT/UPDATE/DELETE)
+3. **Копирует данные** из `orders` в `_orders_new` порциями
+4. **Триггеры синхронизируют изменения** автоматически
+5. **Атомарный rename** в конце: `orders` → `_orders_old`, `_orders_new` → `orders`
+6. **Удаляет `_orders_old`**
+
+**Пример команды:**
+
+```bash
+pt-online-schema-change \
+  --alter="ADD COLUMN status VARCHAR(20)" \
+  --execute \
+  --chunk-size=1000 \
+  --max-load=Threads_running:25 \
+  --critical-load=Threads_running:50 \
+  h=mysql,u=pt-osc,p=ptp,D=mydb,t=orders
+```
+
+**Плюсы:**
+
+- ✅ **Поддерживает foreign keys** (через trigger cascade)
+- ✅ Не читает binlog (меньше нагрузка на binlog)
+- ✅ Проще в отладке (triggers видны в MySQL)
+
+**Минусы:**
+
+- ❌ Trigger overhead — каждая запись вызывает 3 триггера
+- ❌ Нельзя приостановить без удаления триггеров
+- ❌ Triggers увеличивают binlog размер
+
+### Сравнительная таблица: gh-ost vs pt-osc
+
+| Характеристика | gh-ost | pt-online-schema-change |
+|----------------|--------|-------------------------|
+| **Механизм** | Binlog reading | Triggers |
+| **Helper tables** | `_gho`, `_ghc` | `_new`, `_old` |
+| **Foreign keys** | ❌ Не поддерживает | ✅ Поддерживает |
+| **Binlog impact** | Удвоенная нагрузка (читает + пишет) | Нормальная нагрузка |
+| **CDC event volume** | Выше (события от ghost table) | Ниже (только оригинальная таблица) |
+| **Throttling** | Встроенный, replica-aware | Ручная настройка |
+| **Pausable** | ✅ Да | ⚠️ Требует удаления триггеров |
+| **Рекомендация для CDC** | Если нет FK и Debezium читает реплику | Если есть FK или нужна меньшая нагрузка |
+
+<Callout type="warning">
+**gh-ost удваивает binlog read нагрузку**
+
+Во время gh-ost миграции:
+- gh-ost читает binlog (для синхронизации изменений)
+- Debezium читает binlog (для CDC)
+
+Если оба процесса читают с одного master сервера, binlog I/O удваивается. В AWS Aurora рекомендуется читать с reader instance.
+</Callout>
+
+## Проблема Helper Tables в CDC
+
+### Что происходит без правильной конфигурации
+
+**Сценарий 1: Helper tables НЕ в table.include.list**
+
+```json
+{
+  "name": "mysql-connector",
+  "config": {
+    "table.include.list": "mydb.orders,mydb.users",
+    ...
+  }
+}
+```
+
+**Запускаем gh-ost:**
+
+```bash
+gh-ost --table=orders --alter="ADD COLUMN status VARCHAR(20)" --execute
+```
+
+**Что происходит:**
+
+1. gh-ost создаёт `_orders_gho` и `_orders_ghc`
+2. Binlog содержит события для этих таблиц
+3. Debezium видит события для таблиц, которых нет в schema history
+4. **ERROR:** `Table _orders_gho not found in schema history topic`
+5. **Connector crashes mid-migration** 💥
+
+<Callout type="danger">
+**Connector crash во время gh-ost миграции**
+
+Если helper tables не включены в capture pattern, коннектор упадёт с ошибкой missing table. Миграция продолжит выполняться, но CDC-пайплайн будет сломан до ручного вмешательства.
+
+**Предотвращение:** Всегда используйте широкий capture pattern (`mydb.*`) или явно включайте helper tables.
+</Callout>
+
+**Сценарий 2: Helper tables в table.include.list, но НЕ фильтруются**
+
+```json
+{
+  "name": "mysql-connector",
+  "config": {
+    "table.include.list": "mydb.*",
+    ...
+  }
+}
+```
+
+**Что происходит:**
+
+1. Debezium захватывает события от `orders`, `_orders_gho`, `_orders_ghc`
+2. Kafka получает топики:
+   - `mysql-server.mydb.orders`
+   - `mysql-server.mydb._orders_gho`
+   - `mysql-server.mydb._orders_ghc`
+3. Consumers видят **дублирующиеся данные** (та же строка из `orders` и `_orders_gho`)
+4. Downstream системы путаются: какая версия данных правильная?
+
+**Проблема:** Helper tables — это временные артефакты миграции. Consumers не должны их видеть.
+
+## Pattern 1: Broad Capture + SMT Filter (Рекомендуется)
+
+**Стратегия:**
+
+1. Захватывать все таблицы широким паттерном (`mydb.*`)
+2. Фильтровать helper table события перед отправкой в Kafka
+3. Consumers видят только оригинальные таблицы
+
+<Mermaid chart={`
+flowchart LR
+    subgraph MYSQL["MySQL Server"]
+        ORDERS["orders table"]
+        GHO["_orders_gho table"]
+        GHC["_orders_ghc table"]
+    end
+
+    subgraph BINLOG["MySQL Binlog"]
+        B1["orders events"]
+        B2["_orders_gho events"]
+        B3["_orders_ghc events"]
+    end
+
+    subgraph DEBEZIUM["Debezium Connector"]
+        CAPTURE["Capture:<br/>table.include.list=mydb.*"]
+        FILTER["Filter SMT:<br/>regex !.*(gho|ghc|new|old)$"]
+    end
+
+    subgraph KAFKA["Kafka Topics"]
+        K1["mysql-server.mydb.orders<br/>(events published)"]
+        K2["_orders_gho events<br/>❌ FILTERED OUT"]
+        K3["_orders_ghc events<br/>❌ FILTERED OUT"]
+    end
+
+    ORDERS --> B1
+    GHO --> B2
+    GHC --> B3
+
+    B1 --> CAPTURE
+    B2 --> CAPTURE
+    B3 --> CAPTURE
+
+    CAPTURE --> FILTER
+
+    FILTER --> K1
+    FILTER -.-> K2
+    FILTER -.-> K3
+
+    style FILTER fill:#10b981,stroke:#059669
+    style K1 fill:#3b82f6,stroke:#1e40af
+    style K2 fill:#dc2626,stroke:#991b1b,color:#fff
+    style K3 fill:#dc2626,stroke:#991b1b,color:#fff
+`} client:visible />
+
+### Конфигурация с Filter SMT
+
+```json
+{
+  "name": "mysql-connector-with-ddl-tools",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "dbz",
+    "database.server.id": "184001",
+    "database.server.name": "mysql-server",
+
+    "table.include.list": "mydb.*",
+
+    "snapshot.mode": "when_needed",
+    "schema.history.internal.kafka.topic": "schema-changes.mysql-server",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+
+    "transforms": "FilterHelperTables",
+    "transforms.FilterHelperTables.type": "io.debezium.transforms.Filter",
+    "transforms.FilterHelperTables.language": "jsr223.groovy",
+    "transforms.FilterHelperTables.condition": "!value.source.table.matches('.*_(gho|ghc|new|old)$')"
+  }
+}
+```
+
+**Разбор Filter SMT:**
+
+```groovy
+!value.source.table.matches('.*_(gho|ghc|new|old)$')
+```
+
+- `value.source.table` — имя таблицы из Debezium event
+- `.matches('...')` — проверяет regex паттерн
+- `_gho$` — gh-ost ghost table (например, `_orders_gho`)
+- `_ghc$` — gh-ost changelog table (например, `_orders_ghc`)
+- `_new$` — pt-osc новая таблица (например, `_orders_new`)
+- `_old$` — pt-osc старая таблица после rename (например, `_orders_old`)
+- `!` — инвертирует условие (пропускает события, НЕ соответствующие паттерну)
+
+**Результат:**
+
+- События от `orders` → **PASS** (отправляются в Kafka)
+- События от `_orders_gho` → **FILTERED** (отбрасываются)
+- События от `_orders_ghc` → **FILTERED** (отбрасываются)
+- События от `_orders_new` → **FILTERED** (отбрасываются)
+
+<Callout type="tip">
+**Filter SMT работает до Kafka producer**
+
+Фильтрация происходит в Debezium connector до отправки в Kafka. Это экономит:
+- Kafka storage (отфильтрованные события не записываются)
+- Network bandwidth (не передаются по сети)
+- Consumer processing (consumers не видят лишние события)
+
+**Альтернатива (антипаттерн):** Фильтрация в consumers — тратит ресурсы Kafka и сети.
+</Callout>
+
+## Pattern 2: Dynamic Include List (альтернативный подход)
+
+**Когда использовать:** Если нужен строгий контроль над конкретными таблицами в CDC пайплайне.
+
+### Workflow
+
+**1. До миграции: добавить helper tables в include list**
+
+```json
+{
+  "name": "mysql-connector",
+  "config": {
+    "table.include.list": "mydb.orders,mydb.users,mydb._orders_gho,mydb._orders_ghc"
+  }
+}
+```
+
+**2. Применить изменённую конфигурацию:**
+
+```bash
+curl -X PUT http://localhost:8083/connectors/mysql-connector/config \
+  -H "Content-Type: application/json" \
+  -d @connector-config-with-helpers.json
+```
+
+**3. Запустить gh-ost миграцию:**
+
+```bash
+gh-ost --table=orders --alter="ADD COLUMN status VARCHAR(20)" --execute
+```
+
+**4. После миграции: удалить helper tables из include list**
+
+```json
+{
+  "name": "mysql-connector",
+  "config": {
+    "table.include.list": "mydb.orders,mydb.users"
+  }
+}
+```
+
+**5. Применить конфигурацию снова.**
+
+### Недостатки Dynamic Include List
+
+- ❌ Требует ручного изменения конфигурации коннектора
+- ❌ Риск забыть удалить helper tables после миграции
+- ❌ Не подходит для автоматизированных DDL пайплайнов
+- ❌ Helper table события всё равно попадают в Kafka
+
+**Вердикт:** Используйте Pattern 1 (Broad Capture + Filter SMT) как default подход.
+
+## gh-ost Integration: полный walkthrough
+
+### Подготовка: Configure connector
+
+```json
+{
+  "name": "mysql-connector-ghhost",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "dbz",
+    "database.server.id": "184001",
+    "database.server.name": "mysql-server",
+    "table.include.list": "inventory.*",
+    "snapshot.mode": "when_needed",
+    "schema.history.internal.kafka.topic": "schema-changes.mysql-server",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+    "transforms": "FilterHelperTables",
+    "transforms.FilterHelperTables.type": "io.debezium.transforms.Filter",
+    "transforms.FilterHelperTables.language": "jsr223.groovy",
+    "transforms.FilterHelperTables.condition": "!value.source.table.matches('.*_(gho|ghc)$')"
+  }
+}
+```
+
+### Шаг 1: Создать пользователя для gh-ost
+
+```sql
+CREATE USER 'gh-ost'@'%' IDENTIFIED BY 'ghp';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER,
+      LOCK TABLES, TRIGGER, REPLICATION SLAVE, REPLICATION CLIENT
+      ON inventory.* TO 'gh-ost'@'%';
+FLUSH PRIVILEGES;
+```
+
+### Шаг 2: Запустить gh-ost миграцию
+
+```bash
+gh-ost \
+  --host=mysql \
+  --port=3306 \
+  --user=gh-ost \
+  --password=ghp \
+  --database=inventory \
+  --table=orders \
+  --alter="ADD COLUMN status VARCHAR(20) DEFAULT 'pending'" \
+  --assume-rbr \
+  --allow-on-master \
+  --exact-rowcount \
+  --concurrent-rowcount \
+  --chunk-size=1000 \
+  --max-load=Threads_running=25 \
+  --critical-load=Threads_running=50 \
+  --default-retries=120 \
+  --postpone-cut-over-flag-file=/tmp/ghost.postpone.flag \
+  --execute
+```
+
+**Параметры:**
+
+- `--assume-rbr` — предполагает binlog_format=ROW (необходимо для CDC)
+- `--allow-on-master` — разрешает работу на master (используйте `--migrate-on-replica` для replica-based миграции)
+- `--chunk-size=1000` — копирует по 1000 строк за chunk
+- `--max-load` — приостанавливает при превышении нагрузки
+- `--critical-load` — прерывает при критической нагрузке
+- `--postpone-cut-over-flag-file` — позволяет задержать финальный rename (опционально)
+
+### Шаг 3: Мониторинг gh-ost процесса
+
+gh-ost выводит прогресс в реальном времени:
+
+```
+Copy: 25000/100000 25.0%; Applied: 1234; Backlog: 5/100; Time: 2m30s(total), 8m20s(remaining)
+```
+
+**Проверить в MySQL:**
+
+```sql
+-- Проверить существование helper tables
+SHOW TABLES LIKE '%gho%';
+
+-- Проверить размер ghost table
+SELECT
+  TABLE_NAME,
+  TABLE_ROWS,
+  DATA_LENGTH
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = 'inventory' AND TABLE_NAME LIKE '%gho%';
+```
+
+### Шаг 4: Что происходит с Debezium
+
+**Во время миграции:**
+
+1. Debezium видит CREATE TABLE события для `_orders_gho` и `_orders_ghc`
+2. Схемы этих таблиц записываются в schema history topic
+3. Debezium захватывает INSERT/UPDATE/DELETE события для всех трёх таблиц
+4. **Filter SMT отбрасывает события от `_orders_gho` и `_orders_ghc`**
+5. Только события от оригинальной таблицы `orders` отправляются в Kafka
+
+**Проверить Debezium connector logs:**
+
+```bash
+docker logs -f kafka-connect | grep "orders"
+```
+
+Ожидаемые логи:
+
+```
+INFO Creating topic 'mysql-server.inventory.orders'
+INFO Processing CREATE TABLE for _orders_gho
+INFO Processing CREATE TABLE for _orders_ghc
+INFO Filtering event from _orders_gho (helper table)
+INFO Processing event from orders
+```
+
+### Шаг 5: Финальный rename (cut-over)
+
+gh-ost выполняет атомарный rename:
+
+```sql
+RENAME TABLE
+  `inventory`.`orders` TO `inventory`.`_orders_old`,
+  `inventory`.`_orders_gho` TO `inventory`.`orders`;
+```
+
+**Что происходит:**
+
+1. Обе таблицы блокируются на миллисекунды
+2. Rename выполняется атомарно
+3. Приложение продолжает работать с новой таблицей `orders` (бывшая `_orders_gho`)
+
+**В Debezium:**
+
+1. Schema history topic получает событие RENAME
+2. Последующие события используют новую схему (`orders` с колонкой `status`)
+3. Consumers видят новую колонку в CDC событиях
+
+### Шаг 6: Cleanup (автоматический)
+
+gh-ost автоматически удаляет helper tables:
+
+```sql
+DROP TABLE IF EXISTS `inventory`.`_orders_old`;
+DROP TABLE IF EXISTS `inventory`.`_orders_ghc`;
+```
+
+**Debezium записывает DROP TABLE события в schema history.**
+
+### Верификация после миграции
+
+```sql
+-- Проверить новую схему
+DESCRIBE inventory.orders;
+-- Должна быть колонка 'status'
+
+-- Проверить, что helper tables удалены
+SHOW TABLES LIKE '%gho%';
+-- Empty set (0.00 sec)
+
+-- Проверить данные
+SELECT * FROM inventory.orders LIMIT 5;
+```
+
+**Проверить Kafka consumer:**
+
+```bash
+kafka-console-consumer \
+  --bootstrap-server kafka:9092 \
+  --topic mysql-server.inventory.orders \
+  --from-beginning \
+  --max-messages 5
+```
+
+Ожидаемый вывод: события с новой колонкой `status`.
+
+<Callout type="note">
+**gh-ost не поддерживает foreign keys**
+
+Если таблица `orders` имеет foreign key к `customers`, gh-ost **откажется** выполнять миграцию:
+
+```
+FATAL Foreign key constraints are not supported. Run with --alter-foreign-keys-method=auto
+```
+
+**Решения:**
+1. Временно удалить FK: `ALTER TABLE orders DROP FOREIGN KEY fk_customer_id`
+2. Выполнить gh-ost миграцию
+3. Восстановить FK: `ALTER TABLE orders ADD CONSTRAINT fk_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id)`
+
+Или используйте pt-online-schema-change (поддерживает FK).
+</Callout>
+
+## pt-online-schema-change Integration: полный walkthrough
+
+### Подготовка: Configure connector
+
+Та же конфигурация, но добавляем фильтр для pt-osc паттернов:
+
+```json
+{
+  "name": "mysql-connector-ptosc",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "table.include.list": "inventory.*",
+    "transforms": "FilterHelperTables",
+    "transforms.FilterHelperTables.type": "io.debezium.transforms.Filter",
+    "transforms.FilterHelperTables.language": "jsr223.groovy",
+    "transforms.FilterHelperTables.condition": "!value.source.table.matches('.*_(new|old)$')"
+  }
+}
+```
+
+### Шаг 1: Создать пользователя для pt-osc
+
+```sql
+CREATE USER 'pt-osc'@'%' IDENTIFIED BY 'ptp';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER,
+      LOCK TABLES, TRIGGER, REPLICATION SLAVE, REPLICATION CLIENT
+      ON inventory.* TO 'pt-osc'@'%';
+FLUSH PRIVILEGES;
+```
+
+### Шаг 2: Запустить pt-online-schema-change
+
+```bash
+pt-online-schema-change \
+  --alter="ADD COLUMN priority INT DEFAULT 0" \
+  --execute \
+  --chunk-size=1000 \
+  --max-load=Threads_running:25 \
+  --critical-load=Threads_running:50 \
+  --chunk-time=0.5 \
+  --progress=time,30 \
+  h=mysql,P=3306,u=pt-osc,p=ptp,D=inventory,t=orders
+```
+
+**Параметры:**
+
+- `--chunk-size=1000` — копирует по 1000 строк за chunk
+- `--max-load` — приостанавливает при высокой нагрузке
+- `--critical-load` — прерывает при критической нагрузке
+- `--chunk-time=0.5` — ограничивает время выполнения одного chunk (0.5 сек)
+- `--progress=time,30` — выводит прогресс каждые 30 секунд
+
+### Шаг 3: Что делает pt-osc
+
+**1. Создаёт новую таблицу:**
+
+```sql
+CREATE TABLE `inventory`.`_orders_new` LIKE `inventory`.`orders`;
+ALTER TABLE `inventory`.`_orders_new` ADD COLUMN priority INT DEFAULT 0;
+```
+
+**2. Создаёт триггеры:**
+
+```sql
+-- Trigger for INSERT
+CREATE TRIGGER `pt_osc_inventory_orders_ins`
+AFTER INSERT ON `inventory`.`orders`
+FOR EACH ROW
+INSERT IGNORE INTO `inventory`.`_orders_new` (...) VALUES (...);
+
+-- Trigger for UPDATE
+CREATE TRIGGER `pt_osc_inventory_orders_upd`
+AFTER UPDATE ON `inventory`.`orders`
+FOR EACH ROW
+REPLACE INTO `inventory`.`_orders_new` (...) VALUES (...);
+
+-- Trigger for DELETE
+CREATE TRIGGER `pt_osc_inventory_orders_del`
+AFTER DELETE ON `inventory`.`orders`
+FOR EACH ROW
+DELETE IGNORE FROM `inventory`.`_orders_new` WHERE id = OLD.id;
+```
+
+**3. Копирует данные chunk-by-chunk:**
+
+```sql
+INSERT LOW_PRIORITY IGNORE INTO `inventory`.`_orders_new`
+SELECT * FROM `inventory`.`orders`
+WHERE id >= 1 AND id < 1001;
+
+-- Следующий chunk
+INSERT LOW_PRIORITY IGNORE INTO `inventory`.`_orders_new`
+SELECT * FROM `inventory`.`orders`
+WHERE id >= 1001 AND id < 2001;
+```
+
+**4. Финальный rename:**
+
+```sql
+RENAME TABLE
+  `inventory`.`orders` TO `inventory`.`_orders_old`,
+  `inventory`.`_orders_new` TO `inventory`.`orders`;
+```
+
+**5. Удаляет старую таблицу:**
+
+```sql
+DROP TABLE `inventory`.`_orders_old`;
+```
+
+### Шаг 4: Что происходит с Debezium
+
+**Во время миграции:**
+
+1. Debezium видит CREATE TABLE `_orders_new`
+2. Debezium видит CREATE TRIGGER события (записываются в schema history)
+3. Каждая запись в `orders` генерирует **2 события:**
+   - INSERT в `orders` (оригинальная операция)
+   - INSERT в `_orders_new` (через trigger)
+4. **Filter SMT отбрасывает события от `_orders_new`**
+5. Consumers видят только события от `orders`
+
+**После rename:**
+
+1. `_orders_new` становится `orders`
+2. Debezium видит RENAME события
+3. Schema history обновляется
+4. Последующие события от новой таблицы `orders` содержат колонку `priority`
+
+### Верификация после миграции
+
+```sql
+-- Проверить новую схему
+DESCRIBE inventory.orders;
+-- Должна быть колонка 'priority'
+
+-- Проверить, что триггеры удалены
+SHOW TRIGGERS FROM inventory LIKE 'orders';
+-- Empty set (0.00 sec)
+
+-- Проверить, что _orders_old удалена
+SHOW TABLES LIKE '%old%';
+-- Empty set (0.00 sec)
+```
+
+<Callout type="note">
+**pt-osc поддерживает foreign keys**
+
+В отличие от gh-ost, pt-online-schema-change корректно обрабатывает таблицы с foreign keys. Триггеры автоматически применяют FK constraints.
+
+**Пример:**
+
+```sql
+-- Таблица с FK
+CREATE TABLE orders (
+  id INT PRIMARY KEY,
+  customer_id INT,
+  FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
+
+-- pt-osc успешно выполнит миграцию
+pt-online-schema-change --alter="ADD COLUMN status VARCHAR(20)" ...
+```
+
+Триггеры будут соблюдать FK constraints при копировании данных.
+</Callout>
+
+## Schema Evolution в Consumers
+
+### Что видят consumers после DDL
+
+После успешной миграции (gh-ost или pt-osc), новая колонка появляется в CDC событиях:
+
+**До миграции:**
+
+```json
+{
+  "schema": {
+    "fields": [
+      {"field": "id", "type": "int32"},
+      {"field": "customer_id", "type": "int32"},
+      {"field": "created_at", "type": "string"}
+    ]
+  },
+  "payload": {
+    "after": {
+      "id": 1,
+      "customer_id": 42,
+      "created_at": "2026-02-01T10:00:00Z"
+    }
+  }
+}
+```
+
+**После миграции:**
+
+```json
+{
+  "schema": {
+    "fields": [
+      {"field": "id", "type": "int32"},
+      {"field": "customer_id", "type": "int32"},
+      {"field": "created_at", "type": "string"},
+      {"field": "status", "type": "string", "optional": true}
+    ]
+  },
+  "payload": {
+    "after": {
+      "id": 2,
+      "customer_id": 43,
+      "created_at": "2026-02-01T10:05:00Z",
+      "status": "pending"
+    }
+  }
+}
+```
+
+### Обработка schema evolution в consumers
+
+**Avro + Schema Registry (рекомендуется):**
+
+```java
+// Schema Registry автоматически обрабатывает backward/forward compatibility
+GenericRecord record = reader.read();
+String status = record.hasField("status")
+  ? record.get("status").toString()
+  : "unknown";
+```
+
+**JSON Schema:**
+
+```javascript
+// Проверка на наличие поля
+const status = event.payload.after.status || 'unknown';
+```
+
+<Callout type="warning">
+**Incompatible schema changes требуют координации**
+
+Некоторые DDL операции ломают consumers:
+
+**Breaking changes:**
+- `DROP COLUMN email` — consumers ожидают поле, которого больше нет
+- `CHANGE COLUMN id BIGINT` — изменение типа может сломать десериализацию
+- `RENAME TABLE orders TO sales` — consumers слушают старый топик
+
+**Best practice workflow:**
+1. Deploy new consumer version (поддерживает обе схемы)
+2. Выполнить DDL миграцию
+3. Подождать, пока старые consumers обработают backlog
+4. Deploy final consumer version (только новая схема)
+</Callout>
+
+## Мониторинг DDL операций
+
+### Метрики для отслеживания
+
+**1. Connector health:**
+
+```bash
+curl http://localhost:8083/connectors/mysql-connector/status | jq .connector.state
+# Должно быть "RUNNING"
+```
+
+**2. Schema history topic размер:**
+
+```bash
+kafka-log-dirs --bootstrap-server kafka:9092 \
+  --topic-list schema-changes.mysql-server \
+  --describe | grep size
+```
+
+Во время DDL миграции размер должен увеличиться (новые DDL события).
+
+**3. Binlog lag:**
+
+```sql
+SHOW SLAVE STATUS\G
+-- Seconds_Behind_Master может вырасти во время gh-ost (читает binlog)
+```
+
+**4. Kafka topic creation:**
+
+```bash
+kafka-topics --bootstrap-server kafka:9092 --list | grep gho
+# Во время gh-ost должны появиться топики для _orders_gho, _orders_ghc
+```
+
+**5. После миграции: cleanup verification:**
+
+```bash
+kafka-topics --bootstrap-server kafka:9092 --list | grep gho
+# После успешной миграции helper table топики должны остаться (но без новых событий)
+```
+
+### Алерты для настройки
+
+```yaml
+# Prometheus AlertManager rules (пример)
+groups:
+  - name: debezium_ddl_monitoring
+    rules:
+      - alert: DebeziumConnectorFailedDuringDDL
+        expr: |
+          kafka_connect_connector_status{connector="mysql-connector",state="FAILED"} == 1
+        for: 1m
+        annotations:
+          summary: "Debezium connector failed (possibly during DDL operation)"
+
+      - alert: HelperTablesNotCleaned
+        expr: |
+          kafka_topic_partitions{topic=~".*_(gho|ghc|new|old)"} > 0
+        for: 24h
+        annotations:
+          summary: "Helper table topics exist 24h after migration (investigate)"
+```
+
+## Common Mistakes (частые ошибки)
+
+### 1. Не включить helper tables в capture
+
+**Ошибка:**
+
+```json
+{
+  "table.include.list": "inventory.orders,inventory.users"
+}
+```
+
+**Запускаете gh-ost на orders → connector crash:**
+
+```
+ERROR: Table _orders_gho not found in schema history topic
+```
+
+**Исправление:**
+
+```json
+{
+  "table.include.list": "inventory.*"
+}
+```
+
+---
+
+### 2. Забыть фильтр SMT
+
+**Ошибка:** Helper tables захватываются, но не фильтруются.
+
+**Последствия:**
+- Consumers видят дублирующиеся события
+- Kafka storage расходуется на временные данные
+- Путаница в downstream системах
+
+**Исправление:** Добавить Filter SMT (Pattern 1).
+
+---
+
+### 3. Запустить DDL во время snapshot
+
+**Ошибка:** Debezium выполняет initial snapshot, администратор запускает gh-ost параллельно.
+
+**Последствия:**
+- gh-ost блокирует таблицу для rename
+- Snapshot timeout (таблица заблокирована gh-ost)
+- Connector retry loop
+
+**Исправление:** Дождитесь завершения snapshot, затем запускайте DDL.
+
+---
+
+### 4. gh-ost на таблице с FK
+
+**Ошибка:**
+
+```bash
+gh-ost --table=orders --alter="..." --execute
+```
+
+**orders имеет foreign key → gh-ost отказывается выполнять:**
+
+```
+FATAL: Foreign key constraints are not supported
+```
+
+**Исправление:** Используйте pt-online-schema-change или временно удалите FK.
+
+---
+
+## Hands-on Exercise: gh-ost с CDC
+
+### Prerequisites
+
+- MySQL лаборатория с Docker Compose
+- Debezium connector развёрнут с широким capture pattern
+- Filter SMT настроен
+
+### Exercise Steps
+
+**1. Проверить текущую схему:**
+
+```sql
+DESCRIBE inventory.orders;
+```
+
+**2. Deploy connector с Filter SMT:**
+
+```bash
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "mysql-connector-ghhost",
+    "config": {
+      "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+      "database.hostname": "mysql",
+      "database.port": "3306",
+      "database.user": "debezium",
+      "database.password": "dbz",
+      "database.server.id": "184001",
+      "database.server.name": "mysql-server",
+      "table.include.list": "inventory.*",
+      "snapshot.mode": "initial",
+      "schema.history.internal.kafka.topic": "schema-changes.mysql-server",
+      "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+      "transforms": "FilterHelperTables",
+      "transforms.FilterHelperTables.type": "io.debezium.transforms.Filter",
+      "transforms.FilterHelperTables.language": "jsr223.groovy",
+      "transforms.FilterHelperTables.condition": "!value.source.table.matches('\''.*_(gho|ghc)$'\'')"
+    }
+  }'
+```
+
+**3. Запустить gh-ost миграцию:**
+
+```bash
+docker exec -it mysql bash
+
+gh-ost \
+  --host=127.0.0.1 \
+  --user=root \
+  --password=debezium \
+  --database=inventory \
+  --table=orders \
+  --alter="ADD COLUMN status VARCHAR(20) DEFAULT 'pending'" \
+  --assume-rbr \
+  --allow-on-master \
+  --exact-rowcount \
+  --chunk-size=100 \
+  --execute
+```
+
+**4. Наблюдать connector logs:**
+
+```bash
+docker logs -f kafka-connect | grep -E "(orders|gho|ghc)"
+```
+
+Ожидаемые логи:
+
+```
+INFO Creating topic for _orders_gho
+INFO Filtering event from _orders_gho
+INFO Processing event from orders
+```
+
+**5. Проверить Kafka consumer (только orders события):**
+
+```bash
+kafka-console-consumer \
+  --bootstrap-server kafka:9092 \
+  --topic mysql-server.inventory.orders \
+  --from-beginning \
+  --max-messages 10
+```
+
+**6. Проверить schema history topic:**
+
+```bash
+kafka-console-consumer \
+  --bootstrap-server kafka:9092 \
+  --topic schema-changes.mysql-server \
+  --from-beginning \
+  --property print.key=true \
+  | grep -E "(gho|ALTER)"
+```
+
+Ожидаемый вывод: CREATE TABLE для `_orders_gho`, ALTER TABLE для `orders`.
+
+**7. Проверить новую схему после миграции:**
+
+```sql
+DESCRIBE inventory.orders;
+-- Должна быть колонка 'status'
+```
+
+**8. Bonus: Проверить, что helper table топики пустые после миграции:**
+
+```bash
+kafka-console-consumer \
+  --bootstrap-server kafka:9092 \
+  --topic mysql-server.inventory._orders_gho \
+  --from-beginning \
+  --max-messages 1 \
+  --timeout-ms 5000
+```
+
+Если Filter SMT работает правильно: timeout (нет событий).
+
+---
+
+## Summary: DDL Tools Checklist
+
+**Pre-migration:**
+
+- [ ] Debezium connector настроен с широким capture pattern (`mydb.*`)
+- [ ] Filter SMT добавлен в конфигурацию коннектора
+- [ ] Regex фильтра покрывает все helper table паттерны (`_gho`, `_ghc`, `_new`, `_old`)
+- [ ] Connector status: RUNNING
+- [ ] Schema history topic retention: infinite (`retention.ms=-1`)
+
+**During migration:**
+
+- [ ] Мониторинг connector logs (нет ошибок missing table)
+- [ ] Мониторинг binlog lag (может вырасти во время gh-ost)
+- [ ] Проверка Kafka topics (helper table топики создаются, но события фильтруются)
+
+**Post-migration:**
+
+- [ ] Новая колонка появилась в CDC событиях
+- [ ] Schema history topic содержит DDL события (CREATE, ALTER, DROP)
+- [ ] Helper tables удалены из MySQL (`SHOW TABLES` не показывает `_gho`, `_new`)
+- [ ] Consumers обрабатывают события с новой схемой
+- [ ] Helper table топики в Kafka пустые (или могут быть удалены вручную)
+
+---
+
+## Ключевые выводы
+
+1. **Standard ALTER TABLE блокирует таблицу** — для больших таблиц это downtime на часы
+2. **gh-ost и pt-osc выполняют zero-downtime DDL** — через helper tables и chunked copy
+3. **gh-ost triggerless, читает binlog** — удваивает binlog read нагрузку, не поддерживает FK
+4. **pt-osc trigger-based** — поддерживает FK, добавляет trigger overhead
+5. **Helper tables должны быть в table.include.list** — иначе connector crash
+6. **Filter SMT — recommended pattern** — фильтрует helper table события перед Kafka
+7. **Regex filter покрывает все паттерны** — `_gho`, `_ghc`, `_new`, `_old`
+8. **Schema evolution автоматическая** — новые колонки появляются в CDC событиях
+9. **Avro + Schema Registry упрощают schema evolution** — backward/forward compatibility
+10. **Мониторинг connector logs критичен** — детектирует проблемы во время миграции
+
+## Что дальше?
+
+Мы разобрали интеграцию онлайн-инструментов DDL с Debezium MySQL CDC. Вы научились безопасно выполнять schema migrations без downtime и без дублирования данных в CDC-пайплайне.
+
+В следующих уроках мы изучим advanced recovery сценарии: восстановление после потери binlog position, коррекция schema history topic, multi-connector deployments с управлением server.id conflicts, и incremental snapshots для добавления новых таблиц без остановки streaming.
