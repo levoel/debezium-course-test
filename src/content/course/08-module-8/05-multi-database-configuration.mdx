@@ -13,7 +13,7 @@ import Callout from '../../../components/Callout.tsx';
 
 # Multi-Database Configuration
 
-В [предыдущем уроке](/course/module-7/04-multi-database-architecture) вы узнали об **архитектуре multi-database CDC pipeline** и паттернах объединения данных из PostgreSQL и MySQL. Теперь время перейти к **практической конфигурации** — настроить оба коннектора и создать unified PyFlink consumer.
+В [предыдущем уроке](/course/08-module-8/04-multi-database-architecture) вы узнали об **архитектуре multi-database CDC pipeline** и паттернах объединения данных из PostgreSQL и MySQL. Теперь время перейти к **практической конфигурации** — настроить оба коннектора и создать unified PyFlink consumer.
 
 Эта конфигурация готова к использованию в вашем расширенном capstone проекте.
 
@@ -65,7 +65,7 @@ CREATE TABLE outbox (
 <Callout type="note">
 **MySQL Binlog Configuration**
 
-MySQL binlog с ROW format автоматически захватывает полные данные строк — не требуется эквивалент PostgreSQL `REPLICA IDENTITY FULL`. Убедитесь, что binlog_format=ROW установлен (см. [Module 8 - MySQL Configuration](/course/module-8/01-mysql-aurora-setup)).
+MySQL binlog с ROW format автоматически захватывает полные данные строк — не требуется эквивалент PostgreSQL `REPLICA IDENTITY FULL`. Убедитесь, что binlog_format=ROW установлен (см. [Module 8 - MySQL Configuration](/course/03-module-3/01-mysql-aurora-setup)).
 </Callout>
 
 ---
@@ -203,7 +203,7 @@ MySQL connector требует **дополнительные параметры
 
 `database.server.id` должен быть уникальным и НЕ конфликтовать с server_id MySQL server или других MySQL connectors.
 
-**Recommended range:** 184000-184999 для Debezium connectors (см. [Module 8 - Multi-Connector Deployment](/course/module-8/06-multi-connector-deployment) для registry pattern).
+**Recommended range:** 184000-184999 для Debezium connectors (см. [Module 8 - Multi-Connector Deployment](/course/03-module-3/06-multi-connector-deployment) для registry pattern).
 
 **Example assignment:**
 - MySQL Server: server_id = 1

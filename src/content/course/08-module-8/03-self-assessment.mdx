@@ -590,8 +590,8 @@ CREATE TABLE orders (
 **Контекст:** Основной capstone проект использует PostgreSQL как единственный источник. Multi-database extension добавляет MySQL как второй источник для демонстрации heterogeneous CDC pipeline (PostgreSQL + MySQL → unified Kafka topics → PyFlink → BigQuery).
 
 **Полезные ресурсы:**
-- [Multi-Database Architecture](/course/module-7/04-multi-database-architecture) — сравнение separate topics vs unified topics patterns
-- [Multi-Database Configuration](/course/module-7/05-multi-database-configuration) — практическая имплементация
+- [Multi-Database Architecture](/course/08-module-8/04-multi-database-architecture) — сравнение separate topics vs unified topics patterns
+- [Multi-Database Configuration](/course/08-module-8/05-multi-database-configuration) — практическая имплементация
 
 **Зачем это делать?**
 - Демонстрирует понимание connector-specific различий (WAL vs binlog, replication slots vs schema history topic)

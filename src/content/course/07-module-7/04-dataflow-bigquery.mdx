@@ -374,7 +374,7 @@ Dataflow template поддерживает два режима доставки:
 
 **Связь с Module 5 концепциями:**
 
-В [Module 5 - Advanced Python Consumer](/course/module-5/01-advanced-python-consumer) мы разбирали at-least-once vs exactly-once для Kafka consumers. Те же концепции применимы к Dataflow:
+В [Module 5 - Advanced Python Consumer](/course/06-module-6/01-advanced-python-consumer) мы разбирали at-least-once vs exactly-once для Kafka consumers. Те же концепции применимы к Dataflow:
 - **At-least-once** требует идемпотентной обработки (BigQuery MERGE по PK)
 - **Exactly-once** использует транзакционный API (BigQuery Storage Write API)
 
@@ -494,7 +494,7 @@ ADD COLUMN discount_percent FLOAT64;
 
 **Решение для breaking changes:**
 
-Следуйте паттерну из [Module 4 - Schema Evolution](/course/module-4/04-schema-registry-evolution):
+Следуйте паттерну из [Module 4 - Schema Evolution](/course/05-module-5/04-schema-registry-evolution):
 1. **Добавить новую колонку** с новым именем/типом
 2. **Backfill данные** из старой колонки в новую
 3. **Обновить приложения** на использование новой колонки

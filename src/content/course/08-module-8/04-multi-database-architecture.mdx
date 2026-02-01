@@ -13,7 +13,7 @@ import Callout from '../../../components/Callout.tsx';
 
 # Multi-Database CDC Architecture
 
-В [предыдущих уроках модуля 7](/course/module-7/01-capstone-overview) вы проектировали CDC pipeline для **одного источника** — PostgreSQL или MySQL. В реальных enterprise системах часто требуется **объединять события из нескольких баз данных** в единый аналитический поток.
+В [предыдущих уроках модуля 7](/course/08-module-8/01-capstone-overview) вы проектировали CDC pipeline для **одного источника** — PostgreSQL или MySQL. В реальных enterprise системах часто требуется **объединять события из нескольких баз данных** в единый аналитический поток.
 
 Этот урок показывает, как строить **multi-database CDC architecture** — объединять PostgreSQL и MySQL в одном Debezium deployment, управлять различиями в position tracking, schema history, и мониторинге.
 
@@ -473,13 +473,13 @@ This prevents topic naming conflicts.
 - [Replication Slot Management](/course/module-2/03-replication-slot-management) — Slot lifecycle и WAL bloat prevention
 
 **Module 8: MySQL CDC Foundations**
-- [GTID Mode Fundamentals](/course/module-8/02-gtid-mode-fundamentals) — Понимание GTID vs binlog file:position
-- [Binlog vs WAL Comparison](/course/module-8/05-binlog-wal-comparison) — Архитектурные различия PostgreSQL vs MySQL
-- [Schema History Recovery](/course/module-8/06-schema-history-recovery) — MySQL schema history topic backup и recovery
-- [Multi-Connector Deployments](/course/module-8/14-multi-connector-deployments) — database.server.id registry и unique identifier management
+- [GTID Mode Fundamentals](/course/03-module-3/02-gtid-mode-fundamentals) — Понимание GTID vs binlog file:position
+- [Binlog vs WAL Comparison](/course/03-module-3/05-binlog-wal-comparison) — Архитектурные различия PostgreSQL vs MySQL
+- [Schema History Recovery](/course/03-module-3/06-schema-history-recovery) — MySQL schema history topic backup и recovery
+- [Multi-Connector Deployments](/course/03-module-3/14-multi-connector-deployments) — database.server.id registry и unique identifier management
 
 **Next Lesson:**
-- [Multi-Database Configuration](/course/module-7/05-multi-database-configuration) — Hands-on implementation паттернов из этого урока
+- [Multi-Database Configuration](/course/08-module-8/05-multi-database-configuration) — Hands-on implementation паттернов из этого урока
 
 ---
 
