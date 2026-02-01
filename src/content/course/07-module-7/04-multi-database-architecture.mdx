@@ -1,0 +1,491 @@
+---
+title: "Multi-Database CDC Architecture"
+description: "Архитектура CDC pipeline с несколькими источниками: PostgreSQL + MySQL"
+order: 4
+difficulty: "advanced"
+estimatedTime: 35
+topics: ["Multi-Database", "CDC", "Architecture", "PostgreSQL", "MySQL"]
+prerequisites: ["module-7/01-capstone-overview", "module-8/02-gtid-mode-fundamentals"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+import Callout from '../../../components/Callout.tsx';
+
+# Multi-Database CDC Architecture
+
+В [предыдущих уроках модуля 7](/course/module-7/01-capstone-overview) вы проектировали CDC pipeline для **одного источника** — PostgreSQL или MySQL. В реальных enterprise системах часто требуется **объединять события из нескольких баз данных** в единый аналитический поток.
+
+Этот урок показывает, как строить **multi-database CDC architecture** — объединять PostgreSQL и MySQL в одном Debezium deployment, управлять различиями в position tracking, schema history, и мониторинге.
+
+---
+
+## Зачем нужен Multi-Database CDC?
+
+### Реальные сценарии
+
+**Сценарий 1: Разные команды владеют разными базами данных**
+
+Типичная enterprise архитектура:
+- **Team Orders:** Использует PostgreSQL для заказов (выбрали из-за JSONB и extensibility)
+- **Team Inventory:** Использует MySQL для складских остатков (legacy система, миграция дорогая)
+- **Team Analytics:** Нужны события из обеих систем в BigQuery для unified reporting
+
+**Проблема:** Если строить два **изолированных** CDC pipeline, аналитическая команда получает:
+- Два набора Kafka topics
+- Два формата events (разные metadata, envelope structures)
+- Сложность в join операциях через источники
+
+**Решение:** Multi-database CDC pipeline с **унифицированной архитектурой**.
+
+---
+
+**Сценарий 2: Polyglot Persistence + Legacy Integration**
+
+Многие компании используют **polyglot persistence** — разные СУБД для разных workloads:
+- PostgreSQL для transactional workloads (ACID guarantees)
+- MySQL для read-heavy workloads (legacy application, не хотят переписывать)
+- Cassandra для time-series data
+
+CDC нужен для **real-time analytics cross-database** — объединить заказы (PostgreSQL) с inventory (MySQL) в реальном времени.
+
+---
+
+**Сценарий 3: Migrация между СУБД**
+
+При миграции с MySQL на PostgreSQL (или наоборот):
+- **Dual-write phase:** Приложение пишет в обе базы
+- **Validation phase:** CDC от обеих баз для сравнения консистентности
+- **Cutover phase:** Переключиться на новую базу, оставить старую read-only
+
+**CDC помогает:** Проверить, что migration не потерял данные через comparison streams.
+
+---
+
+## Архитектурные паттерны
+
+Существует два основных подхода к multi-database CDC:
+
+### Pattern 1: Separate Topics Architecture
+
+Каждая база данных публикует события в **database-specific topics**.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph SOURCES["Source Databases"]
+        PG["PostgreSQL<br/>orders table"]
+        MY["MySQL<br/>inventory table"]
+    end
+
+    subgraph CDC["CDC Layer"]
+        PG_CONN["PostgreSQL Connector<br/>database.server.name: postgres_prod<br/>slot.name: debezium_pg_slot"]
+        MY_CONN["MySQL Connector<br/>database.server.name: mysql_prod<br/>database.server.id: 184054<br/>schema.history.topic: mysql_prod.schema_history"]
+    end
+
+    subgraph TOPICS["Kafka Topics (Separate)"]
+        PG_TOPIC["postgres_prod.public.orders"]
+        MY_TOPIC["mysql_prod.inventory.stock"]
+        MY_SCHEMA["mysql_prod.schema_history<br/>(MySQL-only)"]
+    end
+
+    subgraph CONSUMER["Consumer Layer"]
+        PYFLINK["PyFlink Table API<br/>UNION ALL FROM<br/>postgres_prod.public.orders,<br/>mysql_prod.inventory.stock"]
+    end
+
+    PG --> PG_CONN
+    MY --> MY_CONN
+    PG_CONN --> PG_TOPIC
+    MY_CONN --> MY_TOPIC
+    MY_CONN -.->|"writes DDL"| MY_SCHEMA
+    PG_TOPIC --> PYFLINK
+    MY_TOPIC --> PYFLINK
+
+    style PG fill:#339af0
+    style MY fill:#ff6b6b
+    style PG_CONN fill:#51cf66
+    style MY_CONN fill:#51cf66
+    style MY_SCHEMA fill:#ffd43b
+    style PYFLINK fill:#8b5cf6
+`} client:visible />
+
+**Naming Convention:**
+```
+postgres_prod.public.orders         # PostgreSQL connector topic
+mysql_prod.inventory.stock          # MySQL connector topic
+mysql_prod.schema_history           # MySQL schema history topic (PostgreSQL doesn't need this)
+```
+
+**Характеристики:**
+
+| Aspect | Description |
+|--------|-------------|
+| **Topic count** | 2N topics (N tables per database) + 1 schema history per MySQL source |
+| **Consumer complexity** | Consumer читает из multiple topics (UNION ALL в PyFlink) |
+| **Schema evolution** | Independent per database (PostgreSQL DDL не влияет на MySQL topics) |
+| **Troubleshooting** | Easier — source isolation (знаем, какой connector отправил событие) |
+| **Traceability** | Clear origin tracking (topic name shows source database) |
+
+**Когда использовать:**
+- ✅ Learning и initial implementation (easier to understand)
+- ✅ Different schemas в PostgreSQL vs MySQL (нельзя объединить в одну структуру)
+- ✅ Different aggregates (orders vs inventory — conceptually different)
+- ✅ Independent schema evolution (PostgreSQL team и MySQL team работают независимо)
+
+---
+
+### Pattern 2: Unified Topics Architecture
+
+Использует **ByLogicalTableRouter SMT** для объединения событий из обеих баз в **single topic per aggregate**.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph SOURCES["Source Databases"]
+        PG["PostgreSQL<br/>outbox table"]
+        MY["MySQL<br/>outbox table"]
+    end
+
+    subgraph CDC["CDC Layer with SMT"]
+        PG_CONN["PostgreSQL Connector<br/>+ ByLogicalTableRouter SMT"]
+        MY_CONN["MySQL Connector<br/>+ ByLogicalTableRouter SMT"]
+    end
+
+    subgraph TOPICS["Kafka Topics (Unified)"]
+        UNIFIED["outbox.event.orders<br/>(contains events from both PostgreSQL and MySQL)"]
+    end
+
+    subgraph CONSUMER["Consumer Layer"]
+        PYFLINK["PyFlink Table API<br/>Single source<br/>WITH source_database metadata"]
+    end
+
+    PG --> PG_CONN
+    MY --> MY_CONN
+    PG_CONN --> UNIFIED
+    MY_CONN --> UNIFIED
+    UNIFIED --> PYFLINK
+
+    style UNIFIED fill:#f59e0b
+    style PG_CONN fill:#51cf66
+    style MY_CONN fill:#51cf66
+    style PYFLINK fill:#8b5cf6
+`} client:visible />
+
+**SMT Configuration Example:**
+
+```json
+{
+  "name": "postgres-outbox-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.server.name": "postgres_prod",
+
+    "transforms": "outbox,router",
+    "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+    "transforms.outbox.route.by.field": "aggregatetype",
+
+    "transforms.router.type": "io.debezium.transforms.ByLogicalTableRouter",
+    "transforms.router.topic.regex": "postgres_prod\\.public\\.outbox",
+    "transforms.router.topic.replacement": "outbox.event.orders"
+  }
+}
+```
+
+**Характеристики:**
+
+| Aspect | Description |
+|--------|-------------|
+| **Topic count** | N topics (one per logical aggregate, consolidated across databases) |
+| **Consumer complexity** | Simpler — single topic to consume |
+| **Schema evolution** | Coordinated (changes must be compatible across PostgreSQL + MySQL) |
+| **Troubleshooting** | Harder — mixed events (need source_database metadata to trace origin) |
+| **Key uniqueness** | Requires handling (PostgreSQL order_id=5 vs MySQL order_id=5 are different) |
+
+**Когда использовать:**
+- ✅ **Identical schemas** в PostgreSQL и MySQL (same columns, same types)
+- ✅ Outbox Pattern в обеих базах (aggregatetype роутит события)
+- ✅ Consumer preference для single stream (проще обработка)
+- ⚠️ **Требует careful key design** — добавить source_database prefix к key для уникальности
+
+<Callout type="warning">
+**Unified Topics = Higher Complexity**
+
+Если события из PostgreSQL и MySQL имеют **разную структуру** (разные columns, разные типы), unified topics приведут к schema conflicts. Используйте этот паттерн только для **identical schemas**.
+</Callout>
+
+---
+
+## Comparison: Separate vs Unified
+
+### Decision Matrix
+
+| Criteria | Separate Topics | Unified Topics |
+|----------|-----------------|----------------|
+| **Schemas identical** | Optional | **Required** |
+| **Independent schema evolution** | ✅ Yes | ❌ No (coordinated changes) |
+| **Traceability (which source?)** | ✅ Automatic (topic name) | ⚠️ Requires metadata field |
+| **Consumer complexity** | ⚠️ Multiple sources to join | ✅ Single source |
+| **Key uniqueness** | ✅ Natural (separate streams) | ⚠️ Requires prefix/composite key |
+| **Troubleshooting** | ✅ Easier (source isolation) | ⚠️ Harder (mixed events) |
+| **Recommended for learning** | ✅ Yes | ❌ No (advanced pattern) |
+
+**Рекомендация для capstone:**
+
+Используйте **Separate Topics** architecture:
+- Проще для understanding (clear source attribution)
+- Легче debug (isolated connector failures)
+- Не требует координации schema changes между командами
+- Более реалистичен для enterprise (разные команды владеют PostgreSQL vs MySQL)
+
+---
+
+## Operational Differences: PostgreSQL vs MySQL
+
+При работе с multi-database CDC критически важно понимать **operational differences** между connectors.
+
+### Schema Storage
+
+| Database | Schema Storage Approach |
+|----------|------------------------|
+| **PostgreSQL** | Schema embedded in each WAL event (no separate storage needed) |
+| **MySQL** | Schema stored in **schema.history.internal.kafka.topic** (separate Kafka topic per connector) |
+
+**Почему это важно:**
+
+PostgreSQL Connector:
+```json
+{
+  "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+  "database.server.name": "postgres_prod"
+  // NO schema.history.topic — not needed
+}
+```
+
+MySQL Connector:
+```json
+{
+  "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+  "database.server.name": "mysql_prod",
+  "database.server.id": "184054",
+  "schema.history.internal.kafka.topic": "mysql_prod.schema_history"  // REQUIRED
+}
+```
+
+<Callout type="danger">
+**NEVER share schema.history.internal.kafka.topic between MySQL connectors**
+
+Если два MySQL connector используют один schema history topic, они **pollute DDL history друг друга**, что приводит к corruption. Каждый MySQL connector ОБЯЗАН иметь уникальный schema history topic.
+</Callout>
+
+---
+
+### Position Tracking
+
+| Database | Position Tracking Mechanism |
+|----------|----------------------------|
+| **PostgreSQL** | Server-side replication slot (LSN stored in `pg_replication_slots`) |
+| **MySQL** | Client-side offsets (GTID or binlog file:position stored in Kafka Connect offsets topic) |
+
+**Impликации:**
+
+**PostgreSQL:**
+- Abandoned connector → replication slot остается active=false → WAL bloat → disk full
+- Recovery: Переподключиться к существующему slot
+- Мониторинг: `SELECT * FROM pg_replication_slots WHERE active=false`
+
+**MySQL:**
+- Abandoned connector → binlog purges after `binlog_expire_logs_seconds` → recovery impossible
+- Recovery: Resnapshot если offset за пределами `gtid_purged`
+- Мониторинг: Compare connector offset GTID vs `SHOW MASTER STATUS`
+
+---
+
+### Recovery Procedures
+
+| Scenario | PostgreSQL | MySQL |
+|----------|------------|-------|
+| **Connector restart after crash** | Resume from replication slot `restart_lsn` | Resume from Kafka Connect offset (GTID) |
+| **Position lost (offsets deleted)** | Recreate slot + resnapshot | Resnapshot (cannot recover without snapshot) |
+| **Source failover** | Migrate slot to new primary (complex) | GTID auto-relocates to new primary (simple) |
+| **Schema history corruption** | N/A (no separate schema history) | Restore schema history topic from backup or resnapshot |
+
+**Recovery time comparison:**
+
+```
+PostgreSQL failover: ~5-10 minutes (slot migration complex)
+MySQL failover: ~30 seconds (GTID automatic)
+
+PostgreSQL schema change: No separate recovery needed
+MySQL schema history corruption: Hours (resnapshot) or minutes (restore backup)
+```
+
+<Callout type="tip">
+**Defense in Depth for MySQL**
+
+Because MySQL schema history topic corruption is **catastrophic** (requires full resnapshot), implement:
+
+1. **Infinite retention:** `retention.ms=-1` for schema history topic
+2. **Daily backups:** Export schema history topic to S3
+3. **Alerts:** Monitor schema history topic size (should grow monotonically)
+</Callout>
+
+---
+
+### Monitoring Metrics
+
+| Metric | PostgreSQL | MySQL |
+|--------|------------|-------|
+| **Replication lag** | `pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)` (bytes) | `MilliSecondsBehindSource` (milliseconds) |
+| **Position format** | LSN (e.g., `0/16B374D8`) | GTID (e.g., `3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5`) |
+| **Server-side state** | Replication slot active/inactive | No server-side state (check binlog availability) |
+| **Heartbeat purpose** | Advance slot to prevent WAL bloat | Advance offset to survive idle tables during binlog purge |
+
+**Unified monitoring dashboard должен показывать:**
+
+```
+PostgreSQL Connector:
+  - Replication lag: 45 MB
+  - Slot active: true
+  - Last event: 2s ago
+
+MySQL Connector:
+  - MilliSecondsBehindSource: 350 ms
+  - Current GTID: ...62:1-5429
+  - Schema history topic: 1.2 MB (OK)
+  - Binlog retention: 5.3 days remaining
+```
+
+---
+
+## Critical Pitfalls: Unique Identifiers
+
+При multi-database CDC **каждый connector ОБЯЗАН иметь unique identifiers** для предотвращения конфликтов.
+
+### Required Unique Properties
+
+| Property | PostgreSQL | MySQL | Purpose |
+|----------|------------|-------|---------|
+| **database.server.name** | `postgres_prod` | `mysql_prod` | Topic prefix (prevents topic name collisions) |
+| **slot.name** | `debezium_pg_slot` | N/A (no slots in MySQL) | Replication slot identifier |
+| **database.server.id** | N/A (no server ID in PostgreSQL) | `184054` | MySQL binlog reader identifier (must be unique across all MySQL clients) |
+| **schema.history.internal.kafka.topic** | N/A (no schema history) | `mysql_prod.schema_history` | DDL event storage (must be unique per connector) |
+
+### Topic Naming Collision Example
+
+**Проблема:** Если оба connector используют одинаковый `database.server.name`:
+
+```json
+// PostgreSQL connector
+{"database.server.name": "prod"}  // Topic: prod.public.orders
+
+// MySQL connector
+{"database.server.name": "prod"}  // Topic: prod.inventory.orders
+```
+
+**Result:** Если table names совпадают (`orders`), topics **collide** → события смешиваются → data corruption.
+
+**Решение:**
+
+```json
+// PostgreSQL connector
+{"database.server.name": "postgres_prod"}  // Topic: postgres_prod.public.orders
+
+// MySQL connector
+{"database.server.name": "mysql_prod"}     // Topic: mysql_prod.inventory.orders
+```
+
+<Callout type="danger">
+**Unique database.server.name is MANDATORY**
+
+В multi-database deployment, используйте **prefix convention**:
+- PostgreSQL: `postgres_<environment>` (e.g., `postgres_prod`, `postgres_staging`)
+- MySQL: `mysql_<environment>` (e.g., `mysql_prod`, `mysql_staging`)
+
+This prevents topic naming conflicts.
+</Callout>
+
+---
+
+## Multi-Database Configuration Template
+
+### PostgreSQL Connector
+
+```json
+{
+  "name": "postgres-prod-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres.example.com",
+    "database.port": "5432",
+    "database.user": "debezium_user",
+    "database.password": "secure_password",
+    "database.dbname": "orders_db",
+    "database.server.name": "postgres_prod",
+
+    "plugin.name": "pgoutput",
+    "slot.name": "debezium_pg_orders_slot",
+    "publication.autocreate.mode": "filtered",
+
+    "table.include.list": "public.orders,public.order_items",
+    "heartbeat.interval.ms": "10000",
+    "snapshot.mode": "when_needed"
+  }
+}
+```
+
+### MySQL Connector
+
+```json
+{
+  "name": "mysql-prod-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "mysql.example.com",
+    "database.port": "3306",
+    "database.user": "debezium_user",
+    "database.password": "secure_password",
+    "database.server.name": "mysql_prod",
+    "database.server.id": "184054",
+
+    "table.include.list": "inventory.stock,inventory.warehouses",
+    "schema.history.internal.kafka.topic": "mysql_prod.schema_history",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+
+    "gtid.source.includes": ".*",
+    "heartbeat.interval.ms": "10000",
+    "snapshot.mode": "when_needed",
+    "binlog.row.metadata.enabled": "true"
+  }
+}
+```
+
+---
+
+## Key Links
+
+**Module 2: PostgreSQL CDC Foundations**
+- [Logical Decoding Deep Dive](/course/module-2/01-logical-decoding-deep-dive) — Понимание replication slots и LSN tracking
+- [Replication Slot Management](/course/module-2/03-replication-slot-management) — Slot lifecycle и WAL bloat prevention
+
+**Module 8: MySQL CDC Foundations**
+- [GTID Mode Fundamentals](/course/module-8/02-gtid-mode-fundamentals) — Понимание GTID vs binlog file:position
+- [Binlog vs WAL Comparison](/course/module-8/05-binlog-wal-comparison) — Архитектурные различия PostgreSQL vs MySQL
+- [Schema History Recovery](/course/module-8/06-schema-history-recovery) — MySQL schema history topic backup и recovery
+- [Multi-Connector Deployments](/course/module-8/14-multi-connector-deployments) — database.server.id registry и unique identifier management
+
+**Next Lesson:**
+- [Multi-Database Configuration](/course/module-7/05-multi-database-configuration) — Hands-on implementation паттернов из этого урока
+
+---
+
+## Ключевые выводы
+
+1. **Multi-database CDC реален:** Enterprise часто требует объединения PostgreSQL и MySQL в единый analytics stream
+2. **Два паттерна:** Separate Topics (recommended for learning) vs Unified Topics (advanced, requires identical schemas)
+3. **Separate Topics = easier:** Independent schema evolution, clear traceability, simpler troubleshooting
+4. **Unified Topics = complex:** Requires ByLogicalTableRouter SMT, careful key design, coordinated schema changes
+5. **Schema storage различается:** PostgreSQL embeds schema in WAL, MySQL uses schema.history.internal.kafka.topic
+6. **Position tracking различается:** PostgreSQL = server-side slots, MySQL = client-side GTID offsets
+7. **Recovery procedures различаются:** PostgreSQL slot migration vs MySQL GTID auto-relocation
+8. **NEVER share schema history topics** между MySQL connectors (causes DDL pollution)
+9. **Unique identifiers MANDATORY:** database.server.name, database.server.id, schema.history.topic must be unique
+10. **Monitoring = unified dashboard:** Show PostgreSQL lag (bytes) + MySQL lag (milliseconds) + schema history health
+
+**В следующем уроке:** Hands-on implementation multi-database CDC pipeline с PostgreSQL + MySQL в capstone проекте.
