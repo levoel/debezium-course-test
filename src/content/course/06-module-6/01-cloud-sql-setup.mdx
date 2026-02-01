@@ -1,0 +1,308 @@
+---
+title: "Настройка Cloud SQL PostgreSQL для CDC"
+description: "Конфигурация logical replication, создание replication user и мониторинг слотов"
+order: 1
+difficulty: "intermediate"
+estimatedTime: 35
+topics: ["Cloud SQL", "PostgreSQL", "Logical Decoding", "Replication Slots", "GCP"]
+prerequisites: ["module-2/01-logical-decoding-deep-dive", "module-2/02-replication-slots-lifecycle"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Настройка Cloud SQL PostgreSQL для CDC
+
+В [Module 2](/course/module-2/01-logical-decoding-deep-dive) мы подробно изучили logical decoding в PostgreSQL. Теперь применим эти знания для настройки **Cloud SQL** — управляемого PostgreSQL от Google Cloud Platform.
+
+## Почему Cloud SQL для CDC?
+
+**Cloud SQL PostgreSQL** — это полностью управляемая база данных с поддержкой logical replication. Основные преимущества:
+
+- Автоматические бэкапы и point-in-time recovery
+- Встроенная высокая доступность (HA)
+- Автоматическое масштабирование хранилища
+- Мониторинг и алертинг через Cloud Monitoring
+- Безопасность: шифрование в покое и в транзите
+
+**Ключевое отличие от самостоятельно развернутого PostgreSQL:**
+- Нет прямого доступа к `postgresql.conf`
+- Конфигурация через **database flags** (gcloud CLI или Console)
+- Вместо `wal_level=logical` используется флаг `cloudsql.logical_decoding`
+
+---
+
+## Архитектура CDC на Cloud SQL
+
+<Mermaid chart={`
+graph LR
+    subgraph "Cloud SQL PostgreSQL"
+        A[Транзакции] --> B[Write-Ahead Log]
+        B --> C[Logical Decoding]
+        C --> D[Replication Slot]
+    end
+
+    D --> E[Debezium Server]
+    E --> F[Google Pub/Sub]
+    F --> G[Consumers]
+
+    style C fill:#339af0
+    style D fill:#ff6b6b
+    style E fill:#51cf66
+`} client:visible />
+
+**Поток данных:**
+1. Транзакции записываются в WAL (Write-Ahead Log)
+2. Logical decoding преобразует WAL в структурированные события
+3. Replication slot хранит позицию чтения и управляет удалением WAL
+4. Debezium Server читает события из слота и публикует в Pub/Sub
+
+---
+
+## Шаг 1: Включение Logical Decoding
+
+Cloud SQL не предоставляет доступ к файлу `postgresql.conf`, поэтому используем **database flags**.
+
+### Через gcloud CLI
+
+```bash
+gcloud sql instances patch your-instance-name \
+  --database-flags=cloudsql.logical_decoding=on
+```
+
+**Важно:** После применения флага требуется **перезагрузка инстанса**. Планируйте maintenance window.
+
+### Через Google Cloud Console
+
+1. Перейдите в **Cloud SQL** > **Instances**
+2. Выберите ваш инстанс PostgreSQL
+3. Нажмите **Edit**
+4. Прокрутите до раздела **Flags**
+5. Добавьте флаг: `cloudsql.logical_decoding = on`
+6. Нажмите **Save**
+7. Подтвердите перезагрузку инстанса
+
+### Проверка конфигурации
+
+После перезагрузки подключитесь к базе данных и проверьте:
+
+```sql
+SHOW wal_level;
+```
+
+**Ожидаемый результат:**
+
+```
+ wal_level
+-----------
+ logical
+```
+
+Если результат `replica` или `minimal`, флаг не применился — проверьте статус инстанса и повторите шаги.
+
+---
+
+## Шаг 2: Создание Replication User
+
+Debezium требует пользователя с привилегией `REPLICATION` для создания replication slot и чтения WAL.
+
+### Создание пользователя с REPLICATION
+
+```sql
+CREATE USER debezium_user WITH REPLICATION
+  IN ROLE cloudsqlsuperuser LOGIN PASSWORD 'secure_password_here';
+```
+
+**Объяснение параметров:**
+
+| Параметр | Назначение |
+|----------|-----------|
+| `WITH REPLICATION` | Разрешение создавать replication slots и читать WAL |
+| `IN ROLE cloudsqlsuperuser` | Cloud SQL не дает настоящий `SUPERUSER`, но `cloudsqlsuperuser` предоставляет необходимые права для CDC |
+| `LOGIN` | Возможность подключения к базе данных |
+| `PASSWORD` | Используйте сложный пароль, храните в Secret Manager |
+
+### Предоставление прав на таблицы
+
+Debezium нужен доступ на чтение таблиц для initial snapshot и мониторинга схемы.
+
+```sql
+-- Права на существующие таблицы
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO debezium_user;
+
+-- Права на будущие таблицы (автоматически)
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT ON TABLES TO debezium_user;
+```
+
+**Для нескольких схем:**
+
+```sql
+GRANT SELECT ON ALL TABLES IN SCHEMA public, inventory, orders TO debezium_user;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT ON TABLES TO debezium_user;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA inventory
+  GRANT SELECT ON TABLES TO debezium_user;
+```
+
+---
+
+## Шаг 3: Создание Publication
+
+Publication определяет, какие таблицы и операции (INSERT, UPDATE, DELETE) будут реплицироваться.
+
+### Publication для конкретных таблиц
+
+```sql
+CREATE PUBLICATION debezium_publication
+  FOR TABLE public.orders, public.customers;
+```
+
+### Publication для всех таблиц в схеме
+
+```sql
+CREATE PUBLICATION debezium_publication
+  FOR ALL TABLES;
+```
+
+**Рекомендация:** Используйте явный список таблиц для production, чтобы избежать случайной репликации служебных таблиц.
+
+### Проверка publication
+
+```sql
+-- Список всех publications
+SELECT * FROM pg_publication;
+
+-- Таблицы в конкретной publication
+SELECT * FROM pg_publication_tables WHERE pubname = 'debezium_publication';
+```
+
+**Ожидаемый результат:**
+
+```
+     pubname          | schemaname | tablename
+---------------------+------------+-----------
+ debezium_publication | public     | orders
+ debezium_publication | public     | customers
+```
+
+---
+
+## Шаг 4: Мониторинг Replication Slots
+
+**Критически важно:** Неактивные или отстающие replication slots приводят к **WAL bloat** — накоплению WAL файлов, которые не могут быть удалены.
+
+### Запрос для мониторинга здоровья слота
+
+```sql
+SELECT
+  slot_name,
+  active,
+  restart_lsn,
+  confirmed_flush_lsn,
+  pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) AS lag_bytes,
+  pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) AS lag
+FROM pg_replication_slots
+WHERE slot_name = 'debezium_slot';
+```
+
+**Интерпретация результатов:**
+
+| Колонка | Значение | Объяснение |
+|---------|----------|-----------|
+| `slot_name` | `debezium_slot` | Имя слота, созданного Debezium |
+| `active` | `true` / `false` | Активен ли слот (есть ли подключенный consumer) |
+| `restart_lsn` | `0/16B2D48` | LSN позиция, с которой будет читать при перезапуске |
+| `confirmed_flush_lsn` | `0/16B2D80` | LSN последнего подтвержденного события |
+| `lag_bytes` | `524288` | Количество байт WAL между текущей позицией и confirmed |
+| `lag` | `512 kB` | Человекочитаемый размер отставания |
+
+### Критические сигналы проблем
+
+**Проблема 1: Отставание растет**
+
+```sql
+-- Если lag_bytes постоянно увеличивается
+SELECT pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) AS lag
+FROM pg_replication_slots
+WHERE slot_name = 'debezium_slot';
+```
+
+**Действия:**
+- Проверьте, работает ли Debezium Server
+- Увеличьте ресурсы Cloud SQL instance (CPU, memory)
+- Проверьте пропускную способность сети до Pub/Sub
+
+**Проблема 2: Слот неактивен**
+
+```sql
+SELECT slot_name, active
+FROM pg_replication_slots
+WHERE slot_name = 'debezium_slot' AND active = false;
+```
+
+**Действия:**
+- Если слот неактивен > 1 часа, выясните причину остановки Debezium
+- Рассмотрите удаление слота, если больше не используется:
+  ```sql
+  SELECT pg_drop_replication_slot('debezium_slot');
+  ```
+
+### Предотвращение WAL bloat
+
+PostgreSQL 13+ поддерживает флаг `max_slot_wal_keep_size`, который автоматически удаляет неактивные слоты при достижении лимита.
+
+```bash
+gcloud sql instances patch your-instance-name \
+  --database-flags=cloudsql.logical_decoding=on,max_slot_wal_keep_size=102400
+```
+
+**Значение:** `102400` = 100 ГБ (в мегабайтах)
+
+**Предупреждение:** Если слот удален из-за превышения лимита, Debezium потеряет позицию и потребуется новый snapshot.
+
+---
+
+## Cloud SQL vs Self-Managed PostgreSQL
+
+| Аспект | Self-Managed | Cloud SQL |
+|--------|--------------|-----------|
+| **Конфигурация wal_level** | Редактирование `postgresql.conf` | Database flag `cloudsql.logical_decoding=on` |
+| **Перезагрузка после изменений** | Ручная перезагрузка `pg_ctl restart` | Автоматическая через Console/gcloud |
+| **Superuser права** | `CREATE USER ... SUPERUSER` | `IN ROLE cloudsqlsuperuser` (ограниченный superuser) |
+| **pg_hba.conf** | Прямое редактирование | Управление через Cloud SQL Authorized Networks |
+| **Бэкапы с replication state** | Ручная настройка pg_basebackup | Автоматические бэкапы включают replication slots |
+| **Мониторинг WAL** | Настройка Prometheus/Grafana | Интеграция с Cloud Monitoring |
+
+**Основное преимущество Cloud SQL:** Автоматическое управление инфраструктурой, но с ограничениями в гибкости конфигурации.
+
+---
+
+## Чеклист перед подключением Debezium Server
+
+Перед переходом к следующему уроку убедитесь:
+
+- [ ] Флаг `cloudsql.logical_decoding=on` включен и инстанс перезагружен
+- [ ] `SHOW wal_level;` возвращает `logical`
+- [ ] Создан пользователь `debezium_user` с `REPLICATION` привилегией
+- [ ] Предоставлены права `SELECT` на целевые таблицы
+- [ ] Создана publication для нужных таблиц
+- [ ] Проверена publication через `pg_publication_tables`
+- [ ] Настроен мониторинг `pg_replication_slots` (вручную или через Cloud Monitoring)
+- [ ] (Опционально) Установлен `max_slot_wal_keep_size` для предотвращения WAL bloat
+
+---
+
+## Что мы узнали
+
+1. **Cloud SQL специфика:** Конфигурация через database flags вместо прямого редактирования `postgresql.conf`
+2. **cloudsql.logical_decoding flag:** Аналог `wal_level=logical` для Cloud SQL
+3. **cloudsqlsuperuser role:** Ограниченный superuser для управляемых баз данных
+4. **Replication user:** Требует `REPLICATION` привилегию и `SELECT` на таблицы
+5. **Publication:** Определяет таблицы для репликации, проверяется через `pg_publication_tables`
+6. **Мониторинг слотов:** Критически важен для предотвращения WAL bloat и проблем с хранилищем
+
+## Что дальше?
+
+В следующем уроке мы развернем **Debezium Server** с **Pub/Sub sink** — Kafka-less архитектуру CDC, которая публикует события напрямую в Google Cloud Pub/Sub, минуя Kafka Connect.
