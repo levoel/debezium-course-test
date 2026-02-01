@@ -188,10 +188,14 @@ MySQL connector требует **дополнительные параметры
 
 ### MySQL-Specific Parameters Explained
 
-<Callout type="warning" title="CRITICAL: Unique Schema History Topic">
-**`schema.history.internal.kafka.topic` MUST be unique per MySQL connector.** Sharing schema history topic между connectors приводит к DDL pollution — connector получает DDL changes от другого connector и fails с schema mismatch errors.
+<Callout type="warning">
+
+**CRITICAL: Unique Schema History Topic**
+
+`schema.history.internal.kafka.topic` MUST be unique per MySQL connector. Sharing schema history topic между connectors приводит к DDL pollution — connector получает DDL changes от другого connector и fails с schema mismatch errors.
 
 **Rule:** One connector = one schema history topic.
+
 </Callout>
 
 <Callout type="note">
@@ -264,8 +268,11 @@ kafka-topics --bootstrap-server kafka:9092 --list | grep outbox.event
 # schema-changes.mysql-outbox
 ```
 
-<Callout type="tip" title="Connector Health Check">
-**Регулярно проверяйте connector status:**
+<Callout type="tip">
+
+**Connector Health Check**
+
+Регулярно проверяйте connector status:
 ```bash
 # Watch connector status
 watch -n 5 'curl -s http://localhost:8083/connectors/postgres-outbox-connector/status | jq .connector.state'
@@ -546,8 +553,11 @@ kafka_connect_connector_status{
 | **Connector Status** | Kafka Connect API | `kafka_connect_connector_status` | < 1 (failed) |
 | **PyFlink Checkpoint Duration** | Flink metrics | `flink_jobmanager_job_lastCheckpointDuration` | > 60000 ms (1 min) |
 
-<Callout type="warning" title="Different Lag Metrics">
-**PostgreSQL and MySQL используют разные lag metrics:**
+<Callout type="warning">
+
+**Different Lag Metrics**
+
+PostgreSQL and MySQL используют разные lag metrics:
 - **PostgreSQL:** WAL lag в **байтах** (volume of unprocessed WAL data)
 - **MySQL:** Time lag в **миллисекундах** (time difference between binlog event timestamp and processing time)
 
@@ -667,8 +677,11 @@ SHOW BINARY LOGS;
 SHOW MASTER STATUS;
 ```
 
-<Callout type="tip" title="Isolation Testing">
-**При troubleshooting:**
+<Callout type="tip">
+
+**Isolation Testing**
+
+При troubleshooting:
 1. Остановите один connector для изоляции issue source
 2. Проверьте каждый connector независимо
 3. Verify consumer обрабатывает each topic отдельно перед unified processing

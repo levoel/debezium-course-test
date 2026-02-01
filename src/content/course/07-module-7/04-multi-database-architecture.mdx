@@ -205,9 +205,11 @@ flowchart TB
 - ⚠️ **Требует careful key design** — добавить source_database prefix к key для уникальности
 
 <Callout type="warning">
+
 **Unified Topics = Higher Complexity**
 
 Если события из PostgreSQL и MySQL имеют **разную структуру** (разные columns, разные типы), unified topics приведут к schema conflicts. Используйте этот паттерн только для **identical schemas**.
+
 </Callout>
 
 ---
@@ -269,9 +271,11 @@ MySQL Connector:
 ```
 
 <Callout type="danger">
+
 **NEVER share schema.history.internal.kafka.topic between MySQL connectors**
 
 Если два MySQL connector используют один schema history topic, они **pollute DDL history друг друга**, что приводит к corruption. Каждый MySQL connector ОБЯЗАН иметь уникальный schema history topic.
+
 </Callout>
 
 ---
@@ -317,6 +321,7 @@ MySQL schema history corruption: Hours (resnapshot) or minutes (restore backup)
 ```
 
 <Callout type="tip">
+
 **Defense in Depth for MySQL**
 
 Because MySQL schema history topic corruption is **catastrophic** (requires full resnapshot), implement:
@@ -324,6 +329,7 @@ Because MySQL schema history topic corruption is **catastrophic** (requires full
 1. **Infinite retention:** `retention.ms=-1` for schema history topic
 2. **Daily backups:** Export schema history topic to S3
 3. **Alerts:** Monitor schema history topic size (should grow monotonically)
+
 </Callout>
 
 ---
@@ -392,6 +398,7 @@ MySQL Connector:
 ```
 
 <Callout type="danger">
+
 **Unique database.server.name is MANDATORY**
 
 В multi-database deployment, используйте **prefix convention**:
@@ -399,6 +406,7 @@ MySQL Connector:
 - MySQL: `mysql_<environment>` (e.g., `mysql_prod`, `mysql_staging`)
 
 This prevents topic naming conflicts.
+
 </Callout>
 
 ---
