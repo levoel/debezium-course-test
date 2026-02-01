@@ -351,10 +351,10 @@ flowchart LR
 
 **Типичные overhead:**
 
-- **Filter**: <1ms (простое условие Groovy)
+- **Filter**: менее 1ms (простое условие Groovy)
 - **ExtractNewRecordState**: 1-2ms (JSON processing)
-- **MaskField**: <1ms (field replacement)
-- **ByLogicalTableRouter**: <1ms (regex match)
+- **MaskField**: менее 1ms (field replacement)
+- **ByLogicalTableRouter**: менее 1ms (regex match)
 
 **Проблема:** Если у вас 10 SMT по 2ms каждый → 20ms overhead на сообщение.
 
@@ -416,7 +416,7 @@ SMT — это не универсальный инструмент. Есть з
 ├─ Работает с одним сообщением? ────────────── НЕТ ──→ Kafka Streams
 │  ├─ ДА ──→ Требует состояния? ─────────────── ДА ──→ Kafka Streams
 │            └─ НЕТ ──→ Требует external call? ─ ДА ──→ Kafka Streams
-│                      └─ НЕТ ──→ Overhead <10ms? ── ДА ──→ SMT подходит
+│                      └─ НЕТ ──→ Overhead менее 10ms? ── ДА ──→ SMT подходит
 │                                                    └─ НЕТ ──→ Kafka Streams
 ```
 
@@ -453,7 +453,7 @@ SMT — это не универсальный инструмент. Есть з
 2. **Дебейзиум 2.5.4** включает 6 production-ready SMT: Filter, Unwrap, Router (2 типа), Outbox, PartitionRouting
 3. **SMT chaining** позволяет комбинировать трансформации; порядок имеет значение
 4. **Стандартный порядок:** Filter → Unwrap → Route → Mask
-5. SMT подходит для **простых stateless операций** с overhead <10ms
+5. SMT подходит для **простых stateless операций** с overhead менее 10ms
 6. SMT **НЕ подходит** для агрегаций, joins, external calls — используйте Kafka Streams
 7. **ExtractNewRecordState** — самый частый SMT, упрощает Debezium envelope
 8. **MaskField** — для PII compliance, работает после unwrap

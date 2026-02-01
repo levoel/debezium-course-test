@@ -682,7 +682,7 @@ Filter SMT выполняет Groovy expression для **каждого сооб
 
 | Groovy expression | Latency | Пример |
 |-------------------|---------|--------|
-| Простое сравнение | <1ms | `value.op == 'c'` |
+| Простое сравнение | менее 1ms | `value.op == 'c'` |
 | Доступ к полю | 1-2ms | `value.after.status == 'ACTIVE'` |
 | Множественные условия | 2-5ms | `value.op == 'u' && value.after.amount > 1000 && value.after.country == 'US'` |
 | Регулярные выражения | 5-10ms | `value.after.email =~ /.*@example\\.com/` |

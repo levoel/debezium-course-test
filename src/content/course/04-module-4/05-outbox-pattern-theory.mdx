@@ -258,7 +258,7 @@ Outbox Pattern — не magic. Важно понимать, что он дает
 | **Exactly-once delivery** | События могут дублироваться при Debezium retry. Consumers должны быть idempotent |
 | **Distributed ACID** | Outbox НЕ дает ACID-гарантии между микросервисами (eventual consistency, не immediate) |
 | **Cross-service rollback** | Если downstream-сервис failнулся, upstream-транзакция НЕ откатывается |
-| **Immediate consistency** | Есть lag между COMMIT и появлением события в Kafka (обычно <1 секунды, но возможно больше при backpressure) |
+| **Immediate consistency** | Есть lag между COMMIT и появлением события в Kafka (обычно менее 1 секунды, но возможно больше при backpressure) |
 
 > **Critical callout:** Outbox Pattern — это НЕ distributed transactions. Это **reliable messaging** с eventual consistency. Если вам нужен distributed ACID — используйте Saga pattern или 2PC (но готовьтесь к сложности).
 

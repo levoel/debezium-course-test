@@ -46,7 +46,7 @@ flowchart TB
 
 | Критерий | PyFlink | PySpark |
 |---------|---------|---------|
-| **Latency требования** | <100ms | 1-10 seconds |
+| **Latency требования** | менее 100ms | 1-10 seconds |
 | **Exactly-once в Kafka** | ✅ Native support | ❌ At-least-once only |
 | **Интеграция с ML** | Limited | ✅ MLlib, feature stores |
 | **Batch + Stream unified** | Separate APIs | ✅ Same DataFrame API |
@@ -507,7 +507,7 @@ Batch: 1
 ## Ключевые выводы
 
 1. **PySpark Structured Streaming** использует DataFrame API для unified batch/streaming processing
-2. **Micro-batching** обеспечивает latency ~1-10 seconds (vs PyFlink <100ms)
+2. **Micro-batching** обеспечивает latency ~1-10 seconds (vs PyFlink менее 100ms)
 3. **PySpark подходит** для data lake integration, ML pipelines, unified workflows
 4. **PyFlink подходит** для low-latency, exactly-once, complex event processing
 5. `readStream.format("kafka")` читает из Kafka topics с автоматическим offset management

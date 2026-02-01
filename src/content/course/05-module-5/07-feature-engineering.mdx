@@ -556,8 +556,8 @@ Real-time features **не всегда нужны**. Иногда batch features
 
 | Use Case | Freshness Required | Latency Target | Approach |
 |----------|-------------------|----------------|----------|
-| Fraud detection | Real-time (seconds) | <1s | CDC → Streaming features |
-| Product recommendations | Near real-time (minutes) | <5min | CDC → Micro-batch features |
+| Fraud detection | Real-time (seconds) | менее 1s | CDC → Streaming features |
+| Product recommendations | Near real-time (minutes) | менее 5min | CDC → Micro-batch features |
 | Customer segmentation | Daily refresh | 1 day | Batch features |
 | Churn prediction | Weekly refresh | 7 days | Batch features |
 

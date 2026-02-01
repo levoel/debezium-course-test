@@ -59,7 +59,7 @@ flowchart TB
 - **Pandas:** Каждый час загружаем CDC события за последний час, считаем агрегаты, пишем в DWH
 - **PyFlink:** Считаем 5-минутные tumbling window агрегации в реальном времени, пишем в Kafka topic для dashboard'а
 
-> **Production истина:** Pandas для batch ETL, PyFlink для real-time processing. Если нужна latency <1 минута — PyFlink. Если достаточно hourly batches — Pandas проще.
+> **Production истина:** Pandas для batch ETL, PyFlink для real-time processing. Если нужна latency менее 1 минуты — PyFlink. Если достаточно hourly batches — Pandas проще.
 
 ## Table API vs DataStream API
 
@@ -198,7 +198,7 @@ table_env.execute_sql("""
 
 **Схема (payload ROW):**
 
-- **ROW<...>** — композитный тип для nested JSON structures
+- **`ROW<...>`** — композитный тип для nested JSON structures
 - **before/after:** Вложенные ROW с полями таблицы
 - **op:** Тип операции (STRING: 'c', 'u', 'd', 'r')
 - **ts_ms:** Timestamp Debezium события (BIGINT: milliseconds)
@@ -466,7 +466,7 @@ UPDATE orders SET status = 'shipped' WHERE id = 1;
 2. **Table API** рекомендован для CDC, т.к. поддерживает SQL DDL и структурированные данные
 3. **TableEnvironment** создаётся в **streaming mode** для CDC обработки
 4. **Kafka connector** конфигурируется через SQL DDL с `WITH ('connector' = 'kafka', ...)`
-5. **Debezium envelope** маппится на **ROW<before, after, op, ts_ms, source>** схему
+5. **Debezium envelope** маппится на `ROW<before, after, op, ts_ms, source>` схему
 6. **VIEW orders_current** извлекает `after` state для inserts/updates
 7. **DELETE события** требуют использования `before` field вместо `after`
 8. **json.ignore-parse-errors=true** обеспечивает resilience при malformed messages
