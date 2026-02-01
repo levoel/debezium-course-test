@@ -1,0 +1,1193 @@
+---
+title: "Aurora MySQL: Выбор Snapshot Mode для CDC"
+description: "Почему Aurora MySQL запрещает глобальные блокировки, как выбрать правильную стратегию snapshot для таблиц разных размеров, и когда использовать backup-based подход"
+order: 9
+difficulty: "intermediate"
+estimatedTime: 25
+topics: ["aurora-mysql", "debezium", "snapshot", "cdc", "locks"]
+prerequisites: ["module-8/08-enhanced-binlog-architecture"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+import Callout from '../../../components/Callout.tsx';
+
+# Aurora MySQL: Выбор Snapshot Mode для CDC
+
+## Почему Aurora требует особого подхода
+
+В предыдущем уроке мы изучили Enhanced Binlog — уникальную архитектуру Aurora MySQL для оптимизации binlog production. Теперь мы столкнемся с еще одним **критическим отличием Aurora**: **запрет на глобальные блокировки** при создании snapshot для Debezium CDC.
+
+### Что это означает на практике?
+
+В Community MySQL Debezium использует `FLUSH TABLES WITH READ LOCK` для создания **консистентного snapshot всей базы данных**. Aurora MySQL, как managed service от AWS, **не разрешает** этот SQL statement из соображений безопасности многопользовательской среды.
+
+**Результат:**
+- Debezium автоматически переключается на **table-level locks** (блокировки отдельных таблиц)
+- Стратегия snapshot зависит от **размера таблиц** и **толерантности к блокировкам**
+- Для очень больших таблиц (500GB+) требуется **backup-based подход**
+
+Этот урок научит вас:
+- Понимать разницу между Community MySQL и Aurora в контексте snapshot
+- Выбирать правильный `snapshot.locking.mode` в зависимости от размера таблиц
+- Реализовывать backup-based initial load для zero-lock сценариев
+- Мониторить прогресс snapshot и troubleshoot проблемы
+
+## Community MySQL vs Aurora: Разница в Lock Scope
+
+### Community MySQL: Глобальная блокировка (FLUSH TABLES)
+
+<Mermaid chart={`
+graph LR
+    D[Debezium Connector]
+    D -->|1. FLUSH TABLES WITH READ LOCK| DB[(MySQL Database)]
+    DB --> T1[Table 1]
+    DB --> T2[Table 2]
+    DB --> T3[Table 3]
+
+    style DB fill:#90EE90
+    style T1 fill:#FFB6C1
+    style T2 fill:#FFB6C1
+    style T3 fill:#FFB6C1
+
+    classDef locked fill:#FFB6C1,stroke:#FF0000,stroke-width:3px
+`} />
+
+**Community MySQL workflow:**
+1. `FLUSH TABLES WITH READ LOCK` — **вся база данных** блокирована для записи
+2. Чтение схем всех таблиц под глобальной блокировкой
+3. Получение binlog position (consistent snapshot point)
+4. `UNLOCK TABLES` — снятие глобальной блокировки
+5. Чтение данных через REPEATABLE READ transaction (без блокировок)
+
+**Преимущества:**
+- Абсолютная консистентность: все таблицы snapshot в одной точке времени
+- Простота: одна блокировка для всех таблиц
+
+**Недостатки:**
+- Блокирует **всю базу данных** на время чтения схем
+- Может быть неприемлемо для production систем
+
+### Aurora MySQL: Table-level блокировки (LOCK TABLES)
+
+<Mermaid chart={`
+graph LR
+    D[Debezium Connector]
+    D -->|FLUSH TABLES blocked ❌| DB[(Aurora MySQL)]
+    D -->|2. Fallback: LOCK TABLES T1| T1[Table 1]
+    D -->|3. LOCK TABLES T2| T2[Table 2]
+    D -->|4. LOCK TABLES T3| T3[Table 3]
+    DB --> T1
+    DB --> T2
+    DB --> T3
+
+    style DB fill:#FFA500
+    style T1 fill:#ADD8E6
+    style T2 fill:#ADD8E6
+    style T3 fill:#ADD8E6
+
+    classDef partial fill:#ADD8E6,stroke:#0000FF,stroke-width:2px
+`} />
+
+**Aurora MySQL workflow:**
+1. Debezium пытается `FLUSH TABLES WITH READ LOCK` → **Access Denied error**
+2. Debezium автоматически переключается на fallback: **table-level locks**
+3. Для каждой таблицы в `table.include.list`:
+   - `LOCK TABLES <table> READ` — блокируем только эту таблицу
+   - Читаем schema (columns, indexes, constraints)
+   - `UNLOCK TABLES` — снимаем блокировку
+4. Начинаем REPEATABLE READ transaction
+5. Читаем binlog position
+6. Читаем данные таблиц (без блокировок)
+
+**Преимущества:**
+- Меньше impact на production: блокировки по одной таблице
+- Не требует привилегий SUPER (Aurora не дает)
+
+**Недостатки:**
+- Для больших таблиц блокировка может длиться **минуты**
+- Snapshot разных таблиц в **разные моменты времени** (но REPEATABLE READ гарантирует консистентность binlog position)
+
+<Callout type="warning" title="Aurora автоматически определяет fallback">
+
+Вам **не нужно настраивать** fallback на table-level locks вручную. Debezium connector автоматически:
+1. Пробует `FLUSH TABLES WITH READ LOCK`
+2. Получает `ERROR 1227 (42000): Access denied` от Aurora
+3. Переключается на `LOCK TABLES` per-table strategy
+
+В логах connector вы увидите:
+```
+INFO: Flush tables with read lock failed, falling back to table-level locks
+```
+
+Это **нормальное поведение** для Aurora, не ошибка.
+
+</Callout>
+
+## Как Debezium адаптируется к Aurora: Snapshot Workflow
+
+<Mermaid chart={`
+sequenceDiagram
+    participant DC as Debezium Connector
+    participant AM as Aurora MySQL (writer)
+    participant T1 as Table 1 (inventory.customers)
+    participant T2 as Table 2 (inventory.orders)
+
+    Note over DC,AM: Phase 1: Detect Aurora (no global lock)
+    DC->>AM: FLUSH TABLES WITH READ LOCK
+    AM-->>DC: ❌ ERROR 1227: Access denied
+    DC->>DC: Fallback: use table-level locks
+
+    Note over DC,T1: Phase 2: Lock & read schema (per-table)
+    DC->>T1: LOCK TABLES inventory.customers READ
+    DC->>T1: Read schema (columns, indexes, PK)
+    DC->>T1: UNLOCK TABLES
+
+    DC->>T2: LOCK TABLES inventory.orders READ
+    DC->>T2: Read schema
+    DC->>T2: UNLOCK TABLES
+
+    Note over DC,AM: Phase 3: Start REPEATABLE READ transaction
+    DC->>AM: START TRANSACTION WITH CONSISTENT SNAPSHOT
+    DC->>AM: SHOW MASTER STATUS
+    AM-->>DC: File=mysql-bin.000003, Position=154
+
+    Note over DC,T1: Phase 4: Read data (no locks held)
+    DC->>T1: SELECT * FROM inventory.customers
+    DC->>T2: SELECT * FROM inventory.orders
+
+    Note over DC,AM: Phase 5: Commit & resume streaming
+    DC->>AM: COMMIT
+    DC->>DC: Save offset: mysql-bin.000003:154
+    DC->>AM: Resume streaming from saved position
+`} />
+
+**Ключевые моменты:**
+
+1. **Lock duration = время чтения schema**
+   - Для таблицы с 10 columns, 2 indexes → **секунды**
+   - Для таблицы с 200 columns, 50 indexes → **минуты**
+
+2. **Data reading не требует блокировок**
+   - REPEATABLE READ transaction гарантирует консистентность
+   - Binlog position зафиксирована в начале transaction
+   - Даже если данные изменяются, snapshot видит состояние на момент START TRANSACTION
+
+3. **Snapshot разных таблиц в разные моменты**
+   - Table 1 schema read: 10:00:00
+   - Table 2 schema read: 10:00:05
+   - Но binlog position одна: 10:00:10 (START TRANSACTION)
+   - После snapshot Debezium догонит все изменения с position 10:00:10
+
+## snapshot.locking.mode: Три стратегии блокировок
+
+Debezium MySQL connector предоставляет три режима управления блокировками:
+
+### 1. minimal (default, рекомендуется для большинства случаев)
+
+**Как работает:**
+- Table locks **только во время чтения schema**
+- Data reading через REPEATABLE READ (без блокировок)
+- Locks держатся **секунды или минуты** в зависимости от сложности schema
+
+**Когда использовать:**
+- Таблицы малого и среднего размера (< 100 GB)
+- Production системы, которые могут выдержать кратковременные блокировки
+- Когда важна **корректность snapshot** (гарантия схем)
+
+**Connector configuration:**
+```json
+{
+  "snapshot.mode": "initial",
+  "snapshot.locking.mode": "minimal"
+}
+```
+
+**Pros:**
+- ✅ Безопасно: schema чтение под блокировкой
+- ✅ Быстро: locks держатся минимальное время
+- ✅ Гарантия консистентности schema
+
+**Cons:**
+- ❌ Кратковременные блокировки могут повлиять на concurrent writes
+- ❌ Для очень сложных schema (hundreds of columns) lock duration увеличивается
+
+### 2. none (zero locks, требует schema freeze)
+
+**Как работает:**
+- **Никаких table locks**
+- Schema чтение и data reading через REPEATABLE READ
+- Полагается на MVCC для консистентности
+
+**Когда использовать:**
+- Очень большие таблицы (> 100 GB) с **zero lock tolerance**
+- Когда можете **гарантировать отсутствие schema changes** во время snapshot
+- Production системы с жесткими SLA на latency
+
+**Connector configuration:**
+```json
+{
+  "snapshot.mode": "initial",
+  "snapshot.locking.mode": "none"
+}
+```
+
+<Callout type="danger" title="КРИТИЧЕСКИЙ РИСК: Schema change во время snapshot">
+
+**Что произойдет, если ALTER TABLE выполнится во время snapshot?**
+
+Пример сценария:
+1. Debezium начинает snapshot таблицы `inventory.orders` (10:00:00)
+2. Кто-то выполняет `ALTER TABLE inventory.orders ADD COLUMN priority INT` (10:00:30)
+3. Debezium продолжает читать данные (10:00:31)
+
+**Результат:**
+- Debezium прочитал schema без колонки `priority` (step 1, no locks)
+- Binlog содержит события с колонкой `priority` (после ALTER TABLE)
+- **Data inconsistency:** snapshot и binlog stream не совпадают по schema
+
+**Как избежать:**
+- Используйте deployment freeze window для snapshot
+- Координируйте с командой разработки: no DDL during snapshot
+- Или используйте `minimal` mode (принимайте блокировки)
+
+**Verification:**
+```sql
+-- Monitoring running snapshot
+SHOW PROCESSLIST;
+-- Если видите DDL statement во время snapshot → STOP DDL immediately
+```
+
+</Callout>
+
+**Pros:**
+- ✅ Нет блокировок вообще
+- ✅ Подходит для больших таблиц
+- ✅ Minimal impact на production writes
+
+**Cons:**
+- ❌ **Опасно:** schema change во время snapshot = data corruption
+- ❌ Требует coordination с командой разработки
+- ❌ Не обнаруживает schema changes автоматически
+
+### 3. extended (НЕ работает на Aurora)
+
+**Как работает (Community MySQL):**
+- `FLUSH TABLES WITH READ LOCK` на время snapshot + data reading
+- Блокирует всю базу данных до завершения snapshot
+
+**Почему НЕ работает на Aurora:**
+- Требует `FLUSH TABLES WITH READ LOCK` → Aurora не разрешает
+- Connector упадет с ошибкой
+
+**Connector configuration (НЕ ИСПОЛЬЗУЙТЕ на Aurora):**
+```json
+{
+  "snapshot.mode": "initial",
+  "snapshot.locking.mode": "extended"  // ❌ Fails on Aurora
+}
+```
+
+<Callout type="warning" title="extended mode не совместим с Aurora">
+
+Если вы попробуете использовать `snapshot.locking.mode=extended` на Aurora:
+
+```
+ERROR: io.debezium.DebeziumException: Could not flush and lock tables:
+Access denied; you need (at least one of) the SUPER, RELOAD privilege(s)
+for this operation
+```
+
+**Решение:** Используйте `minimal` или `none` mode.
+
+</Callout>
+
+## Decision Matrix: Выбор snapshot.locking.mode для Aurora
+
+<table style={{fontSize: '0.9em'}}>
+  <thead>
+    <tr>
+      <th>Размер таблицы</th>
+      <th>Lock Tolerance</th>
+      <th>Schema Freeze Possible?</th>
+      <th>Рекомендуемый Mode</th>
+      <th>Примечания</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&lt; 10 GB</td>
+      <td>Normal</td>
+      <td>Не важно</td>
+      <td><code>minimal</code></td>
+      <td>✅ Безопасный default, locks снимаются быстро</td>
+    </tr>
+    <tr>
+      <td>10-100 GB</td>
+      <td>Normal</td>
+      <td>Не важно</td>
+      <td><code>minimal</code></td>
+      <td>⚠️ Мониторить lock duration (см. раздел 8)</td>
+    </tr>
+    <tr>
+      <td>10-100 GB</td>
+      <td>Zero tolerance</td>
+      <td>✅ Да</td>
+      <td><code>none</code></td>
+      <td>⚠️ Обязательно: freeze schema changes</td>
+    </tr>
+    <tr>
+      <td>&gt; 100 GB</td>
+      <td>Zero tolerance</td>
+      <td>✅ Да</td>
+      <td><code>none</code></td>
+      <td>⚠️ Обязательно: freeze schema changes</td>
+    </tr>
+    <tr>
+      <td>&gt; 100 GB</td>
+      <td>Zero tolerance</td>
+      <td>❌ Нет</td>
+      <td><strong>Backup-based</strong></td>
+      <td>🚀 См. раздел 7 (Aurora snapshot + snapshot.mode=never)</td>
+    </tr>
+    <tr>
+      <td>Any</td>
+      <td>Cannot freeze schema</td>
+      <td>❌ Нет</td>
+      <td><code>minimal</code></td>
+      <td>✅ Принимаем кратковременные блокировки</td>
+    </tr>
+    <tr>
+      <td>Very large (500GB+)</td>
+      <td>Any</td>
+      <td>Any</td>
+      <td><strong>Backup-based</strong></td>
+      <td>🚀 Единственный практичный подход</td>
+    </tr>
+  </tbody>
+</table>
+
+**Ключевые правила выбора:**
+
+1. **Default выбор:** `minimal` — работает для 90% сценариев
+2. **Zero lock tolerance + schema freeze:** `none` — advanced use case
+3. **Very large tables (500GB+):** Backup-based approach (см. раздел 7)
+4. **Никогда не используйте:** `extended` на Aurora (не работает)
+
+## Connector Configuration: Примеры для разных сценариев
+
+### Сценарий 1: Малые и средние таблицы (< 100 GB)
+
+**Рекомендация:** `snapshot.locking.mode=minimal`
+
+```json
+{
+  "name": "aurora-mysql-small-tables",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "tasks.max": "1",
+
+    // Aurora writer endpoint (обязательно)
+    "database.hostname": "my-aurora-cluster.cluster-abc123.us-east-1.rds.amazonaws.com",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "${file:/secrets/mysql-password.txt:password}",
+    "database.server.id": "184054",
+
+    // Database/table filtering
+    "database.include.list": "inventory",
+    "table.include.list": "inventory.customers,inventory.orders,inventory.products",
+
+    // Topic naming
+    "topic.prefix": "aurora-mysql",
+
+    // Snapshot configuration (Aurora-specific)
+    "snapshot.mode": "initial",
+    "snapshot.locking.mode": "minimal",  // ✅ Safe default for Aurora
+
+    // Schema history (infinite retention, per Phase 13 decision)
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+    "schema.history.internal.kafka.topic": "schema-history.aurora-mysql",
+    "schema.history.internal.store.only.captured.tables.ddl": "true",
+
+    // Heartbeat (detect idle periods)
+    "heartbeat.interval.ms": "30000",
+    "heartbeat.topics.prefix": "__debezium-heartbeat",
+
+    // Data type handling
+    "decimal.handling.mode": "precise",
+    "binary.handling.mode": "bytes",
+    "time.precision.mode": "adaptive_time_microseconds",
+
+    // Include schema changes in events
+    "include.schema.changes": "true",
+
+    // Signal table for incremental snapshots
+    "signal.data.collection": "inventory.debezium_signal"
+  }
+}
+```
+
+**Deployment:**
+```bash
+# Deploy connector via Kafka Connect REST API
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d @aurora-mysql-small-tables.json
+
+# Monitor snapshot progress
+curl -s http://localhost:8083/connectors/aurora-mysql-small-tables/status | jq .
+```
+
+**Expected behavior:**
+- Snapshot начинается в течение 5-10 секунд
+- Table locks держатся < 1 минуты на каждую таблицу
+- Data reading без блокировок (может длиться часы для больших таблиц, но не блокирует writes)
+
+### Сценарий 2: Большие таблицы (> 100 GB), zero lock tolerance
+
+**Рекомендация:** `snapshot.locking.mode=none` + schema freeze window
+
+<Callout type="warning" title="Обязательные preconditions для none mode">
+
+**Перед использованием `snapshot.locking.mode=none` убедитесь:**
+
+1. ✅ **Schema freeze coordinated** с командой разработки
+2. ✅ **No DDL statements** планируются в течение snapshot window
+3. ✅ **Monitoring setup** для обнаружения DDL (см. раздел 8)
+4. ✅ **Rollback plan** если snapshot прерывается schema change
+
+**Если НЕ можете гарантировать schema freeze:** Используйте backup-based approach (раздел 7).
+
+</Callout>
+
+```json
+{
+  "name": "aurora-mysql-large-tables-no-locks",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "tasks.max": "1",
+
+    "database.hostname": "my-aurora-cluster.cluster-abc123.us-east-1.rds.amazonaws.com",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "${file:/secrets/mysql-password.txt:password}",
+    "database.server.id": "184055",
+
+    "database.include.list": "analytics",
+    "table.include.list": "analytics.user_events",  // Very large table (200GB)
+
+    "topic.prefix": "aurora-mysql-analytics",
+
+    // NO LOCKS snapshot mode
+    "snapshot.mode": "initial",
+    "snapshot.locking.mode": "none",  // ⚠️ Zero locks, ТРЕБУЕТ schema freeze
+
+    // Longer timeout for large table snapshot
+    "snapshot.query.timeout.ms": "600000",  // 10 minutes per query
+
+    // Larger binlog buffer for high throughput
+    "binlog.buffer.size": "16384",
+
+    // Schema history
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+    "schema.history.internal.kafka.topic": "schema-history.aurora-mysql-analytics",
+
+    // More frequent heartbeats for large tables with infrequent updates
+    "heartbeat.interval.ms": "10000",  // 10 seconds
+
+    // Signal table
+    "signal.data.collection": "analytics.debezium_signal",
+
+    // Data type handling
+    "decimal.handling.mode": "precise",
+    "time.precision.mode": "adaptive_time_microseconds"
+  }
+}
+```
+
+**Deployment workflow:**
+```bash
+# Step 1: Announce schema freeze window
+echo "Schema freeze: $(date) - Estimated 6 hours for snapshot"
+
+# Step 2: Deploy connector
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d @aurora-mysql-large-tables.json
+
+# Step 3: Monitor snapshot progress (см. раздел 8)
+watch -n 10 'curl -s http://localhost:8083/connectors/aurora-mysql-large-tables-no-locks/status | jq .connector.state'
+
+# Step 4: Verify snapshot completion
+# Expected log: "Snapshot completed"
+docker compose logs debezium-connect | grep "Snapshot completed"
+
+# Step 5: Lift schema freeze
+echo "Schema freeze lifted: $(date)"
+```
+
+**Expected behavior:**
+- **No table locks** at any point
+- Snapshot может длиться **часы** для очень больших таблиц
+- Production writes **не блокируются**
+- **Risk:** Если DDL выполняется во время snapshot → data inconsistency
+
+## Backup-Based Initial Load: Стратегия для очень больших таблиц
+
+Для таблиц размером **500GB+** даже `snapshot.locking.mode=none` может быть **непрактичным**:
+- Snapshot через Debezium может длиться **дни**
+- Сетевой bandwidth между Aurora и Kafka Connect ограничен
+- Schema freeze на несколько дней невозможен
+
+**Backup-based approach** решает эти проблемы:
+1. Используем **Aurora DB Cluster Snapshot** для initial data load
+2. Bulk load через JDBC source connector или ETL tool
+3. Debezium запускаем с `snapshot.mode=never` от сохраненного binlog position
+
+### Workflow: Aurora Snapshot → Bulk Load → Debezium Streaming
+
+<Mermaid chart={`
+sequenceDiagram
+    participant Ops as Operations Team
+    participant AM as Aurora MySQL (writer)
+    participant AS as Aurora Snapshot
+    participant RC as Restored Cluster
+    participant BL as Bulk Load Tool (JDBC/ETL)
+    participant K as Kafka
+    participant DC as Debezium Connector
+
+    Note over Ops,AM: Phase 1: Capture binlog position
+    Ops->>AM: SHOW MASTER STATUS
+    AM-->>Ops: File=mysql-bin.000005, Position=154
+    Note over Ops: Save: mysql-bin.000005:154
+
+    Note over Ops,AS: Phase 2: Create Aurora snapshot
+    Ops->>AM: aws rds create-db-cluster-snapshot
+    AM-->>AS: Snapshot created (30-60 min)
+
+    Note over Ops,RC: Phase 3: Restore to temp cluster
+    Ops->>AS: aws rds restore-db-cluster-from-snapshot
+    AS-->>RC: Restored cluster ready
+
+    Note over RC,BL: Phase 4: Bulk load data to Kafka
+    BL->>RC: SELECT * FROM large_table (batches)
+    BL->>K: Publish to Kafka topics
+
+    Note over DC,AM: Phase 5: Debezium streaming from binlog
+    Ops->>DC: Deploy connector (snapshot.mode=never)
+    DC->>AM: Resume from mysql-bin.000005:154
+    DC->>K: Stream CDC events
+
+    Note over Ops,RC: Phase 6: Cleanup
+    Ops->>RC: Delete restored cluster
+`} />
+
+### Step-by-Step Implementation
+
+**Step 1: Capture binlog position ПЕРЕД snapshot**
+
+<Callout type="danger" title="КРИТИЧНО: Binlog position BEFORE snapshot">
+
+Вы **должны** зафиксировать binlog position **ДО** создания Aurora snapshot, потому что:
+
+- Aurora snapshot **не включает binlog files** (особенно с Enhanced Binlog)
+- После restore binlog sequence начинается **с .000001** (fresh start)
+- Debezium нужна **позиция на production writer**, не на restored cluster
+
+**Порядок:**
+1. SHOW MASTER STATUS на **production writer** → save position
+2. Create Aurora snapshot
+3. Restore snapshot → use for bulk load only
+4. Debezium connects to **production writer** from saved position (step 1)
+
+</Callout>
+
+```bash
+# Connect to Aurora writer (production cluster)
+mysql -h my-aurora-cluster.cluster-abc123.us-east-1.rds.amazonaws.com \
+  -u admin -p
+
+# Capture current binlog position
+mysql> SHOW MASTER STATUS;
+# +---------------------------+----------+--------------+------------------+-------------------------------------------+
+# | File                      | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set                         |
+# +---------------------------+----------+--------------+------------------+-------------------------------------------+
+# | mysql-bin-changelog.000005| 154      |              |                  | 3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5  |
+# +---------------------------+----------+--------------+------------------+-------------------------------------------+
+
+# SAVE THIS INFORMATION:
+# binlog_file = mysql-bin-changelog.000005
+# binlog_position = 154
+# gtid_set = 3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5
+```
+
+**Step 2: Создание Aurora DB Cluster Snapshot**
+
+```bash
+# Create snapshot via AWS CLI
+aws rds create-db-cluster-snapshot \
+  --db-cluster-snapshot-identifier aurora-cdc-baseline-2026-02-01 \
+  --db-cluster-identifier my-aurora-cluster \
+  --region us-east-1
+
+# Wait for snapshot completion (30-60 minutes for large clusters)
+aws rds wait db-cluster-snapshot-available \
+  --db-cluster-snapshot-identifier aurora-cdc-baseline-2026-02-01 \
+  --region us-east-1
+
+# Verify snapshot status
+aws rds describe-db-cluster-snapshots \
+  --db-cluster-snapshot-identifier aurora-cdc-baseline-2026-02-01 \
+  --query 'DBClusterSnapshots[0].{Status:Status,PercentProgress:PercentProgress}' \
+  --region us-east-1
+```
+
+**Step 3: Restore snapshot к temporary cluster для bulk load**
+
+```bash
+# Restore snapshot to new Aurora cluster
+aws rds restore-db-cluster-from-snapshot \
+  --db-cluster-identifier aurora-restore-cdc-temp \
+  --snapshot-identifier aurora-cdc-baseline-2026-02-01 \
+  --engine aurora-mysql \
+  --region us-east-1
+
+# Create instance in restored cluster
+aws rds create-db-instance \
+  --db-instance-identifier aurora-restore-cdc-temp-instance-1 \
+  --db-instance-class db.r5.large \
+  --db-cluster-identifier aurora-restore-cdc-temp \
+  --engine aurora-mysql \
+  --region us-east-1
+
+# Wait for instance availability (10-15 minutes)
+aws rds wait db-instance-available \
+  --db-instance-identifier aurora-restore-cdc-temp-instance-1 \
+  --region us-east-1
+
+# Get restored cluster endpoint
+aws rds describe-db-clusters \
+  --db-cluster-identifier aurora-restore-cdc-temp \
+  --query 'DBClusters[0].Endpoint' \
+  --output text
+# Output: aurora-restore-cdc-temp.cluster-xyz789.us-east-1.rds.amazonaws.com
+```
+
+**Step 4: Bulk load data via JDBC Source Connector**
+
+```json
+{
+  "name": "jdbc-source-aurora-bulk-load",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+    "tasks.max": "4",
+
+    // Connect to RESTORED cluster (not production)
+    "connection.url": "jdbc:mysql://aurora-restore-cdc-temp.cluster-xyz789.us-east-1.rds.amazonaws.com:3306/inventory",
+    "connection.user": "admin",
+    "connection.password": "${file:/secrets/mysql-password.txt:password}",
+
+    // Bulk mode: read all data
+    "mode": "bulk",
+    "table.whitelist": "customers,orders,products",
+
+    // Topic naming (match Debezium topic naming)
+    "topic.prefix": "aurora-mysql.inventory.",
+
+    // Batch size for performance
+    "batch.max.rows": "10000",
+
+    // Poll only once (bulk load, not incremental)
+    "poll.interval.ms": "86400000"  // 24 hours (effectively: run once)
+  }
+}
+```
+
+**Deploy JDBC connector:**
+```bash
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d @jdbc-source-aurora-bulk-load.json
+
+# Monitor bulk load progress
+curl -s http://localhost:8083/connectors/jdbc-source-aurora-bulk-load/status | jq .
+```
+
+**Step 5: Deploy Debezium connector с snapshot.mode=never**
+
+```json
+{
+  "name": "aurora-mysql-streaming-only",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "tasks.max": "1",
+
+    // Connect to PRODUCTION writer (NOT restored cluster)
+    "database.hostname": "my-aurora-cluster.cluster-abc123.us-east-1.rds.amazonaws.com",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "${file:/secrets/mysql-password.txt:password}",
+    "database.server.id": "184056",
+
+    "database.include.list": "inventory",
+    "table.include.list": "inventory.customers,inventory.orders,inventory.products",
+
+    "topic.prefix": "aurora-mysql",
+
+    // NO snapshot - data already loaded via JDBC connector
+    "snapshot.mode": "never",
+
+    // Schema history (MUST be populated or connector fails)
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+    "schema.history.internal.kafka.topic": "schema-history.aurora-mysql",
+
+    // Skip unparseable DDL if schema history incomplete
+    "database.history.skip.unparseable.ddl": "true",
+
+    "heartbeat.interval.ms": "30000",
+    "include.schema.changes": "true",
+
+    "decimal.handling.mode": "precise",
+    "time.precision.mode": "adaptive_time_microseconds"
+  }
+}
+```
+
+<Callout type="warning" title="Schema History Topic обязателен при snapshot.mode=never">
+
+**Проблема:** `snapshot.mode=never` означает, что Debezium **не читает schemas** из базы данных. Connector полагается на **schema.history.internal.kafka.topic** для воссоздания schemas.
+
+**Решения:**
+
+**Option A: Populate schema history вручную (complex)**
+```sql
+-- Export DDL statements from production
+mysqldump --no-data --databases inventory > schema.sql
+
+-- Manually publish DDL to schema history topic (advanced)
+```
+
+**Option B: Run connector с snapshot.mode=schema_only ONCE, затем recreate с snapshot.mode=never**
+```bash
+# First deployment: schema-only snapshot
+# Deploy connector с "snapshot.mode": "schema_only"
+# → Schema history topic populated with DDL
+# Delete connector
+
+# Second deployment: streaming only
+# Deploy connector с "snapshot.mode": "never"
+# → Uses schema history from first run
+```
+
+**Option C: Используйте initial snapshot (minimal mode) если bulk load не critical path**
+
+</Callout>
+
+**Deploy streaming connector:**
+```bash
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d @aurora-mysql-streaming-only.json
+
+# Verify connector starts from saved binlog position
+docker compose logs debezium-connect | grep "mysql-bin-changelog.000005"
+# Expected: "Starting streaming from mysql-bin-changelog.000005 at position 154"
+```
+
+**Step 6: Cleanup temporary cluster**
+
+```bash
+# After Debezium connector running successfully
+# Delete restored cluster to save costs
+
+# Delete instance
+aws rds delete-db-instance \
+  --db-instance-identifier aurora-restore-cdc-temp-instance-1 \
+  --skip-final-snapshot \
+  --region us-east-1
+
+# Delete cluster
+aws rds delete-db-cluster \
+  --db-cluster-identifier aurora-restore-cdc-temp \
+  --skip-final-snapshot \
+  --region us-east-1
+
+# Optionally delete snapshot if no longer needed
+aws rds delete-db-cluster-snapshot \
+  --db-cluster-snapshot-identifier aurora-cdc-baseline-2026-02-01 \
+  --region us-east-1
+```
+
+### Backup-Based Approach: Pros & Cons
+
+**Pros:**
+- ✅ **No locks** на production database
+- ✅ **Faster bulk load** через JDBC (parallel tasks, optimized batch reads)
+- ✅ **No schema freeze** requirement
+- ✅ **Minimal impact** на production performance
+
+**Cons:**
+- ❌ **Complex setup** (Aurora snapshot + restore + JDBC connector + Debezium)
+- ❌ **Cost:** Temporary Aurora cluster может стоить сотни долларов в день
+- ❌ **Schema history management** требует manual steps или schema_only snapshot
+- ❌ **Time:** Snapshot creation (30-60 min) + restore (10-15 min) + bulk load (hours)
+
+**Когда использовать:**
+- Таблицы **500GB+**
+- Zero lock tolerance
+- Cannot freeze schema changes
+- Cost обосновывается business requirements (e.g., critical production system)
+
+## Мониторинг Snapshot Progress
+
+### Connector logs: Snapshot phases
+
+Debezium connector логирует snapshot прогресс через несколько фаз:
+
+```bash
+# Real-time logs from Debezium connector
+docker compose logs -f debezium-connect | grep -E "(Snapshot|Locking)"
+
+# Expected log sequence:
+# INFO: Starting snapshot for connector aurora-mysql-connector
+# INFO: Flush tables with read lock failed, falling back to table-level locks
+# INFO: Acquiring table-level lock for inventory.customers
+# INFO: Snapshot step 1 - Determining captured tables
+# INFO: Snapshot step 2 - Locking captured tables [inventory.customers, inventory.orders]
+# INFO: Snapshot step 3 - Reading structure of captured tables
+# INFO: Snapshot step 4 - Releasing table locks
+# INFO: Snapshot step 5 - Snapshotting data
+# INFO: Snapshot - Scanned 10000 rows in 'inventory.customers'
+# INFO: Snapshot - Scanned 50000 rows in 'inventory.orders'
+# INFO: Snapshot completed successfully
+```
+
+**Key indicators:**
+- `Acquiring table-level lock` → Lock начат
+- `Releasing table locks` → Lock снят (data reading начинается)
+- `Scanned X rows` → Progress for large tables
+- `Snapshot completed` → Success
+
+### MySQL SHOW PROCESSLIST: Проверка активных блокировок
+
+```sql
+-- Connect to Aurora writer
+mysql -h my-aurora-cluster.cluster-abc123.us-east-1.rds.amazonaws.com -u admin -p
+
+-- Check active processes and locks
+SHOW PROCESSLIST;
+```
+
+**Output interpretation:**
+
+```
++-----+----------+-----------+------+---------+------+---------------------------+------------------------------+
+| Id  | User     | Host      | db   | Command | Time | State                     | Info                         |
++-----+----------+-----------+------+---------+------+---------------------------+------------------------------+
+| 123 | debezium | 10.0.1.50 | NULL | Query   | 45   | Waiting for table lock    | LOCK TABLES inventory.orders READ |
+| 124 | app_user | 10.0.1.51 | inv  | Query   | 5    | Locked                    | INSERT INTO inventory.orders ... |
++-----+----------+-----------+------+---------+------+---------------------------+------------------------------+
+```
+
+**Indicators:**
+- **`Waiting for table lock`**: Debezium пытается получить lock
+- **`Locked`**: Application query блокируется Debezium snapshot
+- **`Time` column**: Lock duration (секунды)
+
+<Callout type="tip" title="Мониторинг lock duration">
+
+**Warning threshold:** Если `Time > 300` секунд (5 минут) для table lock:
+
+1. Проверьте table schema complexity:
+   ```sql
+   SELECT COUNT(*) AS column_count
+   FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE table_schema = 'inventory' AND table_name = 'orders';
+   ```
+
+2. Рассмотрите переход на `snapshot.locking.mode=none` (с schema freeze)
+
+3. Или используйте backup-based approach
+
+</Callout>
+
+### Kafka Connect REST API: Connector status
+
+```bash
+# Check connector status
+curl -s http://localhost:8083/connectors/aurora-mysql-connector/status | jq .
+
+# Expected during snapshot:
+# {
+#   "name": "aurora-mysql-connector",
+#   "connector": {
+#     "state": "RUNNING",
+#     "worker_id": "connect:8083"
+#   },
+#   "tasks": [
+#     {
+#       "id": 0,
+#       "state": "RUNNING",
+#       "worker_id": "connect:8083"
+#     }
+#   ]
+# }
+```
+
+**Metrics:**
+```bash
+# Connector metrics (snapshot progress)
+curl -s http://localhost:8083/connectors/aurora-mysql-connector/status | \
+  jq '.tasks[0].trace'
+
+# If snapshot stuck, check for errors
+```
+
+### CloudWatch Metrics (Aurora-specific)
+
+Для Aurora MySQL мониторинга lock impact на production:
+
+- **`DatabaseConnections`**: Spike может указывать на connection pileup из-за locks
+- **`WriteLatency`**: Увеличение latency во время snapshot (если `minimal` mode)
+- **`DMLLatency`**: INSERT/UPDATE latency spike
+- **`SelectLatency`**: Queries блокируются table locks
+
+**CloudWatch query example:**
+```bash
+# Via AWS CLI
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/RDS \
+  --metric-name WriteLatency \
+  --dimensions Name=DBClusterIdentifier,Value=my-aurora-cluster \
+  --start-time 2026-02-01T10:00:00Z \
+  --end-time 2026-02-01T11:00:00Z \
+  --period 60 \
+  --statistics Average \
+  --region us-east-1
+```
+
+## Troubleshooting: Типичные проблемы Snapshot
+
+<table style={{fontSize: '0.9em'}}>
+  <thead>
+    <tr>
+      <th>Проблема</th>
+      <th>Симптомы</th>
+      <th>Root Cause</th>
+      <th>Решение</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Access denied for FLUSH TABLES</strong></td>
+      <td>
+        Connector logs:<br/>
+        <code>ERROR 1227: Access denied</code><br/>
+        Но затем:<br/>
+        <code>Falling back to table-level locks</code>
+      </td>
+      <td>Aurora не разрешает global lock (expected)</td>
+      <td>
+        ✅ <strong>Это нормально!</strong><br/>
+        Debezium автоматически fallback на table locks.<br/>
+        No action required.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Lock wait timeout exceeded</strong></td>
+      <td>
+        Connector logs:<br/>
+        <code>Lock wait timeout exceeded; try restarting transaction</code>
+      </td>
+      <td>
+        Table locks не могут быть получены из-за:<br/>
+        - Long-running queries<br/>
+        - DDL в progress
+      </td>
+      <td>
+        1. Увеличить timeout:<br/>
+        <code>"snapshot.query.timeout.ms": "600000"</code><br/>
+        2. Или перейти на <code>snapshot.locking.mode=none</code><br/>
+        3. Или scheduler snapshot window (off-peak hours)
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Schema changed during snapshot</strong></td>
+      <td>
+        Connector fails с:<br/>
+        <code>Table structure changed</code><br/>
+        Или consumer видит schema mismatch
+      </td>
+      <td>
+        <code>snapshot.locking.mode=none</code> используется,<br/>
+        но DDL выполнился во время snapshot
+      </td>
+      <td>
+        1. ❌ <strong>Restart snapshot</strong> (data inconsistency)<br/>
+        2. Используйте <code>minimal</code> mode (accept locks)<br/>
+        3. Или implement schema freeze window
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Snapshot taking too long</strong></td>
+      <td>
+        Snapshot running for hours/days<br/>
+        Production writes degraded
+      </td>
+      <td>
+        Very large tables (100GB+)<br/>
+        Network bandwidth limited
+      </td>
+      <td>
+        1. Switch to <code>snapshot.locking.mode=none</code><br/>
+        2. Or use <strong>backup-based approach</strong> (раздел 7)<br/>
+        3. Or incremental snapshot via signal table
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Connector fails: "db history topic missing"</strong></td>
+      <td>
+        <code>snapshot.mode=never</code> fails:<br/>
+        <code>The db history topic or its content is fully or partially missing</code>
+      </td>
+      <td>
+        Schema history topic не populated<br/>
+        (required for <code>snapshot.mode=never</code>)
+      </td>
+      <td>
+        1. Run connector с <code>snapshot.mode=schema_only</code> first<br/>
+        2. Then recreate с <code>snapshot.mode=never</code><br/>
+        3. Or manually populate schema history topic
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Production writes blocked during snapshot</strong></td>
+      <td>
+        Application timeouts<br/>
+        <code>SHOW PROCESSLIST</code> shows Locked state
+      </td>
+      <td>
+        <code>snapshot.locking.mode=minimal</code><br/>
+        Table locks held too long (complex schema)
+      </td>
+      <td>
+        1. Monitor lock duration via <code>SHOW PROCESSLIST</code><br/>
+        2. If &gt; 5 minutes → switch to <code>none</code> mode or backup-based<br/>
+        3. Schedule snapshot during maintenance window
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+### Когда restart snapshot после failure?
+
+**Автоматический restart:** Debezium connector автоматически перезапустит snapshot если:
+- Connector crashes во время snapshot
+- Kafka Connect worker restarts
+- Network timeout
+
+**Manual restart required:**
+```bash
+# Restart connector (triggers snapshot from beginning)
+curl -X POST http://localhost:8083/connectors/aurora-mysql-connector/restart
+
+# Or delete and recreate connector
+curl -X DELETE http://localhost:8083/connectors/aurora-mysql-connector
+# Then redeploy
+curl -X POST http://localhost:8083/connectors -H "Content-Type: application/json" -d @connector-config.json
+```
+
+<Callout type="warning" title="Restart snapshot = start from beginning">
+
+Debezium **не поддерживает resumable snapshots** (кроме incremental snapshot via signal table).
+
+Если snapshot прерывается:
+- Data уже sent to Kafka → remains (может быть duplicates)
+- Offset not committed → connector restarts snapshot from scratch
+- Для 500GB tables → potentially hours/days lost
+
+**Mitigation:**
+- Use incremental snapshot (Debezium 1.6+) для resumable snapshots
+- Or backup-based approach для очень больших таблиц
+
+</Callout>
+
+## Key Takeaways
+
+**1. Aurora MySQL запрещает глобальные блокировки**
+- `FLUSH TABLES WITH READ LOCK` не работает на Aurora (managed service security)
+- Debezium автоматически fallback на table-level locks
+- Это expected behavior, не ошибка
+
+**2. Выбор snapshot.locking.mode зависит от размера таблиц**
+- **< 100 GB**: `minimal` mode (safe default, кратковременные locks)
+- **> 100 GB + zero lock tolerance**: `none` mode (ТРЕБУЕТ schema freeze)
+- **500GB+**: Backup-based approach (Aurora snapshot + JDBC bulk load + Debezium streaming)
+
+**3. snapshot.locking.mode=none опасен без schema freeze**
+- DDL statement во время snapshot → data inconsistency
+- Обязательно coordinate с командой разработки
+- Или используйте `minimal` mode (accept locks)
+
+**4. Backup-based approach для enterprise use cases**
+- Zero locks на production
+- Faster для очень больших таблиц
+- Но complex setup и cost (temporary Aurora cluster)
+
+**5. Мониторинг snapshot progress обязателен**
+- Connector logs: snapshot phases
+- MySQL SHOW PROCESSLIST: lock duration
+- CloudWatch: WriteLatency, DMLLatency impact
+
+**6. Troubleshooting checklist**
+- "Access denied for FLUSH TABLES" → Expected, automatic fallback
+- "Lock wait timeout" → Increase timeout или switch to `none` mode
+- "Schema changed during snapshot" → Restart snapshot, use `minimal` mode, or implement freeze
+- "Snapshot too long" → Backup-based approach
+
+## Практика: Hands-On Exercise
+
+Попробуйте настроить Debezium connector для Aurora MySQL с разными snapshot modes:
+
+**Exercise 1: Minimal mode (safe default)**
+1. Deploy connector с `snapshot.locking.mode=minimal`
+2. Monitor lock duration via `SHOW PROCESSLIST`
+3. Verify snapshot completes successfully
+
+**Exercise 2: None mode (advanced, schema freeze required)**
+1. Coordinate schema freeze window (no DDL allowed)
+2. Deploy connector с `snapshot.locking.mode=none`
+3. Monitor for DDL statements during snapshot (should be zero)
+4. Verify data consistency after snapshot
+
+**Exercise 3: Backup-based approach (enterprise)**
+1. Capture binlog position via `SHOW MASTER STATUS`
+2. Create Aurora DB cluster snapshot
+3. Restore to temporary cluster
+4. Bulk load via JDBC source connector
+5. Deploy Debezium with `snapshot.mode=never`
+6. Verify streaming from saved binlog position
+
+**Advanced Exercise: Simulate schema change during snapshot**
+1. Start snapshot с `snapshot.locking.mode=none`
+2. Execute `ALTER TABLE` во время snapshot
+3. Observe data inconsistency in Kafka topics
+4. Restart snapshot с `minimal` mode
+5. Verify consistency
+
+## Что дальше?
+
+В следующем уроке **"Aurora MySQL Production Operations"** мы изучим:
+- Monitoring Aurora MySQL CDC в production
+- Failover scenarios (writer instance failover)
+- Binlog retention management для Aurora
+- Enhanced Binlog monitoring (ChangeLogBytesUsed, ChangeLogIOPs)
+- Disaster recovery strategies
+
+**Модуль 8 roadmap:**
+- ✅ Lesson 1-6: MySQL binlog, GTID, retention, connector config
+- ✅ Lesson 7: Aurora parameter groups
+- ✅ Lesson 8: Enhanced Binlog architecture
+- ✅ **Lesson 9: Aurora snapshot modes** ← Вы здесь
+- 🔜 Lesson 10: Aurora production operations
+- 🔜 Lesson 11: MySQL/Aurora comparison & decision matrix
