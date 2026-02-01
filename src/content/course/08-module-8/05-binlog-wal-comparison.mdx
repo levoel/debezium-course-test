@@ -1,0 +1,619 @@
+---
+title: "Binlog vs WAL: Архитектурное Сравнение"
+description: "Глубокое сравнение MySQL binlog и PostgreSQL WAL для CDC: position tracking, schema evolution, failover, monitoring"
+order: 5
+difficulty: "intermediate"
+estimatedTime: 25
+topics: ["mysql", "postgresql", "binlog", "wal", "cdc", "comparison"]
+prerequisites: ["module-8/04-mysql-connector-configuration", "module-2/01-logical-decoding-deep-dive"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Binlog vs WAL: Архитектурное Сравнение
+
+В Модуле 2 вы освоили PostgreSQL CDC через WAL и logical decoding. Теперь, изучив MySQL binlog, вы можете увидеть, что эти системы решают одну задачу (CDC) совершенно разными способами.
+
+Понимание архитектурных различий критически важно: **если вы переносите знания PostgreSQL на MySQL напрямую, вы сделаете дорогие ошибки в production**. В этом уроке мы систематизируем различия и построим ментальную модель для работы с обеими СУБД.
+
+## Зачем сравнивать?
+
+**Проблема:** Многие инженеры изучают PostgreSQL CDC первым (он популярен в стартапах и data engineering) и ожидают, что MySQL работает аналогично.
+
+**Реальность:**
+- MySQL не имеет replication slots — позицию хранит клиент (Kafka Connect offsets)
+- PostgreSQL не требует schema history topic — схема встроена в каждое сообщение
+- GTID (MySQL) работает иначе, чем LSN (PostgreSQL)
+- Failover сценарии принципиально различаются
+
+> **Если вы изучали PostgreSQL в Модуле 2:** Этот урок предотвратит распространенные заблуждения. Если нет — поймете, чем MySQL уникален.
+
+## Архитектурное сравнение: Таблица ключевых отличий
+
+Начнем с высокоуровневого сравнения, а затем углубимся в каждый аспект.
+
+| Аспект | PostgreSQL WAL | MySQL Binlog |
+|--------|----------------|--------------|
+| **Изначальное назначение** | Crash recovery (durability) | Replication (data distribution) |
+| **Формат данных** | Физический (блоки страниц) | Логический (row changes) |
+| **CDC механизм** | Logical decoding (pgoutput/wal2json) | Прямое чтение (binlog уже логический) |
+| **Position tracking** | Server-side (replication slots) | Client-side (Kafka Connect offsets) |
+| **Position формат** | LSN (hexadecimal, 0/16B374D8) | GTID (uuid:sequence) или file:offset |
+| **DDL tracking** | Implicit (в WAL messages) | Explicit (schema.history.internal.kafka.topic) |
+| **Schema в событиях** | Встроена (структура полей) | Ссылка на table_id (требует reconstruction) |
+| **Failover handling** | Slot мигрирует на реплику | GTID автоматически релоцирует |
+| **Server-side state** | Replication slot держит WAL | Нет server-side state (binlog expire независимо) |
+| **Disk growth risk** | Abandoned slot → disk full | Connector lag → невозможность recovery |
+
+**Ключевой вывод:** PostgreSQL архитектура — "сервер помнит позицию и держит WAL". MySQL архитектура — "клиент помнит позицию, сервер чистит binlog независимо".
+
+## Position Tracking: Server-Side vs Client-Side
+
+Это **самое фундаментальное различие**, которое влияет на все остальное.
+
+### PostgreSQL: Server-Side Position (Replication Slot)
+
+<Mermaid chart={`
+sequenceDiagram
+    participant Debezium as Debezium Connector
+    participant Postgres as PostgreSQL Server
+    participant Slot as Replication Slot
+
+    Debezium->>Postgres: CREATE_REPLICATION_SLOT 'debezium_slot'
+    Postgres->>Slot: Создать slot с restart_lsn
+    Note over Slot: Server запомнил позицию
+
+    loop Чтение изменений
+        Debezium->>Postgres: Прочитать WAL с restart_lsn
+        Postgres-->>Debezium: События с LSN
+        Debezium->>Postgres: Подтвердить confirmed_flush_lsn
+        Postgres->>Slot: Обновить confirmed_flush_lsn
+    end
+
+    Note over Slot: WAL до confirmed_flush_lsn<br/>может быть удален
+    Note over Slot: WAL после restart_lsn<br/>СОХРАНЯЕТСЯ ОБЯЗАТЕЛЬНО
+
+    Debezium--xPostgres: Connector упал
+    Note over Slot: Slot ОСТАЕТСЯ ACTIVE=FALSE<br/>WAL продолжает накапливаться
+
+    Debezium->>Postgres: Переподключение
+    Postgres-->>Debezium: Продолжить с restart_lsn
+    Note over Debezium: Ни одно событие не потеряно
+`} client:visible />
+
+**Преимущества server-side tracking:**
+- Сервер гарантирует сохранение WAL до подтверждения клиента
+- Нет риска потерять события при crash Debezium
+- Переподключение возобновляет с точной позиции
+
+**Недостатки:**
+- Abandoned slot → диск переполняется (WAL накапливается бесконечно)
+- Требует мониторинг `pg_replication_slots` и алерты на `active=false`
+- Cleanup слотов требует ручного вмешательства
+
+### MySQL: Client-Side Position (Kafka Connect Offsets)
+
+<Mermaid chart={`
+sequenceDiagram
+    participant Debezium as Debezium Connector
+    participant Kafka as Kafka Connect Offsets
+    participant MySQL as MySQL Server
+
+    Debezium->>MySQL: Подключиться к binlog
+    Note over MySQL: Сервер НЕ создает state
+
+    loop Чтение изменений
+        MySQL-->>Debezium: События с GTID
+        Debezium->>Debezium: Обработать события
+        Debezium->>Kafka: Сохранить offset (GTID position)
+        Note over Kafka: Клиент сам хранит позицию
+    end
+
+    MySQL->>MySQL: binlog_expire_logs_seconds (7 дней)
+    Note over MySQL: Сервер чистит binlog<br/>НЕЗАВИСИМО от Debezium
+
+    Debezium--xKafka: Connector упал
+
+    rect rgb(100, 30, 30)
+        Note over MySQL: Если Debezium не стартует<br/>7+ дней, binlog удаляется
+        MySQL->>MySQL: Purge old binlog files
+        Note over MySQL: gtid_purged обновляется
+    end
+
+    Debezium->>Kafka: Прочитать сохраненный offset
+    Kafka-->>Debezium: Последний GTID: server_uuid:150
+    Debezium->>MySQL: Запросить GTID 150+
+    MySQL-->>Debezium: ERROR: gtid_purged > 150
+
+    Note over Debezium: Невозможно восстановить<br/>Требуется полный snapshot
+`} client:visible />
+
+**Преимущества client-side tracking:**
+- Нет server-side state — чище для сервера
+- Abandoned connector не влияет на MySQL (binlog чистится по расписанию)
+- Failover проще: GTID глобально уникален, можно переключиться на любую реплику
+
+**Недостатки:**
+- Клиент ОБЯЗАН надежно хранить offset (Kafka Connect offsets topic)
+- Если connector down дольше `binlog_expire_logs_seconds` → невозможно восстановить
+- Требует мониторинг зазора между `gtid_executed` и connector offset
+
+## Position Format: LSN vs GTID
+
+### PostgreSQL LSN (Log Sequence Number)
+
+```sql
+-- LSN — 64-битное число, представленное как hexadecimal
+SELECT pg_current_wal_lsn();
+-- Пример: 0/16B374D8
+
+-- LSN состоит из двух частей: timeline / offset
+-- 0/16B374D8 = timeline 0, offset 381101272 bytes
+```
+
+**Характеристики LSN:**
+- Монотонно возрастает
+- Уникален в пределах одного PostgreSQL сервера
+- При failover timeline может измениться (1/..., 2/...)
+- Debezium отслеживает LSN через replication slot
+
+**Сравнение LSN:**
+```sql
+-- Вычислить разницу между LSN (в байтах)
+SELECT pg_wal_lsn_diff('0/16B374D8', '0/16000000');
+-- Результат: 11777240 (bytes)
+```
+
+### MySQL GTID (Global Transaction ID)
+
+```sql
+-- GTID — UUID:sequence_number
+SHOW GLOBAL VARIABLES LIKE 'gtid_executed';
+-- Пример: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-150
+
+-- UUID = уникальный идентификатор MySQL сервера
+-- 1-150 = диапазон transaction IDs (выполнено 150 транзакций)
+```
+
+**Характеристики GTID:**
+- Глобально уникален в MySQL cluster (включая реплики)
+- Не зависит от файлов binlog (в отличие от file:offset)
+- При failover GTID продолжает нумерацию (no reset)
+- Debezium сохраняет GTID в Kafka Connect offsets
+
+**Ranges и Set операции:**
+```sql
+-- Посмотреть очищенные GTIDs (недоступные для репликации)
+SHOW GLOBAL VARIABLES LIKE 'gtid_purged';
+-- Пример: 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100
+
+-- Это значит: транзакции 1-100 удалены, доступны только 101+
+```
+
+### Сравнение форматов
+
+| Характеристика | PostgreSQL LSN | MySQL GTID |
+|----------------|----------------|------------|
+| **Тип** | Byte offset | Transaction ID |
+| **Scope** | Single server | Entire cluster |
+| **Failover** | Timeline изменяется, LSN может сброситься | GTID глобально уникален, failover прозрачен |
+| **Format** | Hexadecimal (0/16B374D8) | UUID:range (uuid:1-150) |
+| **Хранение на сервере** | Replication slot (restart_lsn) | Нет (только executed/purged) |
+| **Хранение у клиента** | Не требуется (slot помнит) | Kafka Connect offsets topic |
+
+**Практическое значение:** GTID делает MySQL failover проще для CDC. PostgreSQL требует внимания к timeline changes при switchover.
+
+## Schema Evolution: Implicit vs Explicit Tracking
+
+### PostgreSQL: Schema Embedded in Messages
+
+PostgreSQL logical decoding **встраивает полную схему** в каждое сообщение WAL:
+
+```json
+// PostgreSQL WAL message (pgoutput format)
+{
+  "schema": {
+    "type": "struct",
+    "fields": [
+      {"field": "id", "type": "int32"},
+      {"field": "name", "type": "string"},
+      {"field": "email", "type": "string"}
+    ]
+  },
+  "payload": {
+    "before": null,
+    "after": {
+      "id": 1,
+      "name": "Alice",
+      "email": "alice@example.com"
+    }
+  }
+}
+```
+
+**Почему это работает:**
+- Logical decoding plugin (pgoutput) знает текущую схему таблицы
+- Каждое событие самодостаточно
+- Нет необходимости в отдельном хранилище DDL истории
+
+### MySQL: Schema History Topic Required
+
+MySQL binlog **НЕ содержит полную схему** в каждом событии. Вместо этого используется `TABLE_MAP_EVENT`:
+
+```
+// Binlog events последовательность
+TABLE_MAP_EVENT: table_id=108, database='inventory', table='customers'
+  Columns: [id INT, name VARCHAR, email VARCHAR]
+
+WRITE_ROWS_EVENT: table_id=108
+  Row: {id: 1, name: 'Alice', email: 'alice@example.com'}
+```
+
+**Проблема:** `table_id` — это runtime идентификатор, который сбрасывается при рестарте MySQL. Debezium не может полагаться только на него.
+
+**Решение:** Debezium записывает ВСЕ DDL изменения в отдельный Kafka topic:
+
+```json
+// Содержимое schema.history.internal.kafka.topic
+{
+  "source": {
+    "server": "mysql-server",
+    "gtid": "3E11FA47-71CA-11E1-9E33-C80AA9429562:47"
+  },
+  "ddl": "CREATE TABLE customers (id INT PRIMARY KEY, name VARCHAR(255), email VARCHAR(255))",
+  "ts_ms": 1706788800000
+}
+```
+
+**Почему это необходимо:**
+- При рестарте connector Debezium читает schema history topic
+- Восстанавливает mapping: `table_id → schema` для каждого GTID
+- Корректно декодирует старые binlog события при recovery
+
+<Mermaid chart={`
+flowchart TB
+    subgraph POSTGRESQL["PostgreSQL CDC"]
+        WAL[WAL Events] -->|"Каждое событие<br/>содержит схему"| PG_DECODE[pgoutput decoder]
+        PG_DECODE --> PG_KAFKA[Kafka Topic]
+        Note1["Самодостаточные события<br/>Нет внешних зависимостей"]
+    end
+
+    subgraph MYSQL["MySQL CDC"]
+        BINLOG[Binlog Events] -->|"TABLE_MAP_EVENT<br/>(table_id only)"| MYSQL_DECODE[Debezium decoder]
+        MYSQL_DECODE -->|"Запросить схему<br/>для table_id"| SCHEMA_HISTORY[Schema History Topic]
+        SCHEMA_HISTORY -->|"DDL для GTID"| MYSQL_DECODE
+        MYSQL_DECODE --> MYSQL_KAFKA[Kafka Topic]
+        Note2["События зависят от<br/>schema history topic"]
+    end
+
+    style SCHEMA_HISTORY fill:#f59e0b,stroke:#d97706
+    style Note2 fill:#7f1d1d,stroke:#ef4444
+`} client:visible />
+
+**Критическое требование для MySQL:**
+
+```json
+// Обязательная конфигурация MySQL connector
+{
+  "schema.history.internal.kafka.topic": "schema-changes.mysql-server",
+  "schema.history.internal.kafka.bootstrap.servers": "kafka:9092"
+}
+```
+
+**Topic retention MUST be infinite:**
+```bash
+kafka-topics --bootstrap-server kafka:9092 \
+  --create \
+  --topic schema-changes.mysql-server \
+  --config retention.ms=-1 \
+  --config retention.bytes=-1
+```
+
+> **Если schema history topic удален или corrupted:** Connector не сможет стартовать. Потребуется полный resnapshot базы данных.
+
+## Connector Configuration: Сравнение свойств
+
+Давайте сравним конфигурации коннекторов для одной задачи: capture изменений таблиц `customers` и `orders`.
+
+### PostgreSQL Connector
+
+```json
+{
+  "name": "postgres-inventory-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+
+    // Connection
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "debezium",
+    "database.password": "dbz",
+    "database.dbname": "inventory",
+
+    // PostgreSQL-specific: Logical decoding configuration
+    "plugin.name": "pgoutput",
+    "slot.name": "debezium_inventory",
+    "publication.name": "dbz_publication",
+
+    // Table filtering
+    "table.include.list": "public.customers,public.orders",
+
+    // Topic naming
+    "topic.prefix": "postgres-server"
+  }
+}
+```
+
+### MySQL Connector
+
+```json
+{
+  "name": "mysql-inventory-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+
+    // Connection (identical pattern)
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "dbz",
+
+    // MySQL-specific: Cluster integration
+    "database.server.id": "184054",
+    "database.server.name": "mysql-server",
+
+    // MySQL-specific: Schema history storage
+    "schema.history.internal.kafka.topic": "schema-changes.mysql-server",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+
+    // Table filtering (identical pattern)
+    "table.include.list": "inventory.customers,inventory.orders",
+
+    // Topic naming (identical pattern)
+    "topic.prefix": "mysql-server"
+  }
+}
+```
+
+### Свойства без эквивалента
+
+| PostgreSQL Only | MySQL Only |
+|-----------------|------------|
+| `plugin.name` (pgoutput/wal2json) | `database.server.id` (cluster member ID) |
+| `slot.name` (replication slot) | `schema.history.internal.*` (DDL tracking) |
+| `publication.name` (table filter) | `gtid.source.includes` (GTID filtering) |
+| `slot.drop.on.stop` (cleanup control) | `binlog.buffer.size` (event buffering) |
+
+**Общие свойства:**
+- `database.hostname`, `database.port`, `database.user`, `database.password`
+- `table.include.list` / `table.exclude.list`
+- `topic.prefix`
+- `snapshot.mode`
+- `heartbeat.interval.ms` / `heartbeat.topics.prefix`
+
+> **Заблуждение:** "Я настроил PostgreSQL connector, MySQL будет аналогично". **Реальность:** MySQL требует уникальные свойства (`database.server.id`, `schema.history.*`), без которых connector не работает.
+
+## Monitoring Metrics: Что измерять
+
+### PostgreSQL Metrics
+
+```sql
+-- Ключевые метрики для PostgreSQL CDC
+SELECT
+    slot_name,
+    active,
+    -- Position lag (bytes)
+    pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS lag_bytes,
+    pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS lag_pretty,
+    -- WAL disk retention
+    wal_status,
+    safe_wal_size,
+    -- Replication lag
+    pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) AS replication_lag_bytes
+FROM pg_replication_slots
+WHERE slot_type = 'logical';
+```
+
+**Критичные алерты:**
+- `active = false` AND `lag_bytes > 1GB` → Abandoned slot warning
+- `wal_status = 'lost'` → WAL deleted, resnapshot required
+- `lag_bytes > safe_wal_size` → Approaching disk full
+
+### MySQL Metrics
+
+```sql
+-- Ключевые метрики для MySQL CDC
+-- 1. Current binlog position
+SHOW MASTER STATUS;
+
+-- 2. GTID tracking
+SHOW GLOBAL VARIABLES LIKE 'gtid_executed';
+SHOW GLOBAL VARIABLES LIKE 'gtid_purged';
+
+-- 3. Binlog retention
+SHOW VARIABLES LIKE 'binlog_expire_logs_seconds';
+SHOW BINARY LOGS;
+
+-- 4. Schema history topic health (через Kafka APIs)
+-- kafka-console-consumer --topic schema-changes.mysql-server --from-beginning
+```
+
+**Критичные алерты:**
+- `gtid_purged` близок к connector offset → Risk of data loss
+- Binlog file count резко падает → Purge occurred, check connector lag
+- Schema history topic lag > 1 hour → DDL not being tracked
+
+### Сравнительная таблица метрик
+
+| Метрика | PostgreSQL | MySQL |
+|---------|------------|-------|
+| **Position lag** | `pg_wal_lsn_diff(current, restart_lsn)` | `gtid_executed` - connector offset |
+| **Data retention** | `wal_status`, `safe_wal_size` | `binlog_expire_logs_seconds`, `gtid_purged` |
+| **Connection health** | `active` status in `pg_replication_slots` | Binlog reader thread status (JMX) |
+| **Schema sync** | N/A (schema in events) | Schema history topic lag |
+| **Slot/state health** | Slot exists and active | N/A (client-side state) |
+
+## Failover Behavior: Slot Migration vs GTID Relocation
+
+### PostgreSQL Failover (With Replication Slots)
+
+<Mermaid chart={`
+sequenceDiagram
+    participant Debezium as Debezium
+    participant Primary as Primary PG
+    participant Replica as Replica PG
+    participant Slot as Replication Slot
+
+    Debezium->>Primary: Читать WAL через slot
+    Primary-->>Debezium: События с LSN
+
+    rect rgb(100, 30, 30)
+        Note over Primary: Primary упал
+        Primary--xDebezium: Connection lost
+    end
+
+    Note over Replica: Replica promoted to primary
+
+    alt Slot был настроен для репликации
+        Primary->>Replica: Slot реплицирован на replica
+        Debezium->>Replica: Переподключение к новому primary
+        Replica-->>Debezium: Продолжить с confirmed_flush_lsn
+        Note over Debezium: Нет потери данных
+    else Slot НЕ реплицировался
+        Debezium->>Replica: Попытка подключиться
+        Replica-->>Debezium: ERROR: slot not found
+        Note over Debezium: Требуется пересоздать slot<br/>Возможна потеря данных
+    end
+`} client:visible />
+
+**PostgreSQL failover сложности:**
+- Replication slots по умолчанию НЕ реплицируются на standby
+- Требуется настройка `hot_standby_feedback = on` и `primary_slot_name` на replica
+- Если slot не мигрировал → нужно пересоздать, возможна потеря LSN tracking
+
+### MySQL Failover (With GTID Mode)
+
+<Mermaid chart={`
+sequenceDiagram
+    participant Debezium as Debezium
+    participant Primary as MySQL Primary
+    participant Replica as MySQL Replica
+
+    Debezium->>Primary: Читать binlog (GTID mode)
+    Primary-->>Debezium: События с GTID uuid:1-150
+
+    rect rgb(100, 30, 30)
+        Note over Primary: Primary упал
+        Primary--xDebezium: Connection lost
+    end
+
+    Note over Replica: Replica promoted to primary
+
+    Debezium->>Debezium: Прочитать offset: uuid:150
+    Debezium->>Replica: Запросить события с GTID uuid:151+
+
+    Note over Replica: GTID глобально уникален<br/>Replica знает uuid:151+
+
+    Replica-->>Debezium: События начиная с uuid:151
+    Note over Debezium: ПРОЗРАЧНОЕ failover<br/>Нет потери данных
+`} client:visible />
+
+**MySQL failover преимущества (GTID mode):**
+- GTID глобально уникален — одинаковый на primary и replicas
+- Debezium просто переподключается к новому primary с последним GTID
+- Нет server-side state для миграции
+- Автоматическое восстановление без manual intervention
+
+**Без GTID (file:offset mode):**
+- Требуется вычислить новый `(binlog_file, offset)` на replica
+- Высокий риск потери данных или дубликатов
+- Не рекомендуется для production CDC
+
+## Common Misconceptions: Распространенные заблуждения
+
+Эти заблуждения возникают у 90% инженеров, переходящих с PostgreSQL на MySQL или наоборот.
+
+| Заблуждение | Реальность |
+|-------------|-----------|
+| **"MySQL has replication slots"** | Нет. MySQL использует client-side position tracking (Kafka Connect offsets). Нет server-side объекта, аналогичного PostgreSQL replication slot. |
+| **"PostgreSQL needs schema history topic"** | Нет. PostgreSQL logical decoding включает schema в каждое WAL сообщение. Schema history topic — MySQL-специфичная необходимость. |
+| **"Binlog is physical like WAL"** | Нет. Binlog (в ROW format) — логический формат, записывает row changes. PostgreSQL WAL — физический, записывает page blocks (требует logical decoding). |
+| **"Both use same offset format"** | Нет. PostgreSQL использует LSN (hexadecimal byte offset). MySQL использует GTID (UUID:sequence) или file:offset. |
+| **"Abandoned connector is safe in both"** | Нет. PostgreSQL abandoned slot → диск переполняется WAL. MySQL abandoned connector → binlog purge продолжается, но recovery невозможен после purge. |
+| **"Failover работает одинаково"** | Нет. PostgreSQL требует slot replication. MySQL (GTID mode) — автоматическое failover без server-side state. |
+| **"Schema changes tracked same way"** | Нет. PostgreSQL — implicit (schema в WAL). MySQL — explicit (schema.history.internal.kafka.topic обязателен). |
+
+## When to Choose Which: Практические рекомендации
+
+Этот курс покрывает обе СУБД, но когда выбирать какую для новых проектов?
+
+### PostgreSQL для CDC (предпочтительно)
+
+**Когда использовать:**
+- Greenfield проекты (новые системы с нуля)
+- Приложения с частыми schema changes (logical decoding гибче)
+- Когда нужна JSONB support в CDC (pgoutput захватывает JSONB корректно)
+- Транзакции с высоким уровнем изоляции (SERIALIZABLE)
+- Open-source ориентированная организация
+
+**Почему:**
+- Logical decoding — более современный подход
+- Schema embedded in messages — меньше зависимостей
+- Managed services (AWS RDS, Azure PostgreSQL) полностью поддерживают logical replication
+- Активное community и регулярные улучшения
+
+### MySQL для CDC (часто унаследованное)
+
+**Когда использовать:**
+- Legacy системы уже на MySQL (миграция дороже)
+- AWS Aurora MySQL (managed MySQL с CDC support)
+- Когда binlog уже используется для репликации (infrastructure готова)
+- Высоконагруженные OLTP с simple schema (binlog эффективнее для простых структур)
+
+**Почему:**
+- Binlog — проверенная технология (20+ лет в production)
+- GTID mode — надежное failover без сложной настройки
+- Меньше server-side overhead (нет slot state)
+- Хорошая поддержка в managed services (RDS, Aurora)
+
+**Для AWS Aurora MySQL специфически:**
+- Aurora MySQL binlog поддерживается из коробки
+- Параметр `binlog_format=ROW` настраивается через parameter groups
+- Automatic failover с GTID работает seamlessly
+
+> **Практический совет:** Если вы начинаете новый проект — рассмотрите PostgreSQL. Если вы поддерживаете существующую MySQL систему — используйте binlog CDC (не мигрируйте ради миграции).
+
+## Key Takeaways: Ключевые выводы
+
+1. **Position tracking:** PostgreSQL — server-side (replication slots), MySQL — client-side (Kafka offsets)
+
+2. **Position format:** PostgreSQL LSN (hexadecimal byte offset), MySQL GTID (UUID:sequence)
+
+3. **Schema evolution:** PostgreSQL — implicit (schema in WAL), MySQL — explicit (schema history topic mandatory)
+
+4. **Failover:** PostgreSQL требует slot replication, MySQL GTID — automatic relocation
+
+5. **Disk growth risk:** PostgreSQL abandoned slot → WAL накапливается. MySQL lag → binlog purge делает recovery невозможным
+
+6. **Configuration:** MySQL требует `database.server.id` и `schema.history.internal.*`, которых нет в PostgreSQL
+
+7. **Monitoring:** PostgreSQL — `pg_replication_slots`, MySQL — `gtid_executed` vs `gtid_purged`
+
+8. **CDC complexity:** PostgreSQL требует logical decoding setup. MySQL — прямое чтение binlog (проще для старта)
+
+9. **Schema history topic:** MySQL ОБЯЗАТЕЛЬНО, PostgreSQL НЕ нужен
+
+10. **Replication slots:** PostgreSQL центральная концепция, MySQL НЕ имеет эквивалента
+
+## What's Next: Что дальше?
+
+Мы систематизировали архитектурные различия между MySQL binlog и PostgreSQL WAL. Теперь вы знаете, **почему MySQL connector настраивается иначе** и **какие подводные камни специфичны для каждой СУБД**.
+
+В следующем уроке мы углубимся в **MySQL schema history topic** — самый критичный MySQL-специфичный компонент. Вы узнаете:
+
+- Как Debezium восстанавливает schema при restart
+- Почему schema history topic MUST have infinite retention
+- Как debugging schema history corruption
+- Операционные процедуры для schema history topic maintenance
+
+Это знание критично для production MySQL CDC — schema history corruption — одна из самых частых причин connector failures.
