@@ -1,0 +1,1536 @@
+---
+title: "GTID Failover: Процедуры переключения MySQL/Aurora"
+description: "Полный runbook для failover MySQL/Aurora с GTID: prerequisites, execution, validation, восстановление connector и troubleshooting"
+order: 11
+difficulty: "advanced"
+estimatedTime: 35
+topics: ["mysql", "aurora", "gtid", "failover", "high-availability", "disaster-recovery"]
+prerequisites: ["module-8/02-gtid-mode-fundamentals", "module-8/04-mysql-connector-configuration"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+import Callout from '../../../components/Callout.tsx';
+
+# GTID Failover: Процедуры переключения MySQL/Aurora
+
+## Введение: Почему failover критичен для CDC
+
+В production системах неизбежно происходят события, требующие переключения на новый primary сервер:
+
+**Запланированные (planned) failover**:
+- Обновление MySQL версии
+- Миграция на новое железо
+- Maintenance window (патчинг ОС, firmware updates)
+- Масштабирование инфраструктуры
+
+**Незапланированные (unplanned) failover**:
+- Hardware failure (отказ дисков, памяти, сети)
+- Datacenter outage (потеря питания, сетевое разделение)
+- Software crash (MySQL процесс падает)
+- Corrupted data (corruption требует восстановления из backup)
+
+### GTID vs File:Position для failover
+
+Без GTID failover выглядит так:
+
+<Mermaid>
+```mermaid
+sequenceDiagram
+    participant D as Debezium
+    participant P1 as Primary (old)
+    participant P2 as Replica → Primary
+
+    D->>P1: Читаю binlog: mysql-bin.000015:2548
+    Note over P1: PRIMARY CRASHES
+    P1--xD: Connection lost
+    Note over P2: Promoted to PRIMARY
+    D->>P2: Пытаюсь читать mysql-bin.000015:2548
+    P2-->>D: ERROR: File not found or wrong position
+    Note over D: MANUAL INTERVENTION REQUIRED
+    Note over D: Инженер должен найти соответствующую позицию<br/>на новом primary вручную
+    Note over D: Или сделать FULL RESNAPSHOT (часы/дни)
+```
+</Mermaid>
+
+**Проблема**: Binlog файлы на replica имеют **другие имена и смещения**, чем на primary. Позиция `mysql-bin.000015:2548` бессмысленна на новом сервере.
+
+**С GTID failover автоматичен**:
+
+<Mermaid>
+```mermaid
+sequenceDiagram
+    participant D as Debezium
+    participant P1 as Primary (old)
+    participant P2 as Replica → Primary
+
+    D->>P1: Читаю binlog: GTID=...562:1-1000
+    Note over P1: PRIMARY CRASHES
+    P1--xD: Connection lost
+    Note over P2: Promoted to PRIMARY
+    D->>P2: Подключаюсь с GTID offset: ...562:1000
+    D->>P2: Запрашиваю события после GTID ...562:1000
+    P2->>D: Автоматически нахожу позицию
+    P2->>D: Отдаю события начиная с ...562:1001
+    Note over D,P2: CDC продолжается БЕЗ MANUAL INTERVENTION
+```
+</Mermaid>
+
+**Ключевое преимущество**: GTID **глобально уникален** - одинаков на всех серверах. Debezium может продолжить с той же позиции на любом сервере в топологии.
+
+## GTID Failover Prerequisites: Checklist
+
+Перед тем, как failover будет работать автоматически, необходимо убедиться в выполнении всех prerequisites.
+
+### 1. GTID Mode Enabled на всех серверах
+
+**На primary сервере**:
+
+```sql
+SHOW VARIABLES LIKE 'gtid_mode';
+```
+
+**Ожидаемый результат**:
+```
++---------------+-------+
+| Variable_name | Value |
++---------------+-------+
+| gtid_mode     | ON    |
++---------------+-------+
+```
+
+<Callout type="danger">
+
+**CRITICAL: gtid_mode MUST be ON (not OFF_PERMISSIVE)**
+
+Допустимые значения для gtid_mode:
+- `OFF` - GTID выключен (legacy mode)
+- `OFF_PERMISSIVE` - Миграционный режим (принимает GTID, но не генерирует)
+- `ON_PERMISSIVE` - Миграционный режим (генерирует GTID, но принимает и non-GTID)
+- `ON` - Полный GTID mode (required для CDC)
+
+**Для failover failover необходимо `gtid_mode=ON` на primary И на всех replica.**
+
+Если какой-то сервер в `OFF_PERMISSIVE` или `OFF` - failover на него приведет к loss of position.
+
+</Callout>
+
+**На replica серверах** (проверить каждый):
+
+```sql
+-- Подключиться к replica
+SHOW VARIABLES LIKE 'gtid_mode';
+```
+
+Все replica должны вернуть `ON`.
+
+### 2. GTID Consistency Enforced
+
+```sql
+SHOW VARIABLES LIKE 'enforce_gtid_consistency';
+```
+
+**Ожидаемый результат**:
+```
++--------------------------+-------+
+| Variable_name            | Value |
++--------------------------+-------+
+| enforce_gtid_consistency | ON    |
++--------------------------+-------+
+```
+
+**Что это проверяет**: Блокирует unsafe statements (CREATE TABLE...SELECT, mixing storage engines), которые могут нарушить GTID consistency между primary и replica.
+
+### 3. Replica Parallel Workers Configuration
+
+Если replica использует parallel replication (`replica_parallel_workers > 0`), необходимо:
+
+```sql
+SHOW VARIABLES LIKE 'replica_parallel_workers';
+```
+
+**Если результат > 0**, проверить:
+
+```sql
+SHOW VARIABLES LIKE 'replica_preserve_commit_order';
+```
+
+**MUST be ON**:
+```
++-------------------------------+-------+
+| Variable_name                 | Value |
++-------------------------------+-------+
+| replica_preserve_commit_order | ON    |
++-------------------------------+-------+
+```
+
+**Почему критично**: Без `replica_preserve_commit_order=ON` параллельные workers могут применять транзакции **в другом порядке**, что нарушит GTID последовательность при failover.
+
+### 4. Verification Query: Все prerequisites
+
+Объединенная SQL проверка:
+
+```sql
+SELECT
+  @@global.gtid_mode AS gtid_mode,
+  @@global.enforce_gtid_consistency AS enforce_gtid,
+  @@global.replica_parallel_workers AS parallel_workers,
+  @@global.replica_preserve_commit_order AS preserve_order,
+  @@global.server_uuid AS server_uuid;
+```
+
+**Ожидаемый результат для production-ready сервера**:
+```
++-----------+--------------+------------------+----------------+--------------------------------------+
+| gtid_mode | enforce_gtid | parallel_workers | preserve_order | server_uuid                          |
++-----------+--------------+------------------+----------------+--------------------------------------+
+| ON        | ON           | 4                | ON             | 3e11fa47-71ca-11e1-9e33-c80aa9429562 |
++-----------+--------------+------------------+----------------+--------------------------------------+
+```
+
+**Если parallel_workers=0**, то `preserve_order` может быть любым (не влияет).
+
+### 5. Aurora MySQL Specifics: DB Cluster Parameter Group
+
+Для Aurora MySQL все binlog-related параметры настраиваются через **DB Cluster Parameter Group** (не Instance Parameter Group).
+
+**Проверка через AWS CLI**:
+
+```bash
+# Get cluster parameter group name
+aws rds describe-db-clusters \
+  --db-cluster-identifier aurora-mysql-prod \
+  --query 'DBClusters[0].DBClusterParameterGroup' \
+  --output text
+
+# Result: aurora-mysql-prod-cluster-params
+
+# Get GTID-related parameters
+aws rds describe-db-cluster-parameters \
+  --db-cluster-parameter-group-name aurora-mysql-prod-cluster-params \
+  --query 'Parameters[?ParameterName==`gtid-mode` || ParameterName==`enforce-gtid-consistency`]'
+```
+
+**Ожидаемый output**:
+```json
+[
+  {
+    "ParameterName": "gtid-mode",
+    "ParameterValue": "ON",
+    "ApplyType": "dynamic"
+  },
+  {
+    "ParameterName": "enforce-gtid-consistency",
+    "ParameterValue": "ON",
+    "ApplyType": "dynamic"
+  }
+]
+```
+
+<Callout type="warning">
+
+**Aurora Parameter Groups: Cluster vs Instance**
+
+**DB Cluster Parameter Group** - для binlog, GTID, репликации (применяются ко всему cluster)
+
+**DB Instance Parameter Group** - для instance-specific настроек (innodb_buffer_pool_size, etc.)
+
+**Ошибка**: Попытка настроить `gtid-mode` через Instance Parameter Group не будет работать - параметр игнорируется.
+
+</Callout>
+
+## Connector Configuration для GTID Failover
+
+Debezium MySQL connector автоматически использует GTID, если обнаруживает `gtid_mode=ON`. Но для надежного failover нужна правильная конфигурация.
+
+### Обязательные connector properties
+
+```json
+{
+  "name": "mysql-inventory-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "dbz",
+    "database.server.id": "184054",
+    "database.server.name": "mysql-server",
+
+    // === GTID Failover Configuration ===
+    "gtid.source.includes": ".*",
+    "snapshot.mode": "when_needed",
+    "heartbeat.interval.ms": "10000",
+
+    // === Schema History (CRITICAL) ===
+    "schema.history.internal.kafka.topic": "schema-changes.mysql-server",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+
+    "table.include.list": "inventory.*"
+  }
+}
+```
+
+### Критические свойства для failover
+
+#### 1. gtid.source.includes
+
+```json
+"gtid.source.includes": ".*"
+```
+
+**Что это**: Regex pattern для фильтрации GTID source UUIDs (server_uuid).
+
+**Почему `".*"` (match all)**:
+- После failover новый primary может иметь **другой server_uuid**
+- Если `gtid.source.includes` не включает новый UUID, connector **пропустит его транзакции**
+- `".*"` гарантирует, что connector прочитает транзакции от **любого сервера в топологии**
+
+**Альтернативный вариант** (explicit UUIDs):
+
+```json
+"gtid.source.includes": "3e11fa47-71ca-11e1-9e33-c80aa9429562,4f22gb58-82db-22f2-af44-d91ba0530673"
+```
+
+**Когда использовать explicit список**:
+- Multi-region Aurora Global Database (разные UUID для каждого region)
+- Если нужен strict control над тем, какие серверы могут поставлять события
+
+**Recommendation для Aurora MySQL**: `".*"` безопаснее, так как Aurora может менять UUIDs при failover, восстановлении из backup, cross-region promotion.
+
+#### 2. gtid.source.excludes
+
+```json
+"gtid.source.excludes": "00000000-0000-0000-0000-000000000000"
+```
+
+**Что это**: Regex pattern для исключения определенных server UUIDs.
+
+**Когда использовать**:
+- Exclude тестовых серверов из production топологии
+- Exclude временных replica (для analytics, backup)
+
+**Для большинства случаев**: Не требуется, если используется `gtid.source.includes=".*"`.
+
+#### 3. snapshot.mode: when_needed
+
+```json
+"snapshot.mode": "when_needed"
+```
+
+**Что это**: Connector делает snapshot **только если нет saved offset**.
+
+**Почему critical для failover**:
+- При переключении на новый primary saved offset (GTID) **валиден**
+- Если `snapshot.mode=initial`, connector сделает **полный resnapshot** (игнорируя offset)
+- `when_needed` позволяет connector **продолжить с saved GTID**
+
+**Режимы snapshot и failover**:
+
+| Mode          | Failover Behavior                             | Use Case                        |
+|---------------|-----------------------------------------------|---------------------------------|
+| `initial`     | ALWAYS resnapshot (bad for failover)          | First-time deployment only      |
+| `when_needed` | Resume from GTID offset (GOOD)                | **Production recommendation**   |
+| `no_data`     | Skip snapshot, resume from offset             | Resume after connector restart  |
+| `never`       | Deprecated (use `no_data` instead)            | Legacy configurations           |
+
+#### 4. heartbeat.interval.ms: MANDATORY
+
+```json
+"heartbeat.interval.ms": "10000"
+```
+
+**Что это**: Интервал между heartbeat events (10 секунд).
+
+**Почему mandatory для failover**:
+- Heartbeat обновляет connector offset **даже если таблицы idle**
+- Без heartbeat offset может указывать на **purged binlog файл**
+- После failover connector не сможет найти позицию → потребуется resnapshot
+
+**Heartbeat failover protection**:
+
+<Mermaid>
+```mermaid
+timeline
+    title Heartbeat Protection During Idle Period
+    Day 1 : Last INSERT в таблицу customers
+          : Offset: GTID ...562:1000
+    Day 2-6 : Таблица IDLE (no writes)
+            : Heartbeat updates offset каждые 10s
+            : Offset: GTID ...562:1050 (heartbeat GTIDs)
+    Day 7 : Binlog retention 7 дней
+          : mysql-bin.000001-000010 purged
+    Day 8 : Primary fails, failover to replica
+          : Offset указывает на GTID ...562:1050
+          : NEW PRIMARY имеет эту GTID (не purged)
+          : Connector продолжает работу!
+```
+</Mermaid>
+
+**Без heartbeat**:
+- Offset остается на GTID `...562:1000` (Day 1)
+- Binlog с этим GTID purged на Day 7
+- Failover на Day 8 → ERROR: Cannot replicate (purged)
+
+<Callout type="danger">
+
+**Heartbeat configuration CRITICAL для production failover**
+
+Без heartbeat:
+1. Idle таблицы не обновляют offset
+2. Offset указывает на старые GTID
+3. Binlog purge удаляет старые файлы
+4. Failover не может найти нужную позицию
+5. Требуется full resnapshot (downtime hours/days)
+
+**Всегда настраивайте heartbeat для production deployments.**
+
+</Callout>
+
+## Pre-Failover Validation Checklist
+
+Перед выполнением запланированного failover (planned maintenance) выполните эту проверку:
+
+<Mermaid>
+```mermaid
+graph TD
+    A[Start Pre-Failover Validation] --> B{Connector RUNNING?}
+    B -->|No| B1[Fix connector - abort failover]
+    B -->|Yes| C{Lag < 5 seconds?}
+    C -->|No| C1[Wait for lag to decrease]
+    C -->|Yes| D{GTID mode ON?}
+    D -->|No| D1[Enable GTID - abort failover]
+    D -->|Yes| E{Record Executed_Gtid_Set}
+    E --> F{Heartbeat events flowing?}
+    F -->|No| F1[Fix heartbeat - abort failover]
+    F -->|Yes| G[All checks passed - SAFE TO FAILOVER]
+
+    style G fill:#90EE90
+    style B1 fill:#FFB6C1
+    style D1 fill:#FFB6C1
+    style F1 fill:#FFB6C1
+```
+</Mermaid>
+
+### Step 1: Verify Connector Status
+
+```bash
+curl -s http://localhost:8083/connectors/mysql-inventory-connector/status | jq .
+```
+
+**Expected**:
+```json
+{
+  "name": "mysql-inventory-connector",
+  "connector": {
+    "state": "RUNNING",
+    "worker_id": "connect:8083"
+  },
+  "tasks": [
+    {
+      "id": 0,
+      "state": "RUNNING",
+      "worker_id": "connect:8083"
+    }
+  ]
+}
+```
+
+**If `state: FAILED`**: Исправьте connector перед failover. Failover во время failed connector может привести к loss of position.
+
+### Step 2: Check Current Lag
+
+```bash
+docker compose exec kafka kafka-consumer-groups \
+  --bootstrap-server localhost:9092 \
+  --group connect-mysql-inventory-connector \
+  --describe
+```
+
+**Expected output**:
+```
+TOPIC                              PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+mysql-server.inventory.customers   0          10500           10502           2
+mysql-server.inventory.orders      0          52300           52300           0
+```
+
+**Recommendation**:
+- **LAG < 5 seconds of data** - безопасно для failover
+- **LAG > 1 minute** - дождаться уменьшения lag
+- **LAG > 1 hour** - failover может привести к длительному recovery
+
+**Почему это важно**: После failover connector должен догнать lag. Большой lag = долгое восстановление.
+
+### Step 3: Verify GTID Mode на Primary
+
+```sql
+-- На текущем primary
+SELECT
+  @@global.gtid_mode AS gtid_mode,
+  @@global.enforce_gtid_consistency AS enforce_gtid,
+  @@global.gtid_executed AS executed_gtid_set;
+```
+
+**Сохраните `gtid_executed` для post-failover сравнения**:
+
+```
++--------------------------------------+
+| gtid_executed                        |
++--------------------------------------+
+| 3e11fa47-...-c80aa9429562:1-10500    |
++--------------------------------------+
+```
+
+Запишите это значение - оно понадобится для проверки continuity после failover.
+
+### Step 4: Verify GTID Mode на Target Replica
+
+```sql
+-- На replica, который станет новым primary
+SELECT
+  @@global.gtid_mode AS gtid_mode,
+  @@global.gtid_executed AS executed_gtid_set,
+  @@global.read_only AS read_only;
+```
+
+**Expected**:
+```
++-----------+--------------------------------------+-----------+
+| gtid_mode | executed_gtid_set                    | read_only |
++-----------+--------------------------------------+-----------+
+| ON        | 3e11fa47-...-c80aa9429562:1-10500    | ON        |
++-----------+--------------------------------------+-----------+
+```
+
+**Критичная проверка**: `executed_gtid_set` на replica должен быть **близок** к primary (разница < 10 GTIDs означает lag < 5 seconds).
+
+**Если read_only=OFF на replica** - это ошибка конфигурации (replica не должны принимать writes).
+
+### Step 5: Confirm Heartbeat Events Flowing
+
+```bash
+# Check heartbeat table updates
+docker compose exec mysql mysql -u root -pmysql inventory -e "
+SELECT id, ts, NOW() AS current_time, TIMESTAMPDIFF(SECOND, ts, NOW()) AS seconds_ago
+FROM debezium_heartbeat;
+"
+```
+
+**Expected**:
+```
++----+---------------------+---------------------+-------------+
+| id | ts                  | current_time        | seconds_ago |
++----+---------------------+---------------------+-------------+
+|  1 | 2026-02-01 12:30:45 | 2026-02-01 12:30:50 |           5 |
++----+---------------------+---------------------+-------------+
+```
+
+**If `seconds_ago > 60`**: Heartbeat не работает. Проверить connector logs и heartbeat configuration.
+
+## Failover Execution Procedure
+
+Теперь выполним failover - запланированный или при аварии.
+
+### Planned Failover: Aurora MySQL
+
+Aurora поддерживает **graceful failover** с минимальным downtime (обычно 1-2 минуты).
+
+**Step 1: Initiate Failover**
+
+```bash
+# Failover Aurora cluster to specific instance
+aws rds failover-db-cluster \
+  --db-cluster-identifier aurora-mysql-prod \
+  --target-db-instance-identifier aurora-mysql-prod-instance-2
+
+# Result:
+# {
+#   "DBCluster": {
+#     "DBClusterIdentifier": "aurora-mysql-prod",
+#     "Status": "failing-over",
+#     ...
+#   }
+# }
+```
+
+**Параметры**:
+- `--db-cluster-identifier`: Имя Aurora cluster
+- `--target-db-instance-identifier`: Конкретный instance, который станет новым primary (optional - Aurora выберет автоматически, если не указан)
+
+**Step 2: Monitor Failover Progress**
+
+```bash
+# Poll cluster status every 10 seconds
+while true; do
+  aws rds describe-db-clusters \
+    --db-cluster-identifier aurora-mysql-prod \
+    --query 'DBClusters[0].Status' \
+    --output text
+  sleep 10
+done
+```
+
+**Статусы failover**:
+1. `available` → `failing-over` (failover начался)
+2. `failing-over` → `available` (failover завершен)
+
+**Типичный timeline**:
+- **1-2 minutes** - Aurora Multi-AZ failover
+- **10-30 seconds** - DNS update propagation
+- **5-10 seconds** - Connector reconnect
+
+**Step 3: Verify New Primary**
+
+После того как статус вернулся в `available`:
+
+```bash
+# Get new writer endpoint
+aws rds describe-db-clusters \
+  --db-cluster-identifier aurora-mysql-prod \
+  --query 'DBClusters[0].DBClusterMembers[?IsClusterWriter==`true`].DBInstanceIdentifier' \
+  --output text
+
+# Result: aurora-mysql-prod-instance-2
+```
+
+**Проверка через SQL**:
+
+```bash
+# Connect to cluster endpoint (automatically routes to new primary)
+mysql -h aurora-mysql-prod.cluster-xxxxx.us-east-1.rds.amazonaws.com \
+      -u admin -p
+
+# Verify read_only is OFF (this is the primary)
+mysql> SELECT @@global.read_only;
++---------------------+
+| @@global.read_only  |
++---------------------+
+|                   0 |
++---------------------+
+```
+
+### Unplanned Failover: Automatic Aurora Behavior
+
+При аварии primary (hardware failure, crash) Aurora **автоматически** переключается на replica.
+
+**Automatic Failover Timeline**:
+
+<Mermaid>
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant EP as Cluster Endpoint
+    participant P1 as Primary (instance-1)
+    participant R2 as Replica (instance-2)
+    participant RDS as RDS Control Plane
+
+    App->>EP: Write request
+    EP->>P1: Route to primary
+    Note over P1: PRIMARY CRASHES
+    P1--xEP: Connection lost
+    EP-->>App: Connection error
+    Note over RDS: Detects failure (30-60s)
+    RDS->>R2: Promote to PRIMARY
+    R2->>R2: SET read_only=OFF
+    RDS->>EP: Update DNS (10-30s)
+    App->>EP: Retry write request
+    EP->>R2: Route to NEW primary
+    R2-->>App: Success
+```
+</Mermaid>
+
+**Expected timeline**:
+- **30-60 seconds** - RDS detects primary failure
+- **30 seconds** - Promotion replica → primary
+- **10-30 seconds** - DNS propagation
+- **Total: 1-2 minutes** for full recovery
+
+**Debezium behavior during automatic failover**:
+1. Connector loses connection to old primary
+2. Connector retries connection (configured via `errors.retry.timeout`)
+3. DNS resolves to new primary
+4. Connector reconnects with last saved GTID
+5. MySQL finds GTID position and continues streaming
+
+**No manual intervention required** - это главное преимущество GTID.
+
+### Manual MySQL Failover (Self-Hosted)
+
+Для self-hosted MySQL (не Aurora) failover требует manual promotion.
+
+**Step 1: Stop Writes на Old Primary** (if still accessible)
+
+```sql
+-- On old primary (if accessible)
+SET GLOBAL read_only = ON;
+FLUSH TABLES WITH READ LOCK;
+```
+
+**Step 2: Promote Replica to Primary**
+
+```sql
+-- On replica that will become new primary
+STOP SLAVE;
+
+-- Remove replica configuration
+RESET SLAVE ALL;
+
+-- Enable writes
+SET GLOBAL read_only = OFF;
+```
+
+**Step 3: Update Application Endpoint**
+
+Либо обновите DNS, либо измените connection string в приложениях и Debezium connector:
+
+```json
+// Update connector config
+{
+  "database.hostname": "new-primary-hostname.example.com",
+  ...
+}
+```
+
+**Step 4: Reconfigure Other Replicas** (если есть)
+
+```sql
+-- On other replicas
+STOP SLAVE;
+
+CHANGE MASTER TO
+  MASTER_HOST='new-primary-hostname.example.com',
+  MASTER_PORT=3306,
+  MASTER_USER='replication_user',
+  MASTER_PASSWORD='password',
+  MASTER_AUTO_POSITION=1;  -- GTID-based replication
+
+START SLAVE;
+```
+
+**MASTER_AUTO_POSITION=1** - ключевой параметр. Он говорит replica использовать GTID для автоматического нахождения позиции (вместо file:position).
+
+## Post-Failover Validation
+
+После завершения failover необходимо проверить, что CDC pipeline восстановился корректно.
+
+### Step 1: Connector Auto-Reconnect Verification
+
+```bash
+# Check connector status
+curl -s http://localhost:8083/connectors/mysql-inventory-connector/status | jq .
+```
+
+**Immediately after failover** (first 30-60 seconds):
+```json
+{
+  "connector": {
+    "state": "RUNNING",
+    "worker_id": "connect:8083"
+  },
+  "tasks": [
+    {
+      "id": 0,
+      "state": "FAILED",  // Temporary
+      "trace": "com.mysql.cj.jdbc.exceptions.CommunicationsException: ..."
+    }
+  ]
+}
+```
+
+**Task `FAILED` - это NORMAL во время failover.**
+
+Connector автоматически retry connection через `errors.retry.timeout` (default 300000ms = 5 minutes).
+
+**After 2-5 minutes** (connector reconnected):
+```json
+{
+  "connector": {
+    "state": "RUNNING"
+  },
+  "tasks": [
+    {
+      "id": 0,
+      "state": "RUNNING"  // Recovered!
+    }
+  ]
+}
+```
+
+**If task remains `FAILED` > 5 minutes**:
+
+```bash
+# Check connector logs
+docker compose logs debezium-connect | tail -100
+
+# Manually restart connector
+curl -X POST http://localhost:8083/connectors/mysql-inventory-connector/restart
+```
+
+### Step 2: Verify GTID Continuity
+
+<Mermaid>
+```mermaid
+sequenceDiagram
+    participant DBA as Engineer
+    participant NP as New Primary
+    participant D as Debezium
+    participant K as Kafka Offset Storage
+
+    DBA->>NP: SHOW GLOBAL VARIABLES LIKE 'gtid_executed'
+    NP-->>DBA: ...562:1-10550
+    DBA->>K: Check Debezium offset
+    K-->>DBA: gtid_set: ...562:1-10500
+    Note over DBA: GTID continuity verified:<br/>Offset (10500) < Executed (10550)<br/>Gap = 50 GTIDs = normal lag
+```
+</Mermaid>
+
+**Query new primary**:
+
+```sql
+-- On new primary
+SELECT @@global.gtid_executed AS current_gtid_set;
+```
+
+**Result**:
+```
++--------------------------------------+
+| current_gtid_set                     |
++--------------------------------------+
+| 3e11fa47-...-c80aa9429562:1-10550    |
++--------------------------------------+
+```
+
+**Check Debezium offset**:
+
+```bash
+# Read offset from Kafka Connect offset storage
+docker compose exec kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic connect-offsets \
+  --from-beginning \
+  --property print.key=true \
+  | grep mysql-inventory-connector | tail -1 | jq .
+```
+
+**Expected offset** (упрощенно):
+```json
+{
+  "gtid_set": "3e11fa47-...-c80aa9429562:1-10500"
+}
+```
+
+**GTID continuity check**:
+- Offset GTID: `1-10500`
+- Executed GTID: `1-10550`
+- **Gap: 50 GTIDs** - normal lag (connector еще не прочитал последние 50 транзакций)
+
+**Good**: Offset GTID находится **внутри** executed GTID range → connector может продолжить.
+
+**Bad**: Offset GTID находится **вне** executed GTID range (например, offset=10600, но executed=10550) → data inconsistency.
+
+### Step 3: Monitor Lag Recovery
+
+```bash
+# Watch lag decrease over time
+watch -n 5 "docker compose exec kafka kafka-consumer-groups \
+  --bootstrap-server localhost:9092 \
+  --group connect-mysql-inventory-connector \
+  --describe"
+```
+
+**Expected behavior**:
+
+```
+Time: 0s (immediately after failover)
+LAG: 150 (connector reconnecting)
+
+Time: 30s
+LAG: 100 (connector catching up)
+
+Time: 60s
+LAG: 50 (recovering)
+
+Time: 120s
+LAG: 5 (normal lag resumed)
+```
+
+**Recovery time expectations**:
+- **Light load** (< 1000 events/sec): 1-3 minutes
+- **Medium load** (1000-10000 events/sec): 3-5 minutes
+- **Heavy load** (> 10000 events/sec): 5-10 minutes
+
+**If lag INCREASES over time**: Problem with connector throughput или downstream Kafka consumers. Investigate:
+- Connector task count (scale out)
+- Kafka broker performance
+- Consumer processing speed
+
+### Step 4: Verify Event Flow
+
+Создать test write на новом primary и убедиться, что CDC событие появляется в Kafka:
+
+```sql
+-- On new primary
+USE inventory;
+INSERT INTO customers (first_name, last_name, email)
+VALUES ('Failover', 'Test', 'failover.test@example.com');
+```
+
+**Consume event**:
+
+```bash
+docker compose exec kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic mysql-server.inventory.customers \
+  --from-beginning \
+  --max-messages 1000 \
+  | grep '"op":"c"' | grep 'Failover'
+```
+
+**Expected event**:
+```json
+{
+  "payload": {
+    "after": {
+      "first_name": "Failover",
+      "last_name": "Test",
+      "email": "failover.test@example.com"
+    },
+    "source": {
+      "gtid": "3e11fa47-...-c80aa9429562:10551",
+      "server_id": 101,  // New primary server_id
+      "snapshot": "false"
+    },
+    "op": "c"
+  }
+}
+```
+
+**Key indicators**:
+- Event появился в Kafka (CDC working)
+- `gtid` продолжает sequence (10551 следует за 10550)
+- `server_id` изменился (новый primary имеет другой server_id)
+
+<Callout type="tip">
+
+**server_id Changes After Failover - This is NORMAL**
+
+`source.server_id` в CDC events отражает MySQL `server_id` сервера, который сгенерировал событие.
+
+**Before failover**:
+- Old primary: `server_id=1`
+- Events: `"server_id": 1`
+
+**After failover**:
+- New primary: `server_id=101`
+- Events: `"server_id": 101`
+
+**This is expected behavior**. GTID обеспечивает continuity, даже если server_id меняется.
+
+</Callout>
+
+### Step 5: Verify SecondsBehindMaster Metric
+
+```sql
+-- On replica (if you have replica connected to new primary)
+SHOW SLAVE STATUS\G
+```
+
+**Expected during failover**:
+```
+Seconds_Behind_Master: -1
+```
+
+**`-1` = Normal during failover** - означает, что replica еще не синхронизировалась или connection lost.
+
+**After failover (1-2 minutes)**:
+```
+Seconds_Behind_Master: 0
+```
+
+**If stuck at `Seconds_Behind_Master: -1` > 5 minutes**:
+- Check `Slave_IO_Running: Yes` и `Slave_SQL_Running: Yes`
+- Check `Last_Error:` для ошибок репликации
+
+## Multi-Region Aurora GTID Considerations
+
+Aurora Global Database использует **cross-region replication** с отдельными GTID source UUIDs для каждого regional cluster.
+
+### Architecture
+
+<Mermaid>
+```mermaid
+graph LR
+    subgraph "US-East-1 (Primary Region)"
+        P1[Primary Writer<br/>UUID: 3e11fa47...]
+        R1[Reader Instance]
+    end
+
+    subgraph "EU-West-1 (Secondary Region)"
+        P2[Primary Writer<br/>UUID: 4f22gb58...]
+        R2[Reader Instance]
+    end
+
+    P1 -->|Replication<br/>< 1 second| P2
+
+    style P1 fill:#90EE90
+    style P2 fill:#FFE4B5
+```
+</Mermaid>
+
+**Key characteristic**: Каждый regional cluster имеет **свой server_uuid**.
+
+**GTID sets после cross-region replication**:
+
+**US-East-1 Primary** (original primary region):
+```sql
+SELECT @@global.gtid_executed;
+-- 3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10000
+```
+
+**EU-West-1 Secondary** (replicated from US-East-1):
+```sql
+SELECT @@global.gtid_executed;
+-- 3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10000,
+-- 4f22gb58-82db-22f2-af44-d91ba0530673:1-50
+```
+
+**Объяснение**:
+- Secondary region имеет **оба UUID**
+- UUIDs от US-East-1 (replicated transactions)
+- UUIDs от EU-West-1 (local heartbeat, metadata transactions)
+
+### Connector Configuration для Global Database
+
+```json
+{
+  "gtid.source.includes": ".*",  // CRITICAL - include ALL region UUIDs
+  ...
+}
+```
+
+**Почему `".*"` critical**:
+
+Если использовать explicit UUID:
+```json
+"gtid.source.includes": "3e11fa47-71ca-11e1-9e33-c80aa9429562"
+```
+
+**Problem**: После cross-region failover (promotion EU-West-1 → primary), connector будет **игнорировать** события с UUID `4f22gb58...`.
+
+**Result**: Partial data loss.
+
+**Solution**: Always use `".*"` для Global Database.
+
+### Cross-Region Failover Validation
+
+После promotion secondary region → primary:
+
+```sql
+-- On EU-West-1 (new primary)
+SELECT @@global.gtid_executed;
+-- 3e11fa47-...:1-10000,     (old primary transactions)
+-- 4f22gb58-...:1-100         (new transactions from promoted primary)
+```
+
+**Debezium offset после failover**:
+```json
+{
+  "gtid_set": "3e11fa47-...:1-10000,4f22gb58-...:1-100"
+}
+```
+
+Connector корректно отслеживает **оба UUID** и продолжает чтение.
+
+## Troubleshooting Failover Issues
+
+### Issue 1: Connector Doesn't Restart After Failover
+
+**Symptom**:
+```json
+{
+  "tasks": [
+    {
+      "state": "FAILED",
+      "trace": "Cannot replicate because the master purged required binary logs"
+    }
+  ]
+}
+```
+
+**Cause**: Debezium offset GTID находится в purged range.
+
+**Diagnosis**:
+
+```sql
+-- On new primary
+SHOW GLOBAL VARIABLES LIKE 'gtid_purged';
+-- Result: 3e11fa47-...:1-5000
+
+-- Compare with Debezium offset
+-- Offset: 3e11fa47-...:1-4500 (INSIDE purged range - BAD)
+```
+
+**Solution**:
+
+**Option A**: Resnapshot (data loss, но гарантированная recovery)
+
+```bash
+# Change snapshot mode
+curl -X PUT http://localhost:8083/connectors/mysql-inventory-connector/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    ...
+    "snapshot.mode": "initial",
+    ...
+  }'
+
+# Delete and recreate connector (force resnapshot)
+curl -X DELETE http://localhost:8083/connectors/mysql-inventory-connector
+curl -X POST http://localhost:8083/connectors -d @mysql-connector-config.json
+```
+
+**Option B**: Backup-based recovery (если есть backup)
+
+Restore MySQL from backup at point before purge, restart connector from that GTID.
+
+**Prevention**:
+- Heartbeat events (обновляют offset даже на idle таблицах)
+- Longer binlog retention (`binlog_expire_logs_seconds`)
+- Alerting на `gtid_purged` approaching Debezium offset
+
+### Issue 2: Duplicate Events After Failover
+
+**Symptom**: Одинаковые события появляются дважды в Kafka topics после failover.
+
+**Cause**: `gtid.source.includes` неправильно настроен - connector читает события от старого primary после reconnect к новому.
+
+**Diagnosis**:
+
+```bash
+# Check CDC events for duplicate primary keys
+docker compose exec kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic mysql-server.inventory.customers \
+  --from-beginning \
+  | jq '.payload.after.id' | sort | uniq -d
+
+# If output shows duplicate IDs - problem confirmed
+```
+
+**Solution**:
+
+Проверить `gtid.source.includes` configuration:
+
+```json
+// Correct for multi-server topology
+"gtid.source.includes": ".*"
+
+// OR explicit list with ALL server UUIDs
+"gtid.source.includes": "3e11fa47-...,4f22gb58-...,..."
+```
+
+**Restart connector** после изменения config.
+
+### Issue 3: SecondsBehindMaster = -1 (Not Recovering)
+
+**Symptom**: После failover replica показывает `Seconds_Behind_Master: -1` и не восстанавливается.
+
+**Cause**: Replica не может найти GTID position на новом primary.
+
+**Diagnosis**:
+
+```sql
+-- On replica
+SHOW SLAVE STATUS\G
+```
+
+**Look for**:
+```
+Last_IO_Error: Got fatal error 1236 from master when reading data from binary log:
+'The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1,
+but the master has purged binary logs containing GTIDs that the slave requires.'
+```
+
+**Cause**: Replica offset GTID находится в purged range на новом primary.
+
+**Solution**:
+
+**Rebuild replica** from backup или resnapshot:
+
+```sql
+-- On replica
+STOP SLAVE;
+RESET SLAVE ALL;
+
+-- Restore from backup at current GTID position
+
+-- Reconfigure replication
+CHANGE MASTER TO
+  MASTER_HOST='new-primary-host',
+  MASTER_AUTO_POSITION=1;
+
+START SLAVE;
+```
+
+### Issue 4: GTID Set Doesn't Match Between Old and New Primary
+
+**Symptom**: Post-failover validation показывает inconsistent GTID sets.
+
+**Example**:
+- Old primary: `3e11fa47-...:1-10000`
+- New primary: `3e11fa47-...:1-9950`
+
+**Cause**: Replica **не догнал** old primary перед failover (асинхронная репликация).
+
+**Diagnosis**:
+
+```sql
+-- Compare GTID sets
+-- On old primary (if accessible)
+SELECT @@global.gtid_executed AS old_primary_gtid;
+
+-- On new primary
+SELECT @@global.gtid_executed AS new_primary_gtid;
+```
+
+**Solution**:
+
+**If old primary accessible**:
+
+```sql
+-- On old primary
+-- Export missing GTIDs (10000 - 9950 = 50 transactions)
+mysqldump --single-transaction \
+  --set-gtid-purged=OFF \
+  --gtid \
+  --include-gtids='3e11fa47-...:9951-10000' \
+  --all-databases > missing_gtids.sql
+
+-- Import to new primary
+mysql -h new-primary < missing_gtids.sql
+```
+
+**If old primary NOT accessible**:
+
+Accept data loss for missing 50 GTIDs, document in incident report.
+
+**Prevention**:
+- Use **synchronous replication** (Aurora MySQL supports `rpl_semi_sync_master_enabled`)
+- Wait for replica lag = 0 before planned failover
+- Aurora automatic failover minimizes this risk (< 1 second lag)
+
+### Issue 5: Cross-Region Failover - Connector Ignores New Primary Events
+
+**Symptom**: После cross-region failover (EU promoted to primary) connector не читает новые события.
+
+**Cause**: `gtid.source.includes` содержит только UUID primary region, excludes secondary region UUID.
+
+**Diagnosis**:
+
+```bash
+# Check connector config
+curl -s http://localhost:8083/connectors/mysql-inventory-connector \
+  | jq '.config."gtid.source.includes"'
+
+# Result: "3e11fa47-71ca-11e1-9e33-c80aa9429562"  (only US-East UUID)
+```
+
+**After EU promotion**, события имеют UUID `4f22gb58-...`, который **excluded** от connector.
+
+**Solution**:
+
+```bash
+# Update connector config to include ALL UUIDs
+curl -X PUT http://localhost:8083/connectors/mysql-inventory-connector/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    ...
+    "gtid.source.includes": ".*",  // OR explicit: "3e11fa47...,4f22gb58..."
+    ...
+  }'
+```
+
+Connector перезапустится и начнет читать события от нового primary UUID.
+
+## Complete Failover Runbook
+
+Объединенный bash script для запланированного failover (Aurora MySQL).
+
+```bash
+#!/bin/bash
+# Aurora MySQL Planned Failover Runbook with GTID
+# Prerequisites: AWS CLI, jq, mysql-client installed
+
+set -e  # Exit on error
+
+CLUSTER_ID="aurora-mysql-prod"
+TARGET_INSTANCE="aurora-mysql-prod-instance-2"  # Optional - leave empty for auto-select
+CONNECTOR_NAME="mysql-inventory-connector"
+KAFKA_CONNECT_URL="http://localhost:8083"
+
+echo "=== Aurora MySQL Failover Runbook ==="
+echo "Cluster: $CLUSTER_ID"
+echo "Target: ${TARGET_INSTANCE:-auto-select}"
+echo ""
+
+# === PRE-FAILOVER VALIDATION ===
+echo "[1/7] Pre-Failover Validation"
+
+# Check connector status
+echo "  → Checking connector status..."
+CONNECTOR_STATE=$(curl -s "$KAFKA_CONNECT_URL/connectors/$CONNECTOR_NAME/status" | jq -r '.connector.state')
+if [ "$CONNECTOR_STATE" != "RUNNING" ]; then
+  echo "  ✗ Connector not RUNNING (state: $CONNECTOR_STATE)"
+  echo "  ABORT: Fix connector before failover"
+  exit 1
+fi
+echo "  ✓ Connector RUNNING"
+
+# Record current GTID on primary
+echo "  → Recording current GTID on primary..."
+CURRENT_GTID=$(mysql -h "$CLUSTER_ID.cluster-xxxxx.us-east-1.rds.amazonaws.com" \
+  -u admin -pPASSWORD \
+  -sNe "SELECT @@global.gtid_executed")
+echo "  ✓ Current GTID: $CURRENT_GTID"
+
+# Check lag
+echo "  → Checking connector lag..."
+MAX_LAG=$(docker compose exec kafka kafka-consumer-groups \
+  --bootstrap-server localhost:9092 \
+  --group connect-$CONNECTOR_NAME \
+  --describe | awk 'NR>1 {print $6}' | sort -n | tail -1)
+if [ "$MAX_LAG" -gt 1000 ]; then
+  echo "  ⚠ High lag: $MAX_LAG events"
+  echo "  Recommendation: Wait for lag < 1000 before failover"
+  read -p "  Continue anyway? (yes/no): " CONFIRM
+  if [ "$CONFIRM" != "yes" ]; then exit 1; fi
+else
+  echo "  ✓ Lag acceptable: $MAX_LAG events"
+fi
+
+# === FAILOVER EXECUTION ===
+echo ""
+echo "[2/7] Executing Failover"
+
+if [ -n "$TARGET_INSTANCE" ]; then
+  aws rds failover-db-cluster \
+    --db-cluster-identifier "$CLUSTER_ID" \
+    --target-db-instance-identifier "$TARGET_INSTANCE"
+else
+  aws rds failover-db-cluster \
+    --db-cluster-identifier "$CLUSTER_ID"
+fi
+
+echo "  → Failover initiated"
+
+# === MONITOR FAILOVER PROGRESS ===
+echo ""
+echo "[3/7] Monitoring Failover Progress"
+
+while true; do
+  STATUS=$(aws rds describe-db-clusters \
+    --db-cluster-identifier "$CLUSTER_ID" \
+    --query 'DBClusters[0].Status' \
+    --output text)
+
+  echo "  Cluster status: $STATUS"
+
+  if [ "$STATUS" == "available" ]; then
+    echo "  ✓ Failover complete"
+    break
+  fi
+
+  sleep 10
+done
+
+# === VERIFY NEW PRIMARY ===
+echo ""
+echo "[4/7] Verifying New Primary"
+
+NEW_PRIMARY=$(aws rds describe-db-clusters \
+  --db-cluster-identifier "$CLUSTER_ID" \
+  --query 'DBClusters[0].DBClusterMembers[?IsClusterWriter==`true`].DBInstanceIdentifier' \
+  --output text)
+
+echo "  ✓ New primary: $NEW_PRIMARY"
+
+# Wait for DNS propagation
+echo "  → Waiting for DNS propagation (30s)..."
+sleep 30
+
+# === VERIFY CONNECTOR RECOVERY ===
+echo ""
+echo "[5/7] Verifying Connector Recovery"
+
+RETRY=0
+while [ $RETRY -lt 12 ]; do  # 2 minutes max
+  TASK_STATE=$(curl -s "$KAFKA_CONNECT_URL/connectors/$CONNECTOR_NAME/status" | jq -r '.tasks[0].state')
+
+  if [ "$TASK_STATE" == "RUNNING" ]; then
+    echo "  ✓ Connector task recovered"
+    break
+  else
+    echo "  Connector task state: $TASK_STATE (retry $RETRY/12)"
+    sleep 10
+    RETRY=$((RETRY + 1))
+  fi
+done
+
+if [ $RETRY -eq 12 ]; then
+  echo "  ✗ Connector task not recovered after 2 minutes"
+  echo "  Manual intervention required"
+fi
+
+# === VERIFY GTID CONTINUITY ===
+echo ""
+echo "[6/7] Verifying GTID Continuity"
+
+NEW_GTID=$(mysql -h "$CLUSTER_ID.cluster-xxxxx.us-east-1.rds.amazonaws.com" \
+  -u admin -pPASSWORD \
+  -sNe "SELECT @@global.gtid_executed")
+
+echo "  Old GTID: $CURRENT_GTID"
+echo "  New GTID: $NEW_GTID"
+echo "  ✓ GTID continuity (manual verification required)"
+
+# === TEST WRITE ===
+echo ""
+echo "[7/7] Testing CDC Event Flow"
+
+TEST_EMAIL="failover-test-$(date +%s)@example.com"
+mysql -h "$CLUSTER_ID.cluster-xxxxx.us-east-1.rds.amazonaws.com" \
+  -u admin -pPASSWORD \
+  inventory \
+  -e "INSERT INTO customers (first_name, last_name, email) VALUES ('Failover', 'Test', '$TEST_EMAIL')"
+
+echo "  → Test write inserted: $TEST_EMAIL"
+echo "  → Waiting for CDC event (30s)..."
+sleep 30
+
+# Check if event appeared in Kafka
+docker compose exec kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic mysql-server.inventory.customers \
+  --from-beginning \
+  --timeout-ms 5000 \
+  | grep -q "$TEST_EMAIL" && echo "  ✓ CDC event confirmed" || echo "  ✗ CDC event not found"
+
+echo ""
+echo "=== Failover Complete ==="
+echo "Summary:"
+echo "  Old primary: (demoted)"
+echo "  New primary: $NEW_PRIMARY"
+echo "  Connector: $TASK_STATE"
+echo "  GTID: Continuity verified"
+```
+
+**Использование**:
+
+```bash
+chmod +x failover-runbook.sh
+./failover-runbook.sh
+```
+
+**Customize variables** в начале скрипта под свою инфраструктуру.
+
+## Hands-On Exercise
+
+Попробуйте процедуру failover в lab environment.
+
+### Exercise 1: Verify GTID Prerequisites
+
+```bash
+# 1. Check GTID mode on lab MySQL
+docker compose exec mysql mysql -u root -pmysql -e "
+SELECT
+  @@global.gtid_mode AS gtid_mode,
+  @@global.enforce_gtid_consistency AS enforce_gtid,
+  @@global.gtid_executed AS executed_gtid_set;
+"
+
+# Expected: gtid_mode=ON, enforce_gtid=ON
+```
+
+### Exercise 2: Simulate Connector Restart (Failover Equivalent)
+
+```bash
+# 2. Record current GTID offset
+docker compose exec kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic connect-offsets \
+  --from-beginning \
+  --timeout-ms 5000 \
+  | grep mysql-inventory-connector | tail -1 > offset_before.json
+
+cat offset_before.json | jq '.gtid_set'
+
+# 3. Restart connector (simulates failover reconnect)
+docker compose restart debezium-connect
+
+# Wait 30 seconds for connector to recover
+
+# 4. Verify connector recovered
+curl -s http://localhost:8083/connectors/mysql-inventory-connector/status | jq .
+
+# Expected: state=RUNNING
+```
+
+### Exercise 3: Verify Automatic Position Recovery
+
+```bash
+# 5. Check offset after restart
+docker compose exec kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic connect-offsets \
+  --from-beginning \
+  --timeout-ms 5000 \
+  | grep mysql-inventory-connector | tail -1 > offset_after.json
+
+cat offset_after.json | jq '.gtid_set'
+
+# 6. Compare before/after - GTID should continue from saved position
+echo "Before: $(cat offset_before.json | jq -r '.gtid_set')"
+echo "After:  $(cat offset_after.json | jq -r '.gtid_set')"
+
+# Expected: After GTID >= Before GTID (connector continued from saved position)
+```
+
+### Exercise 4: Aurora Failover (Optional - Requires AWS Access)
+
+Если у вас есть Aurora test cluster:
+
+```bash
+# 1. Follow complete runbook from previous section
+# 2. Document failover timeline (start time → complete time)
+# 3. Measure connector recovery time
+# 4. Verify zero data loss (compare event count before/after)
+```
+
+## Key Takeaways
+
+- **GTID failover** автоматический - connector продолжает с saved GTID на новом primary без manual intervention
+- **Prerequisites critical**: gtid_mode=ON, enforce_gtid_consistency=ON на всех серверах в топологии
+- **replica_preserve_commit_order=ON** обязателен если используется parallel replication (workers > 0)
+- **gtid.source.includes=".*"** рекомендуется для Aurora Global Database (поддержка multi-region UUIDs)
+- **snapshot.mode=when_needed** позволяет connector resume from saved GTID (avoid unnecessary resnapshot)
+- **heartbeat.interval.ms** MANDATORY для production - предотвращает position loss на idle таблицах
+- **Aurora planned failover**: 1-2 минуты downtime через `aws rds failover-db-cluster`
+- **Aurora automatic failover**: 1-2 минуты при hardware failure (no manual intervention)
+- **Post-failover validation**: Connector status, GTID continuity, lag recovery, test write verification
+- **Multi-region considerations**: Separate UUIDs per region, connector must include all UUIDs
+- **Common pitfalls**: Purged binlog, missing heartbeat, gtid.source.includes misconfiguration, SecondsBehindMaster=-1
+- **Troubleshooting**: Check connector logs, verify GTID sets, monitor lag, test CDC event flow
+- **Complete runbook** включает pre-checks, execution, validation - copy-paste ready for production
+
+## Что дальше?
+
+Вы освоили GTID failover процедуры - критичный навык для production CDC deployments.
+
+**Следующий урок**: **Monitoring и Alerting для MySQL CDC**
+
+Мы изучим:
+- Ключевые метрики для мониторинга (lag, binlog size, GTID gap, connector health)
+- Alerting rules (когда алертить на position loss, high lag, binlog retention issues)
+- Dashboards (Grafana визуализация для MySQL CDC pipeline)
+- Incident response playbooks (runbooks для типичных проблем)
+
+Failover procedures бесполезны без **proactive monitoring**, которое предупредит о проблемах до failover.
