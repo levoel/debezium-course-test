@@ -525,6 +525,64 @@ CREATE TABLE orders (
 
 **Prevention:** Monitoring — first-class deliverable, not afterthought.
 
+### 7. Shared Schema History Topic (Multi-Database)
+
+**Ошибка:** Два MySQL коннектора используют один `schema.history.internal.kafka.topic` — DDL от одного коннектора "загрязняет" историю другого.
+
+**Симптомы:**
+- Коннектор падает с "schema mismatch" ошибками после DDL изменений в другой базе
+- Unexpected table definitions в schema history
+- Recovery после restart не работает
+
+**Fix:**
+```json
+// Connector 1
+"schema.history.internal.kafka.topic": "schema-changes.mysql-connector-1"
+
+// Connector 2
+"schema.history.internal.kafka.topic": "schema-changes.mysql-connector-2"
+```
+
+**Prevention:** Каждый MySQL коннектор должен иметь уникальный schema history topic.
+
+### 8. Duplicate database.server.name (Multi-Database)
+
+**Ошибка:** PostgreSQL и MySQL коннекторы используют одинаковый `database.server.name` — события перезаписывают друг друга в одних топиках.
+
+**Симптомы:**
+- События от одного источника "пропадают"
+- Kafka topic содержит смешанные события без возможности различить источник
+- Consumer processing fails с unexpected schema
+
+**Fix:**
+```json
+// PostgreSQL connector
+"database.server.name": "postgres_prod"
+
+// MySQL connector
+"database.server.name": "mysql_prod"
+```
+
+**Prevention:** Используйте naming convention: `{database_type}_{environment}`.
+
+### 9. Ignoring Connector-Specific Recovery (Multi-Database)
+
+**Ошибка:** Применение PostgreSQL recovery procedures к MySQL коннектору или наоборот.
+
+**Симптомы:**
+- Recovery не работает ("slot not found" для MySQL, "binlog not found" для PostgreSQL)
+- Resnapshot triggers unexpectedly
+- Data loss после failover
+
+**Key differences:**
+| Recovery Scenario | PostgreSQL | MySQL |
+|-------------------|------------|-------|
+| Position loss | Recreate slot + resnapshot | Backup schema history + resnapshot |
+| WAL/binlog purge | Increase wal_keep_size | Increase binlog retention (Aurora: stored procedure) |
+| Connector restart | Automatic (slot preserves position) | Automatic (GTID or offset) |
+
+**Prevention:** Документируйте runbook procedures отдельно для каждого типа коннектора.
+
 ## Multi-Database Capstone Extension (Optional)
 
 Если вы прошли Module 8 (MySQL) и хотите расширить ваш capstone проект добавлением второго источника данных (MySQL), эта секция предоставляет checklist для multi-database CDC pipeline.
@@ -641,5 +699,9 @@ CREATE TABLE orders (
 8. **Testing strategy:** source-to-target validation, negative testing, chaos testing (kill components)
 9. **Scoring rubric:** Exemplary = all sections + advanced patterns, Meets Expectations = core works + minimal monitoring/docs
 10. **Not all items required:** Adapt checklist to your use case, explain why items skipped
+11. **Multi-database extension** требует unique identifiers для каждого коннектора: `database.server.id`, `database.server.name`, `schema.history.internal.kafka.topic`
+12. **Schema history topic sharing** — критическая ошибка для MySQL multi-connector deployments
+13. **Recovery procedures различаются:** PostgreSQL использует replication slots, MySQL использует schema history topic + GTID/binlog position
+14. **Unified consumer** должен отслеживать `source_database` для трассировки происхождения событий
 
 Этот checklist — ваш guide к production-ready CDC pipeline. Используйте его, итерируйте, и продемонстрируйте понимание production patterns. Удачи с capstone проектом!
