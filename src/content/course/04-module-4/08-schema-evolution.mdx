@@ -1,0 +1,678 @@
+---
+title: "Schema Evolution and Compatibility"
+description: "Managing schema changes with backward/forward compatibility"
+order: 8
+difficulty: "advanced"
+estimatedTime: 35
+topics: ["schema-evolution", "compatibility", "schema-registry"]
+prerequisites: ["module-4/07-schema-registry-avro"]
+---
+
+import { Mermaid } from '../../../components/Mermaid.tsx';
+
+# Schema Evolution и управление совместимостью
+
+Вы настроили Schema Registry, Avro работает. Но вот приходит задача: **добавить новое поле в таблицу customers**. Казалось бы, простая операция — `ALTER TABLE ADD COLUMN`. Но в CDC мире это может сломать downstream consumers.
+
+**Schema evolution** — это искусство изменять схемы данных без breaking changes. В этом уроке мы изучим compatibility modes, какие изменения безопасны, и как тестировать совместимость перед deployment.
+
+## Почему schema evolution — критическая проблема
+
+В микросервисной архитектуре CDC события потребляют десятки сервисов. Каждый сервис обновляется независимо. **Изменение схемы может сломать consumers, которые не обновились**.
+
+<Mermaid chart={`
+flowchart TB
+    subgraph DATABASE["PostgreSQL"]
+        TABLE["customers table<br/>v1: id, name, email<br/>v2: id, name, email, phone"]
+    end
+
+    subgraph CDC["Debezium"]
+        CONNECTOR["Connector<br/>Schema v2"]
+    end
+
+    subgraph KAFKA["Kafka Topic"]
+        MESSAGES["Mixed messages:<br/>Schema v1 events<br/>Schema v2 events"]
+    end
+
+    subgraph CONSUMERS["Consumers"]
+        C1["Service A<br/>Code expects v1"]
+        C2["Service B<br/>Code expects v2"]
+        C3["Service C<br/>Code expects v1"]
+    end
+
+    TABLE --> CONNECTOR
+    CONNECTOR --> MESSAGES
+    MESSAGES --> C1
+    MESSAGES --> C2
+    MESSAGES --> C3
+
+    style C1 fill:#ef4444
+    style C2 fill:#10b981
+    style C3 fill:#ef4444
+`} client:visible />
+
+**Проблема:**
+- Connector начинает отправлять события с новым полем `phone` (schema v2)
+- Service A и C все еще используют старый код (ожидают schema v1)
+- Если новое поле **required** — десериализация упадет с ошибкой
+
+**Решение:** Schema Registry с **compatibility modes** предотвращает регистрацию несовместимых схем.
+
+> **Production истина:** Без управления совместимостью каждое изменение схемы требует coordinated deployment всех producers и consumers в один момент. Для распределенной системы это невозможно.
+
+## Compatibility Modes: Полное объяснение
+
+Schema Registry поддерживает несколько **compatibility modes**, которые определяют, какие изменения схем разрешены.
+
+| Mode | Old Consumer + New Data | New Consumer + Old Data | Safe Changes | Upgrade Order |
+|------|-------------------------|-------------------------|--------------|---------------|
+| **BACKWARD** | ✅ Compatible | ❌ May fail | Add optional field<br/>Remove field | Consumers first, then producers |
+| **FORWARD** | ❌ May fail | ✅ Compatible | Add field<br/>Remove optional field | Producers first, then consumers |
+| **FULL** | ✅ Compatible | ✅ Compatible | Add/remove optional fields | Any order |
+| **NONE** | ❌ No checks | ❌ No checks | Any change | Manual coordination |
+
+### BACKWARD (default) — Old consumer reads new data
+
+**Гарантия:** Старый consumer код может читать данные, записанные новой схемой.
+
+**Сценарий:**
+1. У вас запущены consumers с кодом для schema v1
+2. Вы обновляете БД и connector — появляется schema v2
+3. Old consumers продолжают работать (игнорируют новые поля)
+4. Затем вы обновляете consumers до v2
+
+**Safe changes:**
+- ✅ Add optional field (with default value)
+- ✅ Remove field (old consumer не ожидал его)
+
+**Unsafe changes:**
+- ❌ Add required field (old consumer не знает, как его заполнить)
+- ❌ Change field type (старый код ожидает другой тип)
+- ❌ Rename field (для старого кода это удаление + добавление)
+
+**Пример:**
+
+```avro
+// Schema v1
+{
+  "type": "record",
+  "name": "Customer",
+  "fields": [
+    {"name": "id", "type": "int"},
+    {"name": "email", "type": "string"}
+  ]
+}
+
+// Schema v2 (BACKWARD compatible)
+{
+  "type": "record",
+  "name": "Customer",
+  "fields": [
+    {"name": "id", "type": "int"},
+    {"name": "email", "type": "string"},
+    {"name": "phone", "type": ["null", "string"], "default": null}  // Optional field
+  ]
+}
+```
+
+**Что происходит:**
+- Old consumer читает v2 message → игнорирует поле `phone`, обрабатывает `id` и `email` (работает)
+- New consumer читает v1 message → видит `phone = null` (может сломаться, если код не проверяет null)
+
+### FORWARD — New consumer reads old data
+
+**Гарантия:** Новый consumer код может читать данные, записанные старой схемой.
+
+**Сценарий:**
+1. Вы обновляете consumers до v2 (ожидают новое поле)
+2. Connector все еще на schema v1
+3. New consumers обрабатывают старые события (используют default values)
+4. Затем обновляете connector до v2
+
+**Safe changes:**
+- ✅ Add field (new consumer использует default для старых events)
+- ✅ Remove optional field (new consumer не ожидает его)
+
+**Unsafe changes:**
+- ❌ Remove required field (новый consumer ожидает его)
+
+**Когда использовать:** Редко. BACKWARD проще в управлении.
+
+### FULL — Both directions compatible
+
+**Гарантия:** И старые, и новые consumers могут читать любые данные.
+
+**Safe changes:**
+- ✅ Add optional field with default
+- ✅ Remove optional field
+
+**Unsafe changes:**
+- ❌ Add required field
+- ❌ Remove required field
+- ❌ Change field type
+
+**Когда использовать:** Когда нет контроля над порядком deployment (producers и consumers обновляются независимо).
+
+**Цена:** Самые строгие ограничения — можно делать минимум изменений.
+
+### TRANSITIVE варианты
+
+Стандартные modes проверяют совместимость только с **immediate previous version**. TRANSITIVE modes проверяют со **всеми предыдущими версиями**.
+
+| Mode | Checks Compatibility With |
+|------|---------------------------|
+| BACKWARD | Latest version only (v2 compatible with v1) |
+| BACKWARD_TRANSITIVE | All versions (v3 compatible with v1 AND v2) |
+| FORWARD_TRANSITIVE | All versions forward |
+| FULL_TRANSITIVE | Both directions, all versions |
+
+**Когда использовать TRANSITIVE:**
+- Long-running consumers (могут быть отстающими на несколько версий)
+- Системы с долгосрочным storage (Kafka retention = 30 дней, могут читаться старые события)
+
+**Цена:** Еще более строгие ограничения.
+
+## Decision Tree: Какой режим выбрать?
+
+<Mermaid chart={`
+flowchart TD
+    START["Выбор compatibility mode"]
+
+    Q1{"Можете ли вы контролировать<br/>порядок deployment?"}
+    Q1 -->|"Да"| Q2{"Consumers обновляются<br/>быстро (minutes-hours)?"}
+    Q1 -->|"Нет"| FULL["FULL<br/>Максимальная безопасность<br/>Минимум flexibility"]
+
+    Q2 -->|"Да"| BACKWARD["BACKWARD (default)<br/>Рекомендуется<br/>Consumers first deployment"]
+    Q2 -->|"Нет"| Q3{"Consumers могут отставать<br/>на несколько версий?"}
+
+    Q3 -->|"Да"| BACKWARD_TRANS["BACKWARD_TRANSITIVE<br/>Для long-running consumers"]
+    Q3 -->|"Нет"| BACKWARD
+
+    style BACKWARD fill:#10b981
+    style BACKWARD_TRANS fill:#3b82f6
+    style FULL fill:#f59e0b
+`} client:visible />
+
+**Рекомендация для большинства CDC систем:** BACKWARD (default).
+
+**Почему:**
+1. Consumers обычно легче обновить, чем producers (меньше instances, проще deployment)
+2. Consumers можно обновить постепенно (canary, blue-green)
+3. Producer (Debezium) один, обновить можно атомарно
+
+## Безопасные и небезопасные изменения схем
+
+Давайте систематизируем, какие изменения схем безопасны для каждого mode.
+
+### Добавление поля
+
+| Change | BACKWARD | FORWARD | FULL |
+|--------|----------|---------|------|
+| Add optional field (with default) | ✅ | ✅ | ✅ |
+| Add required field | ❌ | ✅ | ❌ |
+
+**Пример безопасного добавления:**
+
+```sql
+-- PostgreSQL
+ALTER TABLE customers ADD COLUMN phone VARCHAR(20);
+```
+
+**Avro schema (auto-generated by Debezium):**
+```avro
+{
+  "name": "phone",
+  "type": ["null", "string"],  // Nullable = optional
+  "default": null
+}
+```
+
+**Почему безопасно для BACKWARD:**
+- Old consumer не знает про `phone` → игнорирует это поле
+- New consumer видит `phone = null` для старых records
+
+### Удаление поля
+
+| Change | BACKWARD | FORWARD | FULL |
+|--------|----------|---------|------|
+| Remove optional field | ✅ | ✅ | ✅ |
+| Remove required field | ✅ | ❌ | ❌ |
+
+**Пример:**
+
+```sql
+-- PostgreSQL
+ALTER TABLE customers DROP COLUMN middle_name;
+```
+
+**Почему безопасно для BACKWARD:**
+- Old consumer ожидает `middle_name` → Avro schema предоставит default value (null)
+- New consumer не ожидает `middle_name` → работает
+
+### Изменение типа поля
+
+| Change | BACKWARD | FORWARD | FULL |
+|--------|----------|---------|------|
+| Any type change | ❌ | ❌ | ❌ |
+
+**Никогда не безопасно** ни для одного режима.
+
+**Пример небезопасного изменения:**
+
+```sql
+-- PostgreSQL: Изменить email с VARCHAR на TEXT
+ALTER TABLE customers ALTER COLUMN email TYPE TEXT;
+```
+
+**Проблема:**
+- Avro видит это как `string` → `string` (тот же тип)
+- Но если бы был `INT` → `BIGINT`, Schema Registry отклонит схему
+
+**Workaround для изменения типа:**
+1. Добавить новое поле с новым типом: `email_v2 TEXT`
+2. Заполнить `email_v2` из `email` (migration script)
+3. Обновить consumers для использования `email_v2`
+4. Удалить старое поле `email`
+
+### Переименование поля
+
+| Change | BACKWARD | FORWARD | FULL |
+|--------|----------|---------|------|
+| Rename field | ❌ | ❌ | ❌ |
+
+**Avro воспринимает rename как DELETE + ADD**, что не проходит compatibility check.
+
+**Workaround:**
+- Avro поддерживает **aliases** — можно указать старое имя как alias
+- Но Debezium auto-generated schemas не используют aliases
+
+**Решение:**
+1. Добавить новое поле с новым именем
+2. Migrate consumers
+3. Удалить старое поле
+
+### Изменение default value
+
+| Change | BACKWARD | FORWARD | FULL |
+|--------|----------|---------|------|
+| Change default | ✅ | ✅ | ✅ |
+
+**Безопасно** — default используется только при отсутствии значения.
+
+## Настройка Compatibility Mode
+
+Schema Registry позволяет настроить compatibility mode **глобально** или **per-subject**.
+
+### Глобальный режим (default для всех subjects)
+
+```bash
+# Получить текущий режим
+curl http://localhost:8081/config
+
+# Вывод:
+# {"compatibilityLevel":"BACKWARD"}
+
+# Установить новый режим
+curl -X PUT http://localhost:8081/config \
+  -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  -d '{"compatibility": "FULL"}'
+```
+
+### Per-subject режим (override для конкретного subject)
+
+```bash
+# Установить режим для конкретной схемы
+curl -X PUT http://localhost:8081/config/dbserver1.inventory.customers-value \
+  -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  -d '{"compatibility": "BACKWARD_TRANSITIVE"}'
+
+# Проверить режим для subject
+curl http://localhost:8081/config/dbserver1.inventory.customers-value
+
+# Вывод:
+# {"compatibilityLevel":"BACKWARD_TRANSITIVE"}
+```
+
+**Когда использовать per-subject override:**
+- Критичные schemas требуют FULL (максимальная безопасность)
+- Internal schemas могут использовать NONE (полный контроль)
+
+## Тестирование совместимости перед deployment
+
+**Золотое правило:** НИКОГДА не деплойте schema changes в production без проверки compatibility.
+
+Schema Registry предоставляет **compatibility test API** — проверить схему перед регистрацией.
+
+### Проверка совместимости новой схемы
+
+```bash
+# Test new schema against latest version
+curl -X POST http://localhost:8081/compatibility/subjects/dbserver1.inventory.customers-value/versions/latest \
+  -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  -d '{
+    "schema": "{\"type\":\"record\",\"name\":\"Customer\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"email\",\"type\":\"string\"},{\"name\":\"phone\",\"type\":[\"null\",\"string\"],\"default\":null}]}"
+  }'
+```
+
+**Ответ при успешной проверке:**
+```json
+{
+  "is_compatible": true
+}
+```
+
+**Ответ при несовместимости:**
+```json
+{
+  "is_compatible": false,
+  "messages": [
+    "Unable to read schema: new field 'phone' is required but has no default"
+  ]
+}
+```
+
+### Проверка против конкретной версии
+
+```bash
+# Test against version 2 (not latest)
+curl -X POST http://localhost:8081/compatibility/subjects/dbserver1.inventory.customers-value/versions/2 \
+  -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  -d '{"schema": "..."}'
+```
+
+**Когда использовать:** При TRANSITIVE modes, чтобы проверить совместимость со старыми версиями.
+
+### Извлечение Avro schema из Debezium event
+
+Если вы хотите протестировать compatibility, нужно получить Avro schema из CDC события.
+
+**Способ 1: Через Kafka (если connector уже запущен):**
+
+```bash
+# Consume one message in Avro format
+docker exec -it schema-registry kafka-avro-console-consumer \
+  --bootstrap-server kafka:9092 \
+  --topic dbserver1.inventory.customers \
+  --from-beginning \
+  --max-messages 1 \
+  --property print.schema.ids=true
+```
+
+**Способ 2: Из Schema Registry (если schema уже зарегистрирована):**
+
+```bash
+curl http://localhost:8081/subjects/dbserver1.inventory.customers-value/versions/latest \
+  | jq -r '.schema' > schema-v1.json
+```
+
+**Способ 3: Manual construction (для тестирования планируемых изменений):**
+
+Добавьте поле в JSON вручную и протестируйте compatibility.
+
+## Debezium и schema evolution: Практические сценарии
+
+Рассмотрим реальные сценарии изменений схем в PostgreSQL и их влияние на CDC.
+
+### Сценарий 1: Добавление nullable колонки (SAFE)
+
+**Изменение в БД:**
+```sql
+ALTER TABLE customers ADD COLUMN phone VARCHAR(20);
+```
+
+**Debezium автоматически:**
+1. Обнаруживает новую колонку через PostgreSQL metadata
+2. Генерирует новую Avro schema с полем `phone: ["null", "string"]`
+3. Отправляет схему в Schema Registry
+4. Schema Registry проверяет compatibility (BACKWARD)
+5. Если OK — регистрирует schema v2, назначает schema ID
+6. Debezium использует schema ID v2 для новых событий
+
+**Результат:**
+- ✅ Old consumers игнорируют `phone`
+- ✅ New consumers видят `phone = null` для старых records
+
+### Сценарий 2: Добавление NOT NULL колонки (UNSAFE)
+
+**Изменение в БД:**
+```sql
+ALTER TABLE customers ADD COLUMN subscription_tier VARCHAR(20) NOT NULL DEFAULT 'free';
+```
+
+**Что происходит:**
+1. Debezium генерирует Avro schema с полем `subscription_tier: "string"` (required)
+2. Schema Registry проверяет BACKWARD compatibility
+3. **REJECTED** — новое required поле без default
+
+**Ошибка:**
+```
+Schema being registered is incompatible with an earlier schema for subject
+```
+
+**Решение:**
+Сделайте поле nullable в схеме вручную (но PostgreSQL уже имеет NOT NULL — конфликт!).
+
+**Правильный подход:**
+1. Добавьте колонку как nullable: `ALTER TABLE customers ADD COLUMN subscription_tier VARCHAR(20) DEFAULT 'free';`
+2. После миграции consumers, если нужно — добавьте NOT NULL constraint
+
+### Сценарий 3: Удаление колонки (SAFE для BACKWARD)
+
+**Изменение в БД:**
+```sql
+ALTER TABLE customers DROP COLUMN middle_name;
+```
+
+**Debezium:**
+1. Новая schema больше не содержит `middle_name`
+2. Schema Registry проверяет BACKWARD compatibility
+3. ✅ OK — удаление поля разрешено
+
+**Результат:**
+- Old consumers ожидают `middle_name` → Avro deserializer предоставит default value (null)
+- New consumers не ожидают `middle_name` → работают корректно
+
+### Сценарий 4: Изменение типа колонки (UNSAFE)
+
+**Изменение в БД:**
+```sql
+ALTER TABLE customers ALTER COLUMN customer_id TYPE BIGINT;
+```
+
+**Проблема:**
+- Старая schema: `customer_id: int`
+- Новая schema: `customer_id: long`
+- Schema Registry: ❌ REJECTED (тип изменился)
+
+**Решение:**
+1. Создайте новую колонку: `customer_id_v2 BIGINT`
+2. Backfill данные: `UPDATE customers SET customer_id_v2 = customer_id;`
+3. Обновите consumers для чтения `customer_id_v2`
+4. Удалите старую колонку: `DROP COLUMN customer_id`
+5. Переименуйте: `ALTER TABLE customers RENAME customer_id_v2 TO customer_id;`
+
+**Да, это долго.** Поэтому type changes избегаются в production.
+
+## Lab: Эволюция схемы customers
+
+Давайте практически изменим схему и проверим compatibility.
+
+### Шаг 1: Получить текущую схему
+
+```bash
+# Текущая версия
+curl http://localhost:8081/subjects/dbserver1.inventory.customers-value/versions/latest | jq
+
+# Запомнить version number
+```
+
+### Шаг 2: Добавить nullable колонку в PostgreSQL
+
+```bash
+docker exec -it postgres psql -U postgres -d inventory -c \
+  "ALTER TABLE customers ADD COLUMN phone VARCHAR(20);"
+```
+
+### Шаг 3: Вставить запись для триггера schema registration
+
+```bash
+docker exec -it postgres psql -U postgres -d inventory -c \
+  "INSERT INTO customers (first_name, last_name, email, phone) VALUES ('Alice', 'Smith', 'alice@example.com', '+1-555-1234');"
+```
+
+### Шаг 4: Проверить новую схему
+
+```bash
+# Должна появиться новая версия
+curl http://localhost:8081/subjects/dbserver1.inventory.customers-value/versions/latest | jq
+
+# Проверьте поле "version" — должно увеличиться (например, с 1 до 2)
+```
+
+### Шаг 5: Проверить compatibility вручную
+
+Допустим, мы хотим добавить еще одну колонку — но сначала протестируем.
+
+**Извлечь текущую схему:**
+```bash
+curl http://localhost:8081/subjects/dbserver1.inventory.customers-value/versions/latest \
+  | jq -r '.schema' > current-schema.json
+```
+
+**Модифицировать схему (добавить поле `loyalty_points`):**
+```bash
+# Edit current-schema.json — добавить:
+# {"name": "loyalty_points", "type": ["null", "int"], "default": null}
+
+# Пример:
+cat current-schema.json | jq '.fields += [{"name":"loyalty_points","type":["null","int"],"default":null}]' > new-schema.json
+```
+
+**Проверить compatibility:**
+```bash
+NEW_SCHEMA=$(cat new-schema.json | jq -c | jq -Rs .)
+
+curl -X POST http://localhost:8081/compatibility/subjects/dbserver1.inventory.customers-value/versions/latest \
+  -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  -d "{\"schema\": $NEW_SCHEMA}"
+
+# Ожидаемый ответ:
+# {"is_compatible": true}
+```
+
+### Шаг 6: Применить изменение в БД
+
+```bash
+docker exec -it postgres psql -U postgres -d inventory -c \
+  "ALTER TABLE customers ADD COLUMN loyalty_points INT;"
+```
+
+### Шаг 7: Триггер события и проверка схемы
+
+```bash
+# Insert с новым полем
+docker exec -it postgres psql -U postgres -d inventory -c \
+  "INSERT INTO customers (first_name, last_name, email, loyalty_points) VALUES ('Bob', 'Brown', 'bob@example.com', 1000);"
+
+# Проверить зарегистрированную схему
+curl http://localhost:8081/subjects/dbserver1.inventory.customers-value/versions/latest | jq '.version'
+
+# Должна быть version 3
+```
+
+## Best Practices для schema evolution
+
+### 1. Всегда используйте compatibility mode
+
+**Никогда не используйте NONE** в production — вы потеряете protection от breaking changes.
+
+```bash
+# Установить BACKWARD как default
+curl -X PUT http://localhost:8081/config \
+  -d '{"compatibility": "BACKWARD"}'
+```
+
+### 2. Тестируйте compatibility перед ALTER TABLE
+
+```bash
+# 1. Получить текущую schema
+# 2. Модифицировать локально
+# 3. Протестировать через API
+# 4. Если OK — применить ALTER TABLE
+```
+
+### 3. Новые колонки — всегда nullable с default
+
+```sql
+-- Good
+ALTER TABLE customers ADD COLUMN phone VARCHAR(20) DEFAULT NULL;
+
+-- Bad (breaks BACKWARD)
+ALTER TABLE customers ADD COLUMN phone VARCHAR(20) NOT NULL;
+```
+
+### 4. Избегайте type changes
+
+Если неизбежно — используйте ADD new column + migrate + DROP old column workflow.
+
+### 5. Документируйте schema changes
+
+Ведите changelog для schemas:
+
+```markdown
+## customers-value schema changelog
+
+### v3 (2025-02-01)
+- Added: `loyalty_points` (nullable int, default null)
+- Compatibility: BACKWARD
+
+### v2 (2025-01-15)
+- Added: `phone` (nullable string, default null)
+- Compatibility: BACKWARD
+
+### v1 (2025-01-01)
+- Initial schema
+```
+
+### 6. Используйте TRANSITIVE для критичных систем
+
+Если consumers могут быть отстающими:
+
+```bash
+curl -X PUT http://localhost:8081/config/critical-topic-value \
+  -d '{"compatibility": "BACKWARD_TRANSITIVE"}'
+```
+
+### 7. Настройте CI/CD checks
+
+Автоматизируйте compatibility testing:
+
+```bash
+# В CI pipeline
+curl -X POST http://schema-registry:8081/compatibility/subjects/${SUBJECT}/versions/latest \
+  -d "{\"schema\": \"$(cat new-schema.json)\"}" \
+| jq -e '.is_compatible == true'
+
+# Exit code 1 если false — блокировать deployment
+```
+
+## Что дальше?
+
+Вы освоили schema evolution — критический навык для production CDC. Следующий шаг зависит от вашей архитектуры:
+
+- **Single Message Transforms (SMTs)** — модификация событий на уровне Kafka Connect
+- **ksqlDB** — real-time processing и aggregation CDC событий
+- **Multi-datacenter replication** — репликация Debezium pipeline между регионами
+
+Все эти паттерны строятся на фундаменте schema management, который вы только что изучили.
+
+## Ключевые выводы
+
+1. **BACKWARD mode** — default и рекомендуется для большинства CDC систем
+2. **Add optional field** — единственное безопасное изменение для всех modes
+3. **Type changes** — никогда не безопасны, требуют migration workflow
+4. **Compatibility test API** — обязательно тестируйте перед ALTER TABLE
+5. **TRANSITIVE modes** — для long-running consumers или долгого retention
+6. **Debezium auto-generates schemas** — изменение БД → автоматическая регистрация schema
+7. **NOT NULL columns** — ломают BACKWARD, делайте nullable с default
+8. **Schema Registry** — single source of truth для всех schema versions
