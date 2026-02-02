@@ -41,6 +41,7 @@ export function DiagramContainer({
         relative p-5 rounded-2xl border backdrop-blur-lg
         bg-gradient-to-br ${colorStyles[color]}
         shadow-xl shadow-black/30
+        not-prose
         ${className}
       `.trim()}
     >
