@@ -97,38 +97,37 @@ export function EventStructureDiagram() {
         </DiagramContainer>
 
         {/* Payload section */}
-        <DiagramContainer title="payload" color="blue" className="space-y-3 py-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {/* before */}
-            <DiagramTooltip content="Состояние строки ДО изменения. null для INSERT и snapshot, заполнен для UPDATE и DELETE.">
-              <FlowNode variant="database" tabIndex={0} size="sm">
-                before
-              </FlowNode>
-            </DiagramTooltip>
+        <DiagramContainer title="payload" color="blue" className="py-6">
+          <div className="space-y-4">
+            {/* Row 1: before, after, op */}
+            <div className="flex flex-wrap justify-center gap-4">
+              <DiagramTooltip content="Состояние строки ДО изменения. null для INSERT и snapshot, заполнен для UPDATE и DELETE.">
+                <FlowNode variant="database" tabIndex={0} size="sm">
+                  before
+                </FlowNode>
+              </DiagramTooltip>
 
-            {/* after */}
-            <DiagramTooltip content="Состояние строки ПОСЛЕ изменения. null для DELETE, заполнен для INSERT, UPDATE и snapshot.">
-              <FlowNode variant="database" tabIndex={0} size="sm">
-                after
-              </FlowNode>
-            </DiagramTooltip>
+              <DiagramTooltip content="Состояние строки ПОСЛЕ изменения. null для DELETE, заполнен для INSERT, UPDATE и snapshot.">
+                <FlowNode variant="database" tabIndex={0} size="sm">
+                  after
+                </FlowNode>
+              </DiagramTooltip>
 
-            {/* op */}
-            <DiagramTooltip content="Тип операции: r=snapshot, c=create, u=update, d=delete. Критично для правильной обработки события.">
-              <FlowNode variant="connector" tabIndex={0} size="sm">
-                op
-              </FlowNode>
-            </DiagramTooltip>
+              <DiagramTooltip content="Тип операции: r=snapshot, c=create, u=update, d=delete. Критично для правильной обработки события.">
+                <FlowNode variant="connector" tabIndex={0} size="sm">
+                  op
+                </FlowNode>
+              </DiagramTooltip>
+            </div>
 
-            {/* ts_ms */}
-            <DiagramTooltip content="Timestamp обработки события Debezium в миллисекундах. Для event time используйте source.ts_ms.">
-              <FlowNode variant="app" tabIndex={0} size="sm">
-                ts_ms
-              </FlowNode>
-            </DiagramTooltip>
+            {/* Row 2: ts_ms, source */}
+            <div className="flex flex-wrap justify-center items-start gap-4">
+              <DiagramTooltip content="Timestamp обработки события Debezium в миллисекундах. Для event time используйте source.ts_ms.">
+                <FlowNode variant="app" tabIndex={0} size="sm">
+                  ts_ms
+                </FlowNode>
+              </DiagramTooltip>
 
-            {/* source */}
-            <div className="md:col-span-2">
               <DiagramTooltip content="Метаданные об источнике: версия Debezium, имя базы, схемы, таблицы, позиция в WAL (lsn), ID транзакции.">
                 <DiagramContainer title="source" color="amber" className="py-3">
                   <div className="flex flex-wrap gap-2 justify-center text-xs">
