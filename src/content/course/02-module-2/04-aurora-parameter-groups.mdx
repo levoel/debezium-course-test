@@ -7,7 +7,7 @@ estimatedTime: 25
 topics: ["aurora", "aws", "parameter-groups", "rds-logical-replication"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { AuroraParameterGroupDiagram, AuroraSetupProcessDiagram } from '../../../components/diagrams/module2';
 
 # Настройка Aurora PostgreSQL для CDC
 
@@ -29,35 +29,7 @@ Amazon Aurora PostgreSQL — это облачная версия PostgreSQL, о
 
 В Aurora существует два типа parameter groups. Для логической репликации **критически важно** использовать правильный тип:
 
-<Mermaid chart={`
-flowchart TB
-    subgraph CLUSTER["DB Cluster Parameter Group"]
-        direction TB
-        P1["rds.logical_replication"]
-        P2["max_replication_slots"]
-        P3["max_wal_senders"]
-        P4["max_logical_replication_workers"]
-    end
-
-    subgraph INSTANCE["DB Instance Parameter Group"]
-        direction TB
-        P5["shared_buffers"]
-        P6["work_mem"]
-        P7["maintenance_work_mem"]
-    end
-
-    CLUSTER -->|"Применяется ко ВСЕМУ кластеру"| WRITER[Writer Instance]
-    CLUSTER --> READER1[Reader Instance 1]
-    CLUSTER --> READER2[Reader Instance 2]
-
-    INSTANCE -->|"Применяется к конкретному инстансу"| WRITER
-
-    style CLUSTER fill:#14532d,stroke:#22c55e,stroke-width:3px
-    style INSTANCE fill:#1e3a5f,stroke:#3b82f6
-    style WRITER fill:#f59e0b
-    style READER1 fill:#6366f1
-    style READER2 fill:#6366f1
-`} client:visible />
+<AuroraParameterGroupDiagram />
 
 > **Warning:** `rds.logical_replication` доступен **только** в DB Cluster Parameter Group. Если вы создадите DB Instance Parameter Group и попытаетесь добавить этот параметр — вы его не найдете!
 
@@ -65,19 +37,7 @@ flowchart TB
 
 Настройка состоит из пяти этапов. Каждый этап обязателен:
 
-<Mermaid chart={`
-flowchart LR
-    A["1. Создать<br/>Parameter Group"] --> B["2. Изменить<br/>параметры"]
-    B --> C["3. Применить<br/>к кластеру"]
-    C --> D["4. Reboot<br/>Writer Instance"]
-    D --> E["5. Проверить<br/>конфигурацию"]
-
-    style A fill:#3b82f6
-    style B fill:#8b5cf6
-    style C fill:#f59e0b
-    style D fill:#ef4444,stroke:#fff,stroke-width:2px
-    style E fill:#22c55e
-`} client:visible />
+<AuroraSetupProcessDiagram />
 
 ### Необходимые параметры
 

@@ -8,7 +8,7 @@ topics: ["wal-configuration", "performance-tuning", "postgresql-config"]
 prerequisites: ["module-2/02-replication-slots-lifecycle"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { WalLevelHierarchyDiagram, WorkloadWalImpactDiagram } from '../../../components/diagrams/module2';
 
 # Настройка WAL для CDC
 
@@ -18,26 +18,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 PostgreSQL поддерживает три уровня детализации WAL. Для CDC требуется `logical`.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph LEVELS["Иерархия wal_level"]
-        direction TB
-        MINIMAL["minimal<br/>Только crash recovery<br/>Минимальный объем WAL"]
-        REPLICA["replica<br/>+ Physical replication<br/>+ Point-in-time recovery"]
-        LOGICAL["logical<br/>+ Logical decoding<br/>+ CDC (Debezium)"]
-
-        MINIMAL --> REPLICA --> LOGICAL
-    end
-
-    MINIMAL -.->|"Недостаточно<br/>для репликации"| X1[" "]
-    REPLICA -.->|"Недостаточно<br/>для CDC"| X2[" "]
-    LOGICAL -.->|"Требуется<br/>для Debezium"| CHECK["Debezium Ready"]
-
-    style MINIMAL fill:#7f1d1d,stroke:#ef4444
-    style REPLICA fill:#1e3a5f,stroke:#3b82f6
-    style LOGICAL fill:#14532d,stroke:#22c55e
-    style CHECK fill:#10b981
-`} client:visible />
+<WalLevelHierarchyDiagram />
 
 | Уровень | Для чего | Объем WAL |
 |---------|----------|-----------|
@@ -108,28 +89,7 @@ SHOW max_slot_wal_keep_size;       -- 10GB или больше
 
 Включение `wal_level=logical` увеличивает объем WAL. Важно понимать, насколько.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph WORKLOAD["Тип нагрузки"]
-        INSERT["INSERT-heavy<br/>Много вставок"]
-        MIXED["Mixed workload<br/>INSERT + UPDATE"]
-        UPDATE["UPDATE-heavy<br/>Много обновлений"]
-    end
-
-    subgraph IMPACT["Увеличение WAL"]
-        I1["+ 5%"]
-        I2["+ 10%"]
-        I3["+ 15-30%"]
-    end
-
-    INSERT --> I1
-    MIXED --> I2
-    UPDATE --> I3
-
-    style INSERT fill:#14532d,stroke:#22c55e
-    style MIXED fill:#1e3a5f,stroke:#3b82f6
-    style UPDATE fill:#7f1d1d,stroke:#ef4444
-`} client:visible />
+<WorkloadWalImpactDiagram />
 
 ### Почему UPDATE дороже INSERT?
 

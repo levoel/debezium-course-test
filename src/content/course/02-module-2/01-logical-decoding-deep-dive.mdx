@@ -8,7 +8,7 @@ topics: ["logical-decoding", "pgoutput", "wal", "publications"]
 prerequisites: ["module-1/02-debezium-architecture"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { PhysicalVsLogicalDiagram, LogicalDecodingComponentsDiagram, PublicationsDiagram, LogicalDecodingSequenceDiagram } from '../../../components/diagrams/module2';
 
 # Logical Decoding: Глубокое погружение
 
@@ -18,25 +18,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 PostgreSQL поддерживает два типа репликации. Понимание разницы критически важно для настройки CDC.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph PHYSICAL["Физическая репликация"]
-        direction LR
-        PRIMARY1[(Primary)] -->|"Бинарные WAL сегменты"| STANDBY1[(Standby)]
-        Note1["Побайтовая копия данных<br/>Только PostgreSQL → PostgreSQL<br/>Вся база целиком"]
-    end
-
-    subgraph LOGICAL["Логическая репликация (CDC)"]
-        direction LR
-        PRIMARY2[(Primary)] -->|"pgoutput plugin"| DECODER[Logical Decoding]
-        DECODER -->|"Структурированные изменения"| CONSUMER[Любой потребитель]
-        Note2["INSERT/UPDATE/DELETE события<br/>Выборочные таблицы<br/>Разные версии PostgreSQL"]
-    end
-
-    style PHYSICAL fill:#1e3a5f,stroke:#3b82f6
-    style LOGICAL fill:#14532d,stroke:#22c55e
-    style DECODER fill:#f59e0b
-`} client:visible />
+<PhysicalVsLogicalDiagram />
 
 | Характеристика | Физическая | Логическая |
 |----------------|------------|------------|
@@ -53,22 +35,7 @@ flowchart TB
 
 ### Компоненты Logical Decoding
 
-<Mermaid chart={`
-flowchart LR
-    subgraph PostgreSQL
-        WAL[WAL<br/>Transaction Log] --> SLOT[Replication Slot]
-        SLOT --> DECODER[Logical Decoder]
-        DECODER --> PLUGIN[Output Plugin<br/>pgoutput]
-    end
-
-    PLUGIN --> DEBEZIUM[Debezium Connector]
-    DEBEZIUM --> KAFKA[Kafka Topic]
-
-    style WAL fill:#3b82f6
-    style SLOT fill:#f59e0b
-    style PLUGIN fill:#10b981
-    style DEBEZIUM fill:#8b5cf6
-`} client:visible />
+<LogicalDecodingComponentsDiagram />
 
 **WAL (Write-Ahead Log)** — журнал транзакций, куда PostgreSQL записывает каждое изменение ДО применения к таблицам. Гарантирует durability.
 
@@ -139,31 +106,7 @@ flowchart LR
 
 **Publication** — это набор таблиц, изменения которых будут доступны для логической репликации. Debezium использует publications для фильтрации таблиц.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph DB["База данных inventory"]
-        T1[customers]
-        T2[orders]
-        T3[products]
-        T4[audit_logs]
-    end
-
-    subgraph PUB1["Publication: dbz_publication<br/>FOR ALL TABLES"]
-        direction LR
-        ALL["Все таблицы"]
-    end
-
-    subgraph PUB2["Publication: orders_pub<br/>FOR TABLE orders, customers"]
-        direction LR
-        SELECTED["Только orders + customers"]
-    end
-
-    DB --> PUB1
-    DB --> PUB2
-
-    style PUB1 fill:#14532d,stroke:#22c55e
-    style PUB2 fill:#1e3a5f,stroke:#3b82f6
-`} client:visible />
+<PublicationsDiagram />
 
 ### Создание Publication
 
@@ -291,34 +234,7 @@ WHERE relname = 'customers';
 
 Соединим все компоненты в единый поток.
 
-<Mermaid chart={`
-sequenceDiagram
-    participant App as Приложение
-    participant PG as PostgreSQL
-    participant WAL as WAL (wal_level=logical)
-    participant Slot as Replication Slot
-    participant PGOut as pgoutput Plugin
-    participant Deb as Debezium
-    participant K as Kafka
-
-    App->>PG: UPDATE customers SET name='Bob' WHERE id=1
-
-    Note over PG: REPLICA IDENTITY FULL
-
-    PG->>WAL: Запись с полными before/after
-
-    Note over WAL,Slot: WAL сегменты сохраняются<br/>пока slot не прочитает
-
-    Deb->>Slot: Запрос изменений<br/>(streaming replication protocol)
-    Slot->>PGOut: Декодировать WAL записи
-    PGOut->>Deb: Логические изменения<br/>(relation, tuple data)
-
-    Deb->>Deb: Преобразование в CDC Event
-    Deb->>K: Публикация в topic
-
-    Deb->>Slot: Подтверждение LSN
-    Slot->>WAL: Освобождение WAL сегментов
-`} client:visible />
+<LogicalDecodingSequenceDiagram />
 
 ### Ключевые точки
 

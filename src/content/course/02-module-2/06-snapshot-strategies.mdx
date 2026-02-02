@@ -8,7 +8,7 @@ topics: ["snapshot-strategies", "incremental-snapshot", "chunk-tuning"]
 prerequisites: ["module-2/05-aurora-failover-handling"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { SnapshotDataLossDiagram, TraditionalSnapshotDiagram, IncrementalSnapshotDiagram, SnapshotDecisionDiagram } from '../../../components/diagrams/module2';
 
 # Стратегии снэпшотов в Debezium
 
@@ -18,15 +18,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 CDC захватывает только **изменения** — INSERT, UPDATE, DELETE. Но что насчет миллиона записей, которые уже существуют в таблице? Без снэпшота consumer увидит только новые изменения, а существующие данные останутся невидимыми.
 
-<Mermaid chart={`
-graph LR
-    subgraph "Без snapshot"
-        A[Существующие данные] -->|Невидимы| X((Потеряны))
-        B[Новые изменения] -->|Захватываются| K[Kafka]
-    end
-
-    style X fill:#ef4444,color:#fff
-`} client:visible />
+<SnapshotDataLossDiagram />
 
 ## Режимы snapshot в Debezium
 
@@ -68,28 +60,7 @@ Debezium предлагает несколько режимов снэпшота
 
 Во время снэпшота коннектор **не обрабатывает** новые изменения из WAL. Все CDC-события накапливаются в replication slot, увеличивая WAL retention.
 
-<Mermaid chart={`
-sequenceDiagram
-    participant C as Коннектор
-    participant PG as PostgreSQL
-    participant K as Kafka
-
-    rect rgb(255, 200, 200)
-        Note over C,K: Период блокировки streaming
-        C->>PG: SELECT * FROM large_table (SNAPSHOT)
-        Note over PG: 10 миллионов строк...
-        Note over PG: WAL накапливается
-        PG-->>C: Все строки
-        C->>K: op='r' events
-    end
-
-    rect rgb(200, 255, 200)
-        Note over C,K: Streaming возобновляется
-        C->>PG: Чтение WAL
-        PG-->>C: Накопленные изменения
-        C->>K: op='c/u/d' events
-    end
-`} client:visible />
+<TraditionalSnapshotDiagram />
 
 ### 2. Нет возобновляемости
 
@@ -110,31 +81,7 @@ sequenceDiagram
 | Блокировки таблиц | Возможны | Минимальные |
 | Управление | Автоматически при старте | По запросу через signaling table |
 
-<Mermaid chart={`
-sequenceDiagram
-    participant C as Коннектор
-    participant PG as PostgreSQL
-    participant K as Kafka
-    participant S as Signaling Table
-
-    Note over C,K: Параллельная работа
-
-    rect rgb(200, 255, 200)
-        S->>C: execute-snapshot signal
-        loop Chunk by chunk
-            C->>PG: SELECT * WHERE id BETWEEN x AND y
-            PG-->>C: Chunk (2048 строк)
-            C->>K: op='r' (snapshot events)
-        end
-    end
-
-    par Одновременно
-        PG->>C: WAL changes
-        C->>K: op='c/u/d' (streaming events)
-    end
-
-    Note over K: Оба потока событий в топике
-`} client:visible />
+<IncrementalSnapshotDiagram />
 
 ### Как работает incremental snapshot
 
@@ -186,25 +133,7 @@ Streaming события отличаются отсутствием `snapshot: 
 
 ## Выбор стратегии: Decision Framework
 
-<Mermaid chart={`
-flowchart TD
-    A[Нужен снэпшот?] -->|Да| B{Размер таблицы}
-    A -->|Нет| Z1["snapshot.mode=never"]
-
-    B -->|< 1M строк| C{Допустимый downtime?}
-    B -->|>= 1M строк| D[Incremental Snapshot]
-
-    C -->|Да, до 30 мин| E["snapshot.mode=initial"]
-    C -->|Нет| D
-
-    D --> F{Нужна фильтрация?}
-    F -->|Нет| G["Полный incremental"]
-    F -->|Да| H["additional-conditions"]
-
-    style D fill:#10b981,color:#fff
-    style Z1 fill:#6366f1,color:#fff
-    style E fill:#f59e0b,color:#fff
-`} client:visible />
+<SnapshotDecisionDiagram />
 
 ### Рекомендации по сценариям
 

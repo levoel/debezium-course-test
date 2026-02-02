@@ -8,7 +8,7 @@ topics: ["replication-slots", "wal-management", "monitoring", "pg_replication_sl
 prerequisites: ["module-2/01-logical-decoding-deep-dive"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { WalRetentionDiagram, SlotLifecycleDiagram } from '../../../components/diagrams/module2';
 
 # Жизненный цикл Replication Slots
 
@@ -20,34 +20,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 **Replication Slot** — это объект PostgreSQL, который отслеживает позицию потребителя в WAL. PostgreSQL гарантирует, что все WAL сегменты после `restart_lsn` слота будут сохранены.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph WAL["WAL (Transaction Log)"]
-        direction LR
-        SEG1["Segment 1<br/>0/1000000"]
-        SEG2["Segment 2<br/>0/2000000"]
-        SEG3["Segment 3<br/>0/3000000"]
-        SEG4["Segment 4<br/>0/4000000"]
-        SEG5["Segment 5<br/>0/5000000"]
-        SEG1 --> SEG2 --> SEG3 --> SEG4 --> SEG5
-    end
-
-    SLOT["Replication Slot<br/>restart_lsn: 0/3000000"]
-    SLOT -.->|"Все после этой<br/>позиции сохраняется"| SEG3
-
-    DELETE["Можно удалить"]
-    KEEP["Сохранено для слота"]
-
-    SEG1 --> DELETE
-    SEG2 --> DELETE
-    SEG3 --> KEEP
-    SEG4 --> KEEP
-    SEG5 --> KEEP
-
-    style DELETE fill:#7f1d1d,stroke:#ef4444
-    style KEEP fill:#14532d,stroke:#22c55e
-    style SLOT fill:#f59e0b
-`} client:visible />
+<WalRetentionDiagram />
 
 ### Ключевые атрибуты слота
 
@@ -63,34 +36,7 @@ flowchart LR
 
 ## Жизненный цикл слота
 
-<Mermaid chart={`
-stateDiagram-v2
-    [*] --> Created: Debezium создает слот<br/>при первом запуске
-
-    Created --> Active: Connector подключается<br/>active = true
-    Active --> Inactive: Connector отключается<br/>active = false
-    Inactive --> Active: Connector переподключается
-
-    Inactive --> Abandoned: Connector удален,<br/>слот остался
-
-    Abandoned --> DiskFull: WAL накапливается<br/>без лимита
-    DiskFull --> DatabaseDown: Диск заполнен
-
-    Inactive --> Dropped: Безопасное удаление<br/>pg_drop_replication_slot()
-    Abandoned --> Dropped: Ручное удаление<br/>после проверки
-
-    Dropped --> [*]
-
-    note right of Abandoned
-        ОПАСНО: WAL сохраняется
-        БЕСКОНЕЧНО
-    end note
-
-    note right of DiskFull
-        БД переходит в
-        read-only или падает
-    end note
-`} client:visible />
+<SlotLifecycleDiagram />
 
 ### Создание слота
 

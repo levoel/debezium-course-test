@@ -7,7 +7,7 @@ estimatedTime: 30
 topics: ["aurora-failover", "heartbeat", "replication-slots", "high-availability"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { AuroraFailoverSequenceDiagram, HeartbeatMonitoringDiagram, AuroraGlobalDatabaseDiagram } from '../../../components/diagrams/module2';
 
 # Aurora Failover и Replication Slots
 
@@ -21,49 +21,7 @@ Amazon Aurora PostgreSQL обеспечивает высокую доступн�
 
 ## Механика Aurora Failover
 
-<Mermaid chart={`
-sequenceDiagram
-    participant App as Приложение
-    participant W as Writer Instance
-    participant R as Reader Instance
-    participant Slot as Replication Slot
-    participant Deb as Debezium
-    participant K as Kafka
-
-    Note over W,Slot: Нормальная работа
-    App->>W: INSERT INTO orders (id=100)
-    W->>Slot: Записать LSN позицию
-    Deb->>Slot: Читать изменения
-    Slot-->>Deb: Change event (id=100)
-    Deb->>K: Отправить в Kafka
-    K-->>Deb: ACK
-    Deb->>Slot: Confirm flush LSN
-
-    Note over W: Writer Instance CRASH!
-
-    rect rgb(127, 29, 29)
-        Note over W,Slot: FAILOVER WINDOW - потенциальная потеря данных
-        App->>W: INSERT INTO orders (id=101)
-        W->>Slot: Записать LSN (не успевает sync)
-    end
-
-    Note over R: Promotion to Writer
-    R->>R: Становится новым Writer
-    Note over R: Replication slot НЕ существует!
-
-    Deb->>R: Попытка подключения
-    R-->>Deb: Slot not found
-    Deb->>R: CREATE replication slot
-    Note over Deb: Слот создается с ТЕКУЩЕЙ позиции
-
-    rect rgb(127, 29, 29)
-        Note over Deb,K: id=101 ПОТЕРЯН - был записан до создания нового слота
-    end
-
-    App->>R: INSERT INTO orders (id=102)
-    Deb->>R: Читать изменения
-    R-->>Deb: Change event (id=102)
-`} client:visible />
+<AuroraFailoverSequenceDiagram />
 
 ### Временная шкала потери данных
 
@@ -80,35 +38,7 @@ sequenceDiagram
 
 Heartbeat не **предотвращает** потерю данных, но позволяет **обнаружить** её. Debezium может периодически обновлять специальную таблицу, создавая "маркеры времени" в потоке событий.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph DEBEZIUM["Debezium Connector"]
-        HB["Heartbeat<br/>каждые 10 сек"]
-    end
-
-    subgraph DB["PostgreSQL"]
-        HBT["heartbeat table<br/>id=1, ts=NOW()"]
-    end
-
-    subgraph KAFKA["Kafka Topics"]
-        CDCTopic["inventory.public.orders"]
-        HBTopic["__debezium-heartbeat.inventory"]
-    end
-
-    subgraph MONITOR["Monitoring"]
-        ALERT["Alert on gap > 30s"]
-    end
-
-    HB -->|"UPDATE heartbeat SET ts=NOW()"| HBT
-    HBT -->|"CDC событие"| CDCTopic
-    HB -->|"Heartbeat event"| HBTopic
-    HBTopic --> MONITOR
-    CDCTopic --> MONITOR
-
-    style HB fill:#f59e0b
-    style HBT fill:#3b82f6
-    style ALERT fill:#ef4444
-`} client:visible />
+<HeartbeatMonitoringDiagram />
 
 ### Создание heartbeat таблицы
 
@@ -243,33 +173,7 @@ VALUES (
 
 Для критически важных данных используйте Aurora Global Database с отдельными CDC-потоками:
 
-<Mermaid chart={`
-flowchart TB
-    subgraph PRIMARY["Primary Region (us-east-1)"]
-        W1[Writer Instance]
-        D1[Debezium #1]
-        K1[Kafka Cluster #1]
-    end
-
-    subgraph SECONDARY["Secondary Region (eu-west-1)"]
-        W2[Writer Instance]
-        D2[Debezium #2]
-        K2[Kafka Cluster #2]
-    end
-
-    W1 -->|"Aurora Replication"| W2
-    W1 --> D1
-    D1 --> K1
-
-    W2 --> D2
-    D2 --> K2
-
-    K1 -->|"Cross-region merge"| CONSUMER[Consumer Service]
-    K2 --> CONSUMER
-
-    style PRIMARY fill:#14532d
-    style SECONDARY fill:#1e3a5f
-`} client:visible />
+<AuroraGlobalDatabaseDiagram />
 
 **Преимущества:**
 - CDC в двух регионах

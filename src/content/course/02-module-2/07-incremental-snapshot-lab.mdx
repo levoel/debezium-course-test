@@ -8,7 +8,7 @@ topics: ["incremental-snapshot", "signaling-table", "hands-on-lab", "python-cons
 prerequisites: ["module-2/06-snapshot-strategies"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { IncrementalSnapshotLabDiagram, LabCompletionDiagram } from '../../../components/diagrams/module2';
 
 # Практика: Incremental Snapshot
 
@@ -36,36 +36,7 @@ docker compose ps
 
 ## Архитектура лабораторной работы
 
-<Mermaid chart={`
-graph LR
-    subgraph PostgreSQL
-        ST[debezium_signal]
-        OL[orders_large<br/>10,000 rows]
-    end
-
-    subgraph Debezium
-        C[Коннектор]
-    end
-
-    subgraph Kafka
-        T[inventory.public.orders_large]
-    end
-
-    subgraph Python
-        M[Snapshot Monitor]
-    end
-
-    ST -->|trigger| C
-    C -->|read chunks| OL
-    C -->|publish| T
-    T -->|consume| M
-
-    style ST fill:#f59e0b,color:#fff
-    style OL fill:#4169E1,color:#fff
-    style C fill:#ef4444,color:#fff
-    style T fill:#000,color:#fff
-    style M fill:#3776AB,color:#fff
-`} client:visible />
+<IncrementalSnapshotLabDiagram />
 
 ## Шаг 1: Создание signaling table
 
@@ -532,19 +503,7 @@ curl -s http://localhost:8083/connectors/orders-incremental/config | jq '.["sign
 
 ## Итоги лабораторной работы
 
-<Mermaid chart={`
-graph TD
-    A[Signaling Table создана] --> B[Orders Large: 10K записей]
-    B --> C[Коннектор с incremental snapshot]
-    C --> D[Python Monitor запущен]
-    D --> E[INSERT execute-snapshot]
-    E --> F[Наблюдение chunk-by-chunk]
-    F --> G[Stop/Resume демонстрация]
-    G --> H[Filtered snapshot]
-
-    style A fill:#10b981,color:#fff
-    style H fill:#10b981,color:#fff
-`} client:visible />
+<LabCompletionDiagram />
 
 Вы успешно:
 - Настроили signaling table для управления snapshots
