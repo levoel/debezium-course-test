@@ -34,40 +34,44 @@ export function Arrow({
   className = '',
 }: ArrowProps) {
   const paths = arrowheadPaths[direction];
+  const isHorizontal = direction === 'right' || direction === 'left';
 
   return (
     <div
       className={`
-        flex items-center justify-center flex-col gap-0.5
+        relative flex items-center justify-center
         ${className}
       `.trim()}
     >
-      <div className="flex items-center justify-center">
-        <svg
-          className="w-8 h-8 text-gray-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          {/* Line */}
-          <path
-            strokeLinecap="round"
-            strokeWidth={2}
-            strokeDasharray={dashed ? '4 2' : undefined}
-            d={paths.line}
-          />
-          {/* Arrowhead */}
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d={paths.head}
-          />
-        </svg>
-      </div>
+      <svg
+        className="w-8 h-8 text-gray-400"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        {/* Line */}
+        <path
+          strokeLinecap="round"
+          strokeWidth={2}
+          strokeDasharray={dashed ? '4 2' : undefined}
+          d={paths.line}
+        />
+        {/* Arrowhead */}
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d={paths.head}
+        />
+      </svg>
       {label && (
-        <span className="text-xs text-gray-400 whitespace-nowrap">
+        <span
+          className={`
+            absolute text-xs text-gray-400 whitespace-nowrap
+            ${isHorizontal ? 'top-full mt-0.5' : 'left-full ml-1'}
+          `}
+        >
           {label}
         </span>
       )}

@@ -96,7 +96,7 @@ export function PhysicalVsLogicalDiagram() {
  */
 export function LogicalDecodingComponentsDiagram() {
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-4 mb-8">
       {/* Main pipeline row */}
       <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
       <DiagramTooltip content="Write-Ahead Log — журнал транзакций PostgreSQL. При wal_level=logical содержит дополнительные данные для декодирования: OID таблиц, tuple data. Гарантирует durability всех изменений.">
