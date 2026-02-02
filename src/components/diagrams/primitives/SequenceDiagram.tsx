@@ -11,6 +11,8 @@
  * - Supports 3-7 actors (typical course diagrams)
  */
 
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { SequenceActor } from './SequenceActor';
 import { DiagramTooltip } from './Tooltip';
 import type { SequenceDiagramProps } from './types';
@@ -24,6 +26,12 @@ export function SequenceDiagram({
   messageSpacing = 40,
   className = '',
 }: SequenceDiagramProps) {
+  // State for SVG message tooltips (actors use DiagramTooltip outside SVG)
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
+  const svgRef = useRef<SVGSVGElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
   // Calculate diagram height based on message count
   const diagramHeight = 20 + messages.length * messageSpacing;
 
@@ -36,6 +44,73 @@ export function SequenceDiagram({
     if (index === -1) return VIEWBOX_WIDTH / 2; // fallback to center
     return columnWidth * index + columnWidth / 2;
   };
+
+  // Get tooltip content for a message
+  const getMessageTooltip = (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    return msg?.tooltip;
+  };
+
+  // Handle message click/hover for tooltips
+  const handleMessageInteraction = useCallback(
+    (msgId: string, event: React.MouseEvent<SVGGElement>) => {
+      if (activeTooltip === msgId) {
+        setActiveTooltip(null);
+        return;
+      }
+
+      // Get SVG element and its bounding box
+      const svg = svgRef.current;
+      if (!svg) return;
+
+      const svgRect = svg.getBoundingClientRect();
+      const target = event.currentTarget;
+      const bbox = target.getBBox();
+
+      // Convert SVG coordinates to screen coordinates
+      const svgWidth = svgRect.width;
+      const viewBoxWidth = VIEWBOX_WIDTH;
+      const scale = svgWidth / viewBoxWidth;
+
+      const centerX = svgRect.left + bbox.x * scale + (bbox.width * scale) / 2;
+      const topY = svgRect.top + bbox.y * scale;
+
+      setTooltipPosition({
+        top: topY - 8,
+        left: Math.max(16, Math.min(centerX - 192, window.innerWidth - 384 - 16)),
+      });
+      setActiveTooltip(msgId);
+    },
+    [activeTooltip]
+  );
+
+  // Close tooltip on click outside
+  useEffect(() => {
+    if (!activeTooltip) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        tooltipRef.current &&
+        !tooltipRef.current.contains(e.target as Node) &&
+        svgRef.current &&
+        !svgRef.current.contains(e.target as Node)
+      ) {
+        setActiveTooltip(null);
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActiveTooltip(null);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [activeTooltip]);
 
   return (
     <div className={`relative ${className}`}>
@@ -63,6 +138,7 @@ export function SequenceDiagram({
 
       {/* SVG for lifelines and messages */}
       <svg
+        ref={svgRef}
         width="100%"
         viewBox={`0 0 ${VIEWBOX_WIDTH} ${diagramHeight}`}
         preserveAspectRatio="xMidYMid meet"
@@ -107,7 +183,7 @@ export function SequenceDiagram({
             const loopPath = `M${fromX},${y - loopHeight / 2} L${fromX + loopWidth},${y - loopHeight / 2} L${fromX + loopWidth},${y + loopHeight / 2} L${fromX},${y + loopHeight / 2}`;
             const selfArrowPath = `M${fromX + arrowheadSize},${y + loopHeight / 2 - arrowheadSize / 2} L${fromX},${y + loopHeight / 2} L${fromX + arrowheadSize},${y + loopHeight / 2 + arrowheadSize / 2}`;
 
-            const selfMessageContent = (
+            return (
               <g
                 key={msg.id}
                 className="text-gray-400"
@@ -115,6 +191,19 @@ export function SequenceDiagram({
                 role={msg.tooltip ? 'button' : undefined}
                 style={{ cursor: msg.tooltip ? 'pointer' : undefined }}
                 aria-label={msg.label}
+                onClick={msg.tooltip ? (e) => handleMessageInteraction(msg.id, e) : undefined}
+                onMouseEnter={msg.tooltip ? (e) => handleMessageInteraction(msg.id, e) : undefined}
+                onMouseLeave={msg.tooltip ? () => setActiveTooltip(null) : undefined}
+                onKeyDown={
+                  msg.tooltip
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleMessageInteraction(msg.id, e as unknown as React.MouseEvent<SVGGElement>);
+                        }
+                      }
+                    : undefined
+                }
               >
                 {/* Loop path */}
                 <path
@@ -145,15 +234,6 @@ export function SequenceDiagram({
                 </text>
               </g>
             );
-
-            if (msg.tooltip) {
-              return (
-                <DiagramTooltip key={msg.id} content={msg.tooltip}>
-                  {selfMessageContent}
-                </DiagramTooltip>
-              );
-            }
-            return selfMessageContent;
           }
 
           // Regular message: arrow from one actor to another
@@ -161,7 +241,7 @@ export function SequenceDiagram({
             ? `M${toX - arrowheadSize},${y - arrowheadSize / 2} L${toX},${y} L${toX - arrowheadSize},${y + arrowheadSize / 2}`
             : `M${toX + arrowheadSize},${y - arrowheadSize / 2} L${toX},${y} L${toX + arrowheadSize},${y + arrowheadSize / 2}`;
 
-          const messageContent = (
+          return (
             <g
               key={msg.id}
               className="text-gray-400"
@@ -169,6 +249,19 @@ export function SequenceDiagram({
               role={msg.tooltip ? 'button' : undefined}
               style={{ cursor: msg.tooltip ? 'pointer' : undefined }}
               aria-label={msg.label}
+              onClick={msg.tooltip ? (e) => handleMessageInteraction(msg.id, e) : undefined}
+              onMouseEnter={msg.tooltip ? (e) => handleMessageInteraction(msg.id, e) : undefined}
+              onMouseLeave={msg.tooltip ? () => setActiveTooltip(null) : undefined}
+              onKeyDown={
+                msg.tooltip
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleMessageInteraction(msg.id, e as unknown as React.MouseEvent<SVGGElement>);
+                      }
+                    }
+                  : undefined
+              }
             >
               {/* Line */}
               <line
@@ -201,18 +294,37 @@ export function SequenceDiagram({
               </text>
             </g>
           );
-
-          // Wrap in tooltip if tooltip content provided
-          if (msg.tooltip) {
-            return (
-              <DiagramTooltip key={msg.id} content={msg.tooltip}>
-                {messageContent}
-              </DiagramTooltip>
-            );
-          }
-          return messageContent;
         })}
       </svg>
+
+      {/* Tooltip portal for SVG messages */}
+      {activeTooltip &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={tooltipRef}
+            role="tooltip"
+            onMouseEnter={() => setActiveTooltip(activeTooltip)}
+            onMouseLeave={() => setActiveTooltip(null)}
+            className="
+              fixed w-96
+              bg-gray-900/95 backdrop-blur-md border border-white/20
+              rounded-xl px-4 pt-3 pb-5
+              text-sm text-gray-200 leading-relaxed
+              shadow-2xl shadow-black/50
+              z-[9999]
+              pointer-events-auto
+            "
+            style={{
+              top: tooltipPosition.top,
+              left: tooltipPosition.left,
+              transform: 'translateY(-100%)',
+            }}
+          >
+            {getMessageTooltip(activeTooltip)}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
