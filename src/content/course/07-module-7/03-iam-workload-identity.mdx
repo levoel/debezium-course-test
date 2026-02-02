@@ -8,7 +8,7 @@ topics: ["IAM", "Workload Identity", "GKE", "Security", "Service Accounts"]
 prerequisites: ["module-6/02-debezium-server-pubsub"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { WorkloadIdentityFlowDiagram } from '../../../components/diagrams/module7';
 
 # IAM и Workload Identity для CDC Pipeline
 
@@ -97,19 +97,7 @@ gcloud projects add-iam-policy-binding PROJECT_ID \
 
 ### Как это работает
 
-<Mermaid chart={`
-graph LR
-    Pod[Pod в GKE] --> KSA[Kubernetes<br/>Service Account]
-    KSA --> |iam.gke.io/gcp-service-account| WI[Workload Identity<br/>Binding]
-    WI --> GCPSA[GCP Service Account]
-    GCPSA --> IAM[IAM Roles]
-    IAM --> PubSub[Pub/Sub API]
-    IAM --> SM[Secret Manager API]
-
-    style Pod fill:#e3f2fd
-    style GCPSA fill:#c8e6c9
-    style IAM fill:#fff9c4
-`} client:visible />
+<WorkloadIdentityFlowDiagram client:load />
 
 **Поток аутентификации:**
 1. Pod запускается с Kubernetes Service Account

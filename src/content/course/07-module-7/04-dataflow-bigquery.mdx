@@ -8,7 +8,7 @@ topics: ["Dataflow", "BigQuery", "Pub/Sub", "CDC Replication", "Data Warehouse"]
 prerequisites: ["module-6/02-debezium-server-pubsub", "module-6/03-iam-workload-identity"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { CdcToBigQueryDiagram, DataflowEndToEndWorkflowDiagram } from '../../../components/diagrams/module7';
 
 # Dataflow Template: CDC в BigQuery
 
@@ -30,21 +30,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ### Архитектура CDC → BigQuery
 
-<Mermaid chart={`
-graph LR
-    PG[(Cloud SQL<br/>PostgreSQL)] --> DS[Debezium<br/>Server]
-    DS --> |CDC Events| PS[Pub/Sub Topics]
-    PS --> |Subscription| DF[Dataflow Job]
-    DF --> |Staging| BQS[(BigQuery<br/>Changelog)]
-    DF --> |MERGE| BQR[(BigQuery<br/>Replica)]
-
-    style PG fill:#e3f2fd
-    style DS fill:#fff9c4
-    style PS fill:#f3e5f5
-    style DF fill:#c8e6c9
-    style BQS fill:#ffe0b2
-    style BQR fill:#ffccbc
-`} client:visible />
+<CdcToBigQueryDiagram client:load />
 
 **Компоненты потока:**
 1. **Cloud SQL PostgreSQL** — source database с logical replication
@@ -623,48 +609,7 @@ python custom_cdc_pipeline.py \
 
 ### Архитектура
 
-<Mermaid chart={`
-graph TB
-    subgraph "Cloud SQL"
-        PG[(PostgreSQL<br/>Logical Replication)]
-    end
-
-    subgraph "GKE Cluster"
-        DS[Debezium Server<br/>+ Workload Identity]
-    end
-
-    subgraph "Pub/Sub"
-        T1[Topic: cdc.public.orders]
-        T2[Topic: cdc.public.customers]
-        S1[Subscription: orders-sub]
-        S2[Subscription: customers-sub]
-    end
-
-    subgraph "Dataflow"
-        DF[CDC to BigQuery Job]
-    end
-
-    subgraph "BigQuery"
-        BQS[(cdc_staging<br/>Changelog)]
-        BQR[(cdc_replica<br/>Current State)]
-    end
-
-    PG -->|WAL| DS
-    DS -->|CDC Events| T1
-    DS -->|CDC Events| T2
-    T1 --> S1
-    T2 --> S2
-    S1 -->|Stream| DF
-    S2 -->|Stream| DF
-    DF -->|Raw Events| BQS
-    DF -->|MERGE Every 60s| BQR
-
-    style PG fill:#e3f2fd
-    style DS fill:#fff9c4
-    style DF fill:#c8e6c9
-    style BQS fill:#ffe0b2
-    style BQR fill:#ffccbc
-`} client:visible />
+<DataflowEndToEndWorkflowDiagram client:load />
 
 ### Checklist развертывания
 

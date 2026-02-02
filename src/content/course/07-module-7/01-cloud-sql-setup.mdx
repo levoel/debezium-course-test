@@ -8,7 +8,7 @@ topics: ["Cloud SQL", "PostgreSQL", "Logical Decoding", "Replication Slots", "GC
 prerequisites: ["module-2/01-logical-decoding-deep-dive", "module-2/02-replication-slots-lifecycle"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { CloudSqlCdcArchitectureDiagram } from '../../../components/diagrams/module7';
 
 # Настройка Cloud SQL PostgreSQL для CDC
 
@@ -33,22 +33,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ## Архитектура CDC на Cloud SQL
 
-<Mermaid chart={`
-graph LR
-    subgraph "Cloud SQL PostgreSQL"
-        A[Транзакции] --> B[Write-Ahead Log]
-        B --> C[Logical Decoding]
-        C --> D[Replication Slot]
-    end
-
-    D --> E[Debezium Server]
-    E --> F[Google Pub/Sub]
-    F --> G[Consumers]
-
-    style C fill:#339af0
-    style D fill:#ff6b6b
-    style E fill:#51cf66
-`} client:visible />
+<CloudSqlCdcArchitectureDiagram client:load />
 
 **Поток данных:**
 1. Транзакции записываются в WAL (Write-Ahead Log)

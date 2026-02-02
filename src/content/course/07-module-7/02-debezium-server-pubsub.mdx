@@ -8,7 +8,7 @@ topics: ["Debezium Server", "Pub/Sub", "Kafka-less", "GCP", "CDC"]
 prerequisites: ["module-6/01-cloud-sql-setup"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { TraditionalKafkaArchitectureDiagram, KafkalessArchitectureDiagram, DebeziumServerInternalDiagram } from '../../../components/diagrams/module7';
 
 # Debezium Server с Pub/Sub Sink
 
@@ -22,18 +22,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ### Традиционная архитектура (Kafka Connect)
 
-<Mermaid chart={`
-graph LR
-    A[PostgreSQL] --> B[Debezium Connector]
-    B --> C[Kafka Connect]
-    C --> D[Kafka Cluster]
-    D --> E[Consumer 1]
-    D --> F[Consumer 2]
-    D --> G[Kafka Streams]
-
-    style D fill:#ff6b6b
-    style C fill:#ff6b6b
-`} client:visible />
+<TraditionalKafkaArchitectureDiagram client:load />
 
 **Компоненты:**
 - PostgreSQL как источник данных
@@ -53,17 +42,7 @@ graph LR
 
 ### Kafka-less архитектура (Debezium Server)
 
-<Mermaid chart={`
-graph LR
-    A[PostgreSQL] --> B[Debezium Server]
-    B --> C[Google Pub/Sub]
-    C --> D[Cloud Run Consumer]
-    C --> E[Dataflow Job]
-    C --> F[BigQuery Subscription]
-
-    style B fill:#51cf66
-    style C fill:#339af0
-`} client:visible />
+<KafkalessArchitectureDiagram client:load />
 
 **Компоненты:**
 - PostgreSQL как источник данных
@@ -103,28 +82,7 @@ Debezium Server — это **standalone приложение на базе Quark
 1. **Source connector** — Debezium PostgreSQL connector для чтения WAL
 2. **Sink adapter** — адаптер для публикации в различные системы
 
-<Mermaid chart={`
-graph TD
-    subgraph "Debezium Server (Quarkus App)"
-        A[PostgreSQL Connector] --> B[Event Buffer]
-        B --> C[Sink Adapter]
-    end
-
-    D[Cloud SQL PostgreSQL] --> A
-    C --> E[Google Pub/Sub]
-
-    subgraph "Offset Storage"
-        F[File: offsets.dat]
-        G[Redis]
-    end
-
-    A -.->|save position| F
-    A -.->|save position| G
-
-    style A fill:#339af0
-    style C fill:#51cf66
-    style F fill:#ffd43b
-`} client:visible />
+<DebeziumServerInternalDiagram client:load />
 
 **Поддерживаемые sink адаптеры:**
 - **Google Pub/Sub** (для GCP)

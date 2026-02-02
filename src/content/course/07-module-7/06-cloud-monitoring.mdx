@@ -8,7 +8,7 @@ topics: ["Cloud Monitoring", "Alerting", "Metrics", "Dashboards", "SRE"]
 prerequisites: ["module-6/01-cloud-sql-setup", "module-6/02-debezium-server-pubsub", "module-6/04-dataflow-bigquery", "module-6/05-cloud-run-event-driven"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { MonitoringComponentsDiagram, MonitoringPointsHierarchyDiagram, AlertFlowDiagram } from '../../../components/diagrams/module7';
 
 # End-to-End Мониторинг CDC Pipeline
 
@@ -26,45 +26,7 @@ CDC pipeline — это **критичная инфраструктура** дл
 
 ### Компоненты для мониторинга
 
-<Mermaid chart={`
-graph TD
-    subgraph "Source"
-        CS[Cloud SQL<br/>PostgreSQL]
-    end
-
-    subgraph "CDC Engine"
-        DBS[Debezium<br/>Server]
-    end
-
-    subgraph "Messaging"
-        PS[Pub/Sub<br/>Topics]
-    end
-
-    subgraph "Consumers"
-        DF[Dataflow<br/>BigQuery]
-        CR[Cloud Run<br/>Processors]
-    end
-
-    subgraph "Monitoring Points"
-        M1[CPU/Disk/WAL<br/>Replication Slots]
-        M2[Lag/Throughput<br/>Queue Capacity]
-        M3[Backlog/DLQ<br/>Publish Rate]
-        M4[System Lag<br/>vCPU Usage]
-        M5[Request Count<br/>Error Rate]
-    end
-
-    CS -.->|Monitor| M1
-    DBS -.->|Monitor| M2
-    PS -.->|Monitor| M3
-    DF -.->|Monitor| M4
-    CR -.->|Monitor| M5
-
-    style M1 fill:#ff6b6b
-    style M2 fill:#ff6b6b
-    style M3 fill:#ff6b6b
-    style M4 fill:#ff6b6b
-    style M5 fill:#ff6b6b
-`} client:visible />
+<MonitoringComponentsDiagram client:load />
 
 В этом уроке мы разберем метрики, alerts, dashboards и runbooks для каждого компонента.
 
@@ -567,47 +529,7 @@ documentation:
 ╚════════════════════════════════════════════════════════════╝
 ```
 
-<Mermaid chart={`
-graph TD
-    subgraph "Dashboard Layout"
-        subgraph "Row 1: Health Indicators"
-            H1[🟢 Cloud SQL<br/>Healthy]
-            H2[🟢 Debezium<br/>Healthy]
-            H3[🟡 Pub/Sub<br/>Warning]
-            H4[🟢 Dataflow<br/>Healthy]
-            H5[🔴 Cloud Run<br/>Critical]
-        end
-
-        subgraph "Row 2: Source"
-            S1[CPU: 45%]
-            S2[Disk: 62%]
-            S3[WAL Lag: 2.5GB]
-        end
-
-        subgraph "Row 3: CDC"
-            C1[Lag: 12s]
-            C2[Throughput: 350 evt/s]
-            C3[Queue: 75% free]
-        end
-
-        subgraph "Row 4: Messaging"
-            M1[Oldest Msg: 45s]
-            M2[Backlog: 1250]
-            M3[DLQ: 0]
-        end
-
-        subgraph "Row 5: Consumers"
-            D1[System Lag: 8s]
-            D2[Workers: 5]
-            R1[Req/s: 120]
-            R2[Error Rate: 12%]
-        end
-    end
-
-    style H5 fill:#ff6b6b
-    style H3 fill:#ffd93d
-    style R2 fill:#ff6b6b
-`} client:visible />
+<MonitoringPointsHierarchyDiagram client:load />
 
 ### JSON Dashboard Definition (Excerpt)
 
@@ -926,39 +848,7 @@ alertStrategy:
 
 ## Monitoring Points Diagram
 
-<Mermaid chart={`
-graph LR
-    subgraph "Source"
-        CS[Cloud SQL] -->|Monitor| M1[fa:fa-chart-line<br/>CPU/Disk<br/>Connections<br/>WAL]
-    end
-
-    subgraph "CDC Engine"
-        DBS[Debezium<br/>Server] -->|Monitor| M2[fa:fa-chart-line<br/>Lag<br/>Throughput<br/>Queue]
-    end
-
-    subgraph "Messaging"
-        PS[Pub/Sub] -->|Monitor| M3[fa:fa-chart-line<br/>Backlog<br/>DLQ<br/>Publish Rate]
-    end
-
-    subgraph "Consumers"
-        DF[Dataflow] -->|Monitor| M4[fa:fa-chart-line<br/>System Lag<br/>Workers<br/>Cost]
-        CR[Cloud Run] -->|Monitor| M5[fa:fa-chart-line<br/>Requests<br/>Errors<br/>Latency]
-    end
-
-    M1 --> CM[Cloud<br/>Monitoring]
-    M2 --> CM
-    M3 --> CM
-    M4 --> CM
-    M5 --> CM
-
-    CM --> DASH[Unified<br/>Dashboard]
-    CM --> ALERT[Alert<br/>Policies]
-    CM --> RB[Runbooks]
-
-    style CM fill:#4285f4
-    style DASH fill:#34a853
-    style ALERT fill:#ea4335
-`} client:visible />
+<AlertFlowDiagram client:load />
 
 ---
 

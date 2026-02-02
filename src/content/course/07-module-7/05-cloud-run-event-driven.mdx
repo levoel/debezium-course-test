@@ -8,7 +8,7 @@ topics: ["Cloud Run", "Eventarc", "Pub/Sub", "Serverless", "Event-Driven"]
 prerequisites: ["module-6/02-debezium-server-pubsub", "module-6/03-iam-workload-identity"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { PubSubEventarcCloudRunDiagram, AutoScalingBehaviorSequence, EndToEndEventProcessingSequence } from '../../../components/diagrams/module7';
 
 # Cloud Run для Event-Driven CDC
 
@@ -44,35 +44,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ## Архитектура: Pub/Sub → Eventarc → Cloud Run
 
-<Mermaid chart={`
-graph LR
-    subgraph "Source"
-        CS[Cloud SQL<br/>PostgreSQL] -->|WAL| DBS[Debezium<br/>Server]
-    end
-
-    subgraph "Messaging"
-        DBS -->|Publish| PS1[Pub/Sub Topic<br/>cdc.public.orders]
-        DBS -->|Publish| PS2[Pub/Sub Topic<br/>cdc.public.customers]
-    end
-
-    subgraph "Event-Driven Processing"
-        PS1 -->|Eventarc Trigger| CR1[Cloud Run<br/>order-processor]
-        PS2 -->|Eventarc Trigger| CR2[Cloud Run<br/>customer-processor]
-    end
-
-    subgraph "Downstream Actions"
-        CR1 --> EMAIL[Email Service]
-        CR1 --> SLACK[Slack API]
-        CR2 --> ES[Elasticsearch]
-        CR2 --> REDIS[Redis Cache]
-    end
-
-    style DBS fill:#4285f4
-    style PS1 fill:#fbbc04
-    style PS2 fill:#fbbc04
-    style CR1 fill:#34a853
-    style CR2 fill:#34a853
-`} client:visible />
+<PubSubEventarcCloudRunDiagram client:load />
 
 **Поток событий:**
 
@@ -617,31 +589,7 @@ Cloud Run автоматически масштабируется на осно�
 - **CPU утилизации**
 - **Concurrency** (запросов на контейнер)
 
-<Mermaid chart={`
-sequenceDiagram
-    participant PS as Pub/Sub
-    participant CR1 as Cloud Run<br/>Instance 1
-    participant CR2 as Cloud Run<br/>Instance 2
-    participant CR3 as Cloud Run<br/>Instance 3
-
-    Note over PS: 10 сообщений/сек<br/>Concurrency=80
-    PS->>CR1: 80 сообщений
-    Note over CR1: Контейнер загружен
-
-    Note over PS: 90 сообщений/сек
-    PS->>CR1: 80 сообщений
-    PS->>CR2: 10 сообщений
-    Note over CR2: Новый контейнер<br/>создан автоматически
-
-    Note over PS: 200 сообщений/сек
-    PS->>CR1: 80 сообщений
-    PS->>CR2: 80 сообщений
-    PS->>CR3: 40 сообщений
-    Note over CR3: Еще один контейнер
-
-    Note over PS: 5 сообщений/сек
-    Note over CR2,CR3: Scale down<br/>через 15 минут idle
-`} client:visible />
+<AutoScalingBehaviorSequence client:load />
 
 ### Настройка Concurrency
 
@@ -684,36 +632,7 @@ gcloud run deploy customer-processor \
 
 ## Sequence Diagram: End-to-End Flow
 
-<Mermaid chart={`
-sequenceDiagram
-    participant DB as Cloud SQL
-    participant DBS as Debezium Server
-    participant PS as Pub/Sub
-    participant EA as Eventarc
-    participant CR as Cloud Run
-    participant EXT as External Service<br/>(Slack/Elasticsearch)
-
-    DB->>DBS: WAL change event
-    DBS->>PS: Publish CDC event
-    Note over PS: Message stored<br/>до обработки
-
-    PS->>EA: Trigger subscription
-    EA->>CR: HTTP POST /
-    Note over CR: Decode base64<br/>Parse Debezium JSON
-
-    CR->>CR: Execute business logic
-    CR->>EXT: Call external API
-    EXT-->>CR: Response
-    CR-->>EA: 204 No Content
-    EA-->>PS: ACK message
-    Note over PS: Message deleted
-
-    alt Processing failed
-        CR-->>EA: 500 Internal Error
-        EA-->>PS: NACK message
-        Note over PS: Retry with backoff
-    end
-`} client:visible />
+<EndToEndEventProcessingSequence client:load />
 
 ---
 
