@@ -8,7 +8,7 @@ topics: ["Capstone", "CDC", "Aurora", "PyFlink", "BigQuery", "Production"]
 prerequisites: ["module-6/06-cloud-monitoring"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { CapstoneArchitectureDiagram } from '../../../components/diagrams/module8';
 
 # Capstone: End-to-End CDC Pipeline
 
@@ -44,51 +44,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ## Архитектура Pipeline
 
-<Mermaid chart={`
-flowchart TB
-    subgraph SOURCE["Source: Aurora PostgreSQL"]
-        APP["Application<br/>(writes orders)"]
-        ORDERS_TABLE["orders table"]
-        OUTBOX_TABLE["outbox table"]
-        APP -->|"INSERT order"| ORDERS_TABLE
-        APP -->|"INSERT event<br/>(same transaction)"| OUTBOX_TABLE
-    end
-
-    subgraph CDC["CDC Layer: Debezium"]
-        DEBEZIUM["Debezium Connector<br/>(Outbox Event Router SMT)"]
-        KAFKA["Kafka Topic<br/>outbox.event.orders"]
-        OUTBOX_TABLE -->|"WAL stream"| DEBEZIUM
-        DEBEZIUM -->|"Route events"| KAFKA
-    end
-
-    subgraph PROCESSING["Stream Processing: PyFlink"]
-        PYFLINK["PyFlink Table API<br/>(transformations)"]
-        KAFKA_SINK["Kafka Topic<br/>bigquery.orders"]
-        KAFKA -->|"Consume CDC"| PYFLINK
-        PYFLINK -->|"Publish enriched"| KAFKA_SINK
-    end
-
-    subgraph WAREHOUSE["Analytics: BigQuery"]
-        BQ_CONNECTOR["BigQuery Connector<br/>(Storage Write API)"]
-        BQ_TABLE["BigQuery Table<br/>project.dataset.orders"]
-        KAFKA_SINK -->|"Stream ingestion"| BQ_CONNECTOR
-        BQ_CONNECTOR -->|"UPSERT/DELETE"| BQ_TABLE
-    end
-
-    subgraph MONITORING["Observability"]
-        PROMETHEUS["Prometheus<br/>(JMX metrics)"]
-        GRAFANA["Grafana<br/>(dashboards)"]
-        DEBEZIUM -.->|"Export metrics"| PROMETHEUS
-        PROMETHEUS --> GRAFANA
-    end
-
-    style APP fill:#339af0
-    style OUTBOX_TABLE fill:#ff6b6b
-    style DEBEZIUM fill:#51cf66
-    style PYFLINK fill:#8b5cf6
-    style BQ_TABLE fill:#f59e0b
-    style GRAFANA fill:#10b981
-`} client:visible />
+<CapstoneArchitectureDiagram client:load />
 
 ---
 

@@ -8,7 +8,7 @@ topics: ["Architecture", "Production", "Documentation", "Monitoring"]
 prerequisites: ["module-7/01-capstone-overview"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { SystemContextDiagram, ContainerDiagram } from '../../../components/diagrams/module8';
 
 # Архитектура и Deliverables
 
@@ -77,21 +77,7 @@ capstone-project/
 
 **Показывает:** Внешние пользователи и системы, с которыми взаимодействует ваш CDC pipeline.
 
-<Mermaid chart={`
-C4Context
-    title System Context: E-commerce CDC Pipeline
-
-    Person(analyst, "Data Analyst", "Queries real-time data")
-    System(cdc_pipeline, "CDC Pipeline", "Captures and streams changes from Aurora to BigQuery")
-    System_Ext(app, "E-commerce Application", "Writes orders to Aurora")
-    System_Ext(bigquery, "BigQuery", "Cloud data warehouse")
-
-    Rel(app, cdc_pipeline, "Writes to outbox table")
-    Rel(cdc_pipeline, bigquery, "Streams CDC events")
-    Rel(analyst, bigquery, "Runs SQL queries")
-
-    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
-`} client:visible />
+<SystemContextDiagram client:load />
 
 **Цель:** Показать, кто использует систему и с какими external systems она интегрируется.
 
@@ -99,44 +85,7 @@ C4Context
 
 **Показывает:** Основные компоненты (containers) внутри CDC pipeline и их взаимодействия.
 
-<Mermaid chart={`
-C4Container
-    title Container Diagram: CDC Pipeline Components
-
-    Container_Boundary(source, "Source") {
-        ContainerDb(aurora, "Aurora PostgreSQL", "Database", "Transactional database with logical replication")
-        Container(outbox, "Outbox Table", "PostgreSQL Table", "Transactional event publishing")
-    }
-
-    Container_Boundary(cdc, "CDC Layer") {
-        Container(debezium, "Debezium Connector", "Kafka Connect", "Captures WAL changes with Outbox Event Router SMT")
-        ContainerQueue(kafka, "Kafka", "Event Streaming", "Durable event log")
-    }
-
-    Container_Boundary(processing, "Stream Processing") {
-        Container(pyflink, "PyFlink Job", "Python/Flink", "Transforms and enriches CDC events")
-    }
-
-    Container_Boundary(warehouse, "Analytics Warehouse") {
-        ContainerDb(bigquery, "BigQuery", "Data Warehouse", "CDC-enabled tables with primary keys")
-    }
-
-    Container_Boundary(monitoring, "Observability") {
-        Container(prometheus, "Prometheus", "Metrics DB", "Scrapes JMX metrics")
-        Container(grafana, "Grafana", "Dashboards", "Visualizes metrics")
-    }
-
-    Rel(aurora, outbox, "Writes events in transaction")
-    Rel(outbox, debezium, "WAL stream")
-    Rel(debezium, kafka, "Publishes routed events")
-    Rel(kafka, pyflink, "Consumes CDC stream")
-    Rel(pyflink, kafka, "Publishes transformed events")
-    Rel(kafka, bigquery, "Streams via Storage Write API")
-    Rel(debezium, prometheus, "Exports JMX metrics")
-    Rel(prometheus, grafana, "Queries metrics")
-
-    UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="2")
-`} client:visible />
+<ContainerDiagram client:load />
 
 **Цель:** Показать технологии каждого компонента и data flow между ними.
 

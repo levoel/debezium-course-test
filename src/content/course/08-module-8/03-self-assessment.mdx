@@ -8,7 +8,7 @@ topics: ["Production Readiness", "Self-Assessment", "Checklist", "Quality"]
 prerequisites: ["module-7/02-architecture-deliverables"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { ProductionGapDiagram, FourGoldenSignalsDiagram } from '../../../components/diagrams/module8';
 
 # Production Readiness Checklist
 
@@ -22,27 +22,7 @@ Production-ready система — это не просто "работает �
 
 ### Production != "It Works Locally"
 
-<Mermaid chart={`
-flowchart LR
-    subgraph LOCAL["Локальная разработка"]
-        DEV["Код работает<br/>в Docker Compose"]
-        style DEV fill:#f59e0b
-    end
-
-    subgraph PROD["Production"]
-        MONITOR["Мониторинг"] --> FAULT["Fault Tolerance"]
-        FAULT --> SCALE["Масштабируемость"]
-        SCALE --> OPS["Operational<br/>Procedures"]
-        OPS --> DOC["Документация"]
-        style MONITOR fill:#10b981
-        style FAULT fill:#10b981
-        style SCALE fill:#10b981
-        style OPS fill:#10b981
-        style DOC fill:#10b981
-    end
-
-    DEV -.->|"Production Gap"| MONITOR
-`} client:visible />
+<ProductionGapDiagram client:load />
 
 **Разница:**
 - **Локально:** Данные небольшие, можно перезапустить вручную, ошибки видны в консоли
@@ -60,32 +40,7 @@ flowchart LR
 
 Google SRE определяет **Four Golden Signals** для monitoring любой distributed системы:
 
-<Mermaid chart={`
-flowchart TB
-    subgraph SIGNALS["Four Golden Signals"]
-        LATENCY["1. Latency<br/>Время ответа системы"]
-        TRAFFIC["2. Traffic<br/>Нагрузка на систему"]
-        ERRORS["3. Errors<br/>Частота ошибок"]
-        SATURATION["4. Saturation<br/>Насыщенность ресурсов"]
-    end
-
-    subgraph CDC["Применительно к CDC"]
-        LAG["Replication lag<br/>(ms behind source)"]
-        THROUGHPUT["Events/second<br/>в Kafka"]
-        FAILURES["Connector failures<br/>Error rate > 0"]
-        QUEUE["Kafka consumer lag<br/>CPU/Memory usage"]
-    end
-
-    LATENCY --> LAG
-    TRAFFIC --> THROUGHPUT
-    ERRORS --> FAILURES
-    SATURATION --> QUEUE
-
-    style LATENCY fill:#8b5cf6
-    style TRAFFIC fill:#8b5cf6
-    style ERRORS fill:#8b5cf6
-    style SATURATION fill:#8b5cf6
-`} client:visible />
+<FourGoldenSignalsDiagram client:load />
 
 **Для вашего CDC pipeline:**
 

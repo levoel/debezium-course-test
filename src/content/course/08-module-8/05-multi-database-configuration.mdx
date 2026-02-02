@@ -8,7 +8,7 @@ topics: ["Configuration", "PostgreSQL", "MySQL", "PyFlink", "Kafka Connect"]
 prerequisites: ["module-7/04-multi-database-architecture"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { MonitoringMultiDatabaseDiagram } from '../../../components/diagrams/module8';
 import Callout from '../../../components/Callout.tsx';
 
 # Multi-Database Configuration
@@ -454,43 +454,7 @@ Multi-database CDC pipeline требует мониторинга обоих con
 
 ### Monitoring Architecture
 
-<Mermaid chart={`
-flowchart TB
-    subgraph POSTGRES["PostgreSQL"]
-        PG_SLOT["Replication Slot<br/>debezium_outbox_slot_pg"]
-        PG_METRIC["Metric: WAL lag bytes<br/>(pg_wal_lsn_diff)"]
-        PG_SLOT --> PG_METRIC
-    end
-
-    subgraph MYSQL["MySQL"]
-        MYSQL_BINLOG["Binlog Position<br/>(GTID tracking)"]
-        MYSQL_METRIC["Metric: MilliSecondsBehindSource<br/>(JMX)"]
-        MYSQL_BINLOG --> MYSQL_METRIC
-    end
-
-    subgraph PROMETHEUS["Prometheus"]
-        PG_SCRAPE["PostgreSQL Exporter<br/>(SQL query)"]
-        MYSQL_SCRAPE["JMX Exporter<br/>(Kafka Connect)"]
-        PG_METRIC --> PG_SCRAPE
-        MYSQL_METRIC --> MYSQL_SCRAPE
-    end
-
-    subgraph GRAFANA["Grafana Dashboard"]
-        PANEL1["Panel 1: PostgreSQL WAL Lag"]
-        PANEL2["Panel 2: MySQL Time Lag"]
-        PANEL3["Panel 3: Combined Throughput"]
-        PG_SCRAPE --> PANEL1
-        MYSQL_SCRAPE --> PANEL2
-        PG_SCRAPE --> PANEL3
-        MYSQL_SCRAPE --> PANEL3
-    end
-
-    style PG_METRIC fill:#51cf66
-    style MYSQL_METRIC fill:#ff6b6b
-    style PANEL1 fill:#339af0
-    style PANEL2 fill:#f59e0b
-    style PANEL3 fill:#8b5cf6
-`} client:visible />
+<MonitoringMultiDatabaseDiagram client:load />
 
 ### Key Metrics by Connector Type
 

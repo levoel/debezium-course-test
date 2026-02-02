@@ -8,7 +8,7 @@ topics: ["Multi-Database", "CDC", "Architecture", "PostgreSQL", "MySQL"]
 prerequisites: ["module-7/01-capstone-overview", "module-8/02-gtid-mode-fundamentals"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { SeparateTopicsArchitectureDiagram, UnifiedTopicsArchitectureDiagram } from '../../../components/diagrams/module8';
 import Callout from '../../../components/Callout.tsx';
 
 # Multi-Database CDC Architecture
@@ -69,43 +69,7 @@ CDC нужен для **real-time analytics cross-database** — объедин�
 
 Каждая база данных публикует события в **database-specific topics**.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph SOURCES["Source Databases"]
-        PG["PostgreSQL<br/>orders table"]
-        MY["MySQL<br/>inventory table"]
-    end
-
-    subgraph CDC["CDC Layer"]
-        PG_CONN["PostgreSQL Connector<br/>database.server.name: postgres_prod<br/>slot.name: debezium_pg_slot"]
-        MY_CONN["MySQL Connector<br/>database.server.name: mysql_prod<br/>database.server.id: 184054<br/>schema.history.topic: mysql_prod.schema_history"]
-    end
-
-    subgraph TOPICS["Kafka Topics (Separate)"]
-        PG_TOPIC["postgres_prod.public.orders"]
-        MY_TOPIC["mysql_prod.inventory.stock"]
-        MY_SCHEMA["mysql_prod.schema_history<br/>(MySQL-only)"]
-    end
-
-    subgraph CONSUMER["Consumer Layer"]
-        PYFLINK["PyFlink Table API<br/>UNION ALL FROM<br/>postgres_prod.public.orders,<br/>mysql_prod.inventory.stock"]
-    end
-
-    PG --> PG_CONN
-    MY --> MY_CONN
-    PG_CONN --> PG_TOPIC
-    MY_CONN --> MY_TOPIC
-    MY_CONN -.->|"writes DDL"| MY_SCHEMA
-    PG_TOPIC --> PYFLINK
-    MY_TOPIC --> PYFLINK
-
-    style PG fill:#339af0
-    style MY fill:#ff6b6b
-    style PG_CONN fill:#51cf66
-    style MY_CONN fill:#51cf66
-    style MY_SCHEMA fill:#ffd43b
-    style PYFLINK fill:#8b5cf6
-`} client:visible />
+<SeparateTopicsArchitectureDiagram client:load />
 
 **Naming Convention:**
 ```
@@ -136,37 +100,7 @@ mysql_prod.schema_history           # MySQL schema history topic (PostgreSQL doe
 
 Использует **ByLogicalTableRouter SMT** для объединения событий из обеих баз в **single topic per aggregate**.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph SOURCES["Source Databases"]
-        PG["PostgreSQL<br/>outbox table"]
-        MY["MySQL<br/>outbox table"]
-    end
-
-    subgraph CDC["CDC Layer with SMT"]
-        PG_CONN["PostgreSQL Connector<br/>+ ByLogicalTableRouter SMT"]
-        MY_CONN["MySQL Connector<br/>+ ByLogicalTableRouter SMT"]
-    end
-
-    subgraph TOPICS["Kafka Topics (Unified)"]
-        UNIFIED["outbox.event.orders<br/>(contains events from both PostgreSQL and MySQL)"]
-    end
-
-    subgraph CONSUMER["Consumer Layer"]
-        PYFLINK["PyFlink Table API<br/>Single source<br/>WITH source_database metadata"]
-    end
-
-    PG --> PG_CONN
-    MY --> MY_CONN
-    PG_CONN --> UNIFIED
-    MY_CONN --> UNIFIED
-    UNIFIED --> PYFLINK
-
-    style UNIFIED fill:#f59e0b
-    style PG_CONN fill:#51cf66
-    style MY_CONN fill:#51cf66
-    style PYFLINK fill:#8b5cf6
-`} client:visible />
+<UnifiedTopicsArchitectureDiagram client:load />
 
 **SMT Configuration Example:**
 
