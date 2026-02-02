@@ -11,10 +11,12 @@
  * - Supports 3-7 actors (typical course diagrams)
  */
 
-import { useRef, useLayoutEffect, useState } from 'react';
 import { SequenceActor } from './SequenceActor';
 import { DiagramTooltip } from './Tooltip';
 import type { SequenceDiagramProps } from './types';
+
+// Fixed viewBox width for consistent coordinate system
+const VIEWBOX_WIDTH = 1000;
 
 export function SequenceDiagram({
   actors,
@@ -22,37 +24,17 @@ export function SequenceDiagram({
   messageSpacing = 40,
   className = '',
 }: SequenceDiagramProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [svgWidth, setSvgWidth] = useState(600);
-
   // Calculate diagram height based on message count
   const diagramHeight = 20 + messages.length * messageSpacing;
 
-  // Calculate column width as percentage
-  const columnWidth = 100 / actors.length;
+  // Calculate column width in viewBox units
+  const columnWidth = VIEWBOX_WIDTH / actors.length;
 
-  // Helper to get actor column center X position (as percentage)
-  const getActorCenterPercent = (actorId: string): number => {
+  // Helper to get actor column center X position in viewBox units
+  const getActorCenterX = (actorId: string): number => {
     const index = actors.findIndex((a) => a.id === actorId);
-    if (index === -1) return 50; // fallback to center
+    if (index === -1) return VIEWBOX_WIDTH / 2; // fallback to center
     return columnWidth * index + columnWidth / 2;
-  };
-
-  // Get SVG width for pixel calculations (for message arrows)
-  useLayoutEffect(() => {
-    const updateWidth = () => {
-      if (svgRef.current) {
-        setSvgWidth(svgRef.current.getBoundingClientRect().width);
-      }
-    };
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, []);
-
-  // Convert percentage to pixel for SVG elements that need it
-  const percentToPixel = (percent: number): number => {
-    return (percent / 100) * svgWidth;
   };
 
   return (
@@ -81,21 +63,21 @@ export function SequenceDiagram({
 
       {/* SVG for lifelines and messages */}
       <svg
-        ref={svgRef}
         width="100%"
-        height={diagramHeight}
+        viewBox={`0 0 ${VIEWBOX_WIDTH} ${diagramHeight}`}
+        preserveAspectRatio="xMidYMid meet"
         className="overflow-visible"
         aria-label="Sequence diagram messages"
       >
         {/* Lifelines - positioned at actor column centers */}
         {actors.map((actor) => {
-          const xPercent = getActorCenterPercent(actor.id);
+          const x = getActorCenterX(actor.id);
           return (
             <line
               key={`lifeline-${actor.id}`}
-              x1={`${xPercent}%`}
+              x1={x}
               y1="0"
-              x2={`${xPercent}%`}
+              x2={x}
               y2={diagramHeight}
               stroke="currentColor"
               strokeWidth="1"
@@ -107,10 +89,8 @@ export function SequenceDiagram({
 
         {/* Messages */}
         {messages.map((msg, i) => {
-          const fromPercent = getActorCenterPercent(msg.from);
-          const toPercent = getActorCenterPercent(msg.to);
-          const fromX = percentToPixel(fromPercent);
-          const toX = percentToPixel(toPercent);
+          const fromX = getActorCenterX(msg.from);
+          const toX = getActorCenterX(msg.to);
           const y = 20 + i * messageSpacing;
 
           const isLeftToRight = toX > fromX;

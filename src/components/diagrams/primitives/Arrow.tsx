@@ -42,7 +42,7 @@ export function Arrow({
         ${className}
       `.trim()}
     >
-      <div className={`flex items-center justify-center ${isVertical ? '' : 'px-2'}`}>
+      <div className="flex items-center justify-center">
         <svg
           className="w-8 h-8 text-gray-400"
           fill="none"
