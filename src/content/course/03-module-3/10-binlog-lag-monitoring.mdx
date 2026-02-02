@@ -8,7 +8,7 @@ topics: ["mysql", "monitoring", "jmx", "prometheus", "grafana", "aurora", "cloud
 prerequisites: ["module-8/03-binlog-retention-heartbeat", "module-8/08-enhanced-binlog-architecture"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { LagMetricsFlowDiagram, MonitoringArchitectureDiagram } from '../../../components/diagrams/module3/MonitoringDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Binlog Lag Monitoring: Метрики JMX и CloudWatch для Production CDC
@@ -36,41 +36,7 @@ import Callout from '../../../components/Callout.tsx';
 
 В production MySQL CDC мы используем **три уровня мониторинга**, каждый из которых предоставляет разный perspective на health системы.
 
-<Mermaid>
-```mermaid
-graph TB
-    subgraph Tier1["Tier 1: JMX Metrics (Connector Health)"]
-        JMX1[MilliSecondsBehindSource]
-        JMX2[SecondsBehindMaster]
-        JMX3[BinlogPosition]
-        JMX4[IsGtidModeEnabled]
-        JMX5[Connected]
-        JMX6[QueueRemainingCapacity]
-        JMX7[SecondsSinceLastEvent]
-    end
-
-    subgraph Tier2["Tier 2: CloudWatch Metrics (Aurora Infrastructure)"]
-        CW1[AuroraBinlogReplicaLag]
-        CW2[ChangeLogBytesUsed]
-        CW3[ChangeLogReadIOPs]
-        CW4[ChangeLogWriteIOPs]
-    end
-
-    subgraph Tier3["Tier 3: Operational Signals"]
-        OP1[Heartbeat Events]
-        OP2[Signal Table Events]
-        OP3[Kafka Consumer Lag]
-    end
-
-    Tier1 --> Prometheus[Prometheus]
-    Tier2 --> CloudWatch[AWS CloudWatch]
-    Tier3 --> Prometheus
-
-    Prometheus --> Grafana[Grafana Dashboards]
-    CloudWatch --> Grafana
-    Grafana --> Alerts[PagerDuty/Slack Alerts]
-```
-</Mermaid>
+<MonitoringArchitectureDiagram client:visible />
 
 **Tier 1: JMX Metrics** - Connector-level health (что Debezium видит и делает)
 **Tier 2: CloudWatch Metrics** - Infrastructure-level health (что происходит на Aurora database layer)
@@ -297,16 +263,7 @@ debezium_metrics_QueueTotalCapacity{context="streaming", server="mysql-server"}
 
 Debezium использует **internal queue** для буферизации событий между binlog reader thread и Kafka producer thread.
 
-<Mermaid>
-```mermaid
-graph LR
-    A[Binlog Reader Thread] -->|Put events| B[Internal Queue]
-    B -->|Take events| C[Kafka Producer Thread]
-    C --> D[Kafka Topic]
-
-    style B fill:#f9f,stroke:#333,stroke-width:2px
-```
-</Mermaid>
+<LagMetricsFlowDiagram client:visible />
 
 **Queue capacity** (default: 8192 events)
 

@@ -8,7 +8,7 @@ topics: ["aurora-mysql", "enhanced-binlog", "aws", "performance", "cdc"]
 prerequisites: ["module-8/01-binlog-architecture"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { EnhancedBinlogArchitectureDiagram, EnhancedVsStandardDiagram, RetentionComparisonDiagram } from '../../../components/diagrams/module3/EnhancedBinlogDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Aurora Enhanced Binlog: Архитектура и Trade-offs
@@ -38,26 +38,7 @@ import Callout from '../../../components/Callout.tsx';
 
 ### Последовательная запись событий
 
-<Mermaid>
-```mermaid
-sequenceDiagram
-    participant App as Приложение
-    participant Engine as MySQL Engine
-    participant Redo as Redo Log
-    participant Binlog as Binlog File
-    participant Storage as Storage (Disk)
-
-    App->>Engine: INSERT INTO customers VALUES (...)
-    Engine->>Redo: Записать изменения в redo log
-    Note over Redo: Durability guarantee
-    Engine->>Engine: Commit transaction
-    Engine->>Binlog: Записать binlog события
-    Note over Binlog: ПОСЛЕ commit
-    Binlog->>Storage: Flush binlog на диск
-
-    Note over Engine,Storage: ПОСЛЕДОВАТЕЛЬНЫЙ процесс:<br/>1. Redo log → 2. Commit → 3. Binlog
-```
-</Mermaid>
+<EnhancedVsStandardDiagram client:visible />
 
 ### Характеристики стандартного binlog
 
@@ -85,38 +66,7 @@ Aurora Enhanced Binlog решает проблему через **разделе
 
 ### Параллельные записи в специализированное хранилище
 
-<Mermaid>
-```mermaid
-graph TB
-    subgraph ENGINE["MySQL Engine (Compute Node)"]
-        direction TB
-        TX[Transaction Execution]
-        TX --> TL[Transaction Log Events]
-        TX --> BL[Binlog Events<br/>UNSORTED]
-    end
-
-    subgraph STORAGE["Aurora Storage Layer"]
-        direction TB
-        subgraph STANDARD["Standard Storage Nodes"]
-            TLS[Transaction Log Storage]
-        end
-        subgraph ENHANCED["Enhanced Binlog Storage Nodes<br/>SPECIALIZED"]
-            BLS[Binlog Storage]
-            SORT[Sorting & Ordering<br/>at Storage Layer]
-            BLS --> SORT
-        end
-    end
-
-    TL -.->|"Parallel Write #1"| TLS
-    BL -.->|"Parallel Write #2"| BLS
-
-    SORT --> OUTPUT["Ordered Binlog Files<br/>mysql-bin-changelog.000001"]
-
-    style ENGINE fill:#1e3a5f,stroke:#3b82f6
-    style ENHANCED fill:#10b981,stroke:#22c55e
-    style SORT fill:#f59e0b
-```
-</Mermaid>
+<EnhancedBinlogArchitectureDiagram client:visible />
 
 ### Как это работает
 
@@ -284,26 +234,7 @@ snapshot.mode=initial
 
 **Aurora Global Database architecture:**
 
-<Mermaid>
-```mermaid
-graph LR
-    subgraph PRIMARY["Primary Region (us-east-1)"]
-        PW[Primary Writer]
-        PEBL["Enhanced Binlog<br/>mysql-bin-changelog.000001<br/>mysql-bin-changelog.000002"]
-        PW --> PEBL
-    end
-
-    subgraph SECONDARY["Secondary Region (eu-west-1)"]
-        SW[Secondary Writer<br/>read-only until failover]
-        SEBL["NO Enhanced Binlog<br/>Replicated via Aurora storage"]
-    end
-
-    PRIMARY -.->|"Physical replication<br/>(storage-level)"| SECONDARY
-
-    style PEBL fill:#10b981
-    style SEBL fill:#ef4444,stroke:#dc2626
-```
-</Mermaid>
+<RetentionComparisonDiagram client:visible />
 
 **Что происходит при failover:**
 
@@ -584,34 +515,7 @@ Debezium постепенно обновит данные без полного 
 
 ### Decision Flowchart
 
-<Mermaid>
-```mermaid
-graph TD
-    START[Оценка Enhanced Binlog]
-
-    START --> Q1{Нужен backtrack<br/>для point-in-time recovery?}
-    Q1 -->|Да| NO1[❌ НЕ используйте<br/>Enhanced Binlog]
-    Q1 -->|Нет| Q2{Используете<br/>Aurora Global Database?}
-
-    Q2 -->|Да| Q3{Secondary регионы нуждаются<br/>в binlog для CDC?}
-    Q3 -->|Да| NO2[❌ НЕ используйте<br/>Enhanced Binlog]
-    Q3 -->|Нет| Q4{High write throughput?<br/>Compute overhead проблема?}
-
-    Q2 -->|Нет| Q4
-
-    Q4 -->|Нет| NO3[⚠️ Standard Binlog<br/>достаточен]
-    Q4 -->|Да| Q5{Можете принять resnapshot<br/>после restore/clone?}
-
-    Q5 -->|Нет| NO4[❌ НЕ используйте<br/>Enhanced Binlog]
-    Q5 -->|Да| YES[✅ ИСПОЛЬЗУЙТЕ<br/>Enhanced Binlog]
-
-    style YES fill:#10b981,stroke:#22c55e
-    style NO1 fill:#ef4444,stroke:#dc2626
-    style NO2 fill:#ef4444,stroke:#dc2626
-    style NO3 fill:#f59e0b,stroke:#d97706
-    style NO4 fill:#ef4444,stroke:#dc2626
-```
-</Mermaid>
+{/* Decision flowchart is covered by the critical limitations section in RetentionComparisonDiagram above */}
 
 <Callout type="tip">
 **Золотое правило:** Если у вас есть сомнения или вы не уверены в будущих требованиях (backtrack, Global Database, DR через backups), **начните с standard binlog**. Переход с standard на Enhanced возможен, но обратный переход потребует Debezium resnapshot.

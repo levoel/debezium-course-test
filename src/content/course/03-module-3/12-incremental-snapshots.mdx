@@ -8,7 +8,7 @@ topics: ["debezium", "mysql", "aurora", "snapshot", "signal-table", "incremental
 prerequisites: ["module-8/09-aurora-snapshot-modes"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { IncrementalSnapshotFlowDiagram, ChunkProcessingDiagram, SignalTableDiagram } from '../../../components/diagrams/module3/IncrementalSnapshotDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Incremental Snapshots через Signal Table
@@ -65,36 +65,7 @@ Issue:
 
 ## Initial vs Incremental Snapshot: Архитектурное сравнение
 
-<Mermaid chart={`
-graph TB
-    subgraph "Initial Snapshot"
-        IS_Start[Connector Start]
-        IS_Start --> IS_Lock["LOCK TABLES (all tables)"]
-        IS_Lock --> IS_Schema["Read Schema (all tables)"]
-        IS_Schema --> IS_Unlock["UNLOCK TABLES"]
-        IS_Unlock --> IS_Data["Read Data (all tables)"]
-        IS_Data --> IS_Stream["Resume Binlog Streaming"]
-
-        style IS_Lock fill:#FFB6C1
-        style IS_Schema fill:#FFB6C1
-        style IS_Data fill:#ADD8E6
-    end
-
-    subgraph "Incremental Snapshot"
-        IC_Start[Signal INSERT]
-        IC_Start --> IC_Chunk1["Read Chunk 1 (2048 rows)"]
-        IC_Chunk1 --> IC_Binlog1["Process Binlog Events"]
-        IC_Binlog1 --> IC_Chunk2["Read Chunk 2 (2048 rows)"]
-        IC_Chunk2 --> IC_Binlog2["Process Binlog Events"]
-        IC_Binlog2 --> IC_ChunkN["..."]
-        IC_ChunkN --> IC_Complete["Snapshot Complete"]
-
-        style IC_Chunk1 fill:#90EE90
-        style IC_Chunk2 fill:#90EE90
-        style IC_Binlog1 fill:#FFA500
-        style IC_Binlog2 fill:#FFA500
-    end
-`} />
+<IncrementalSnapshotFlowDiagram client:visible />
 
 ### Ключевые отличия
 
@@ -162,37 +133,7 @@ Incremental snapshot триггируется через **signal table** — с
 
 ### Архитектура Signal Table
 
-<Mermaid chart={`
-sequenceDiagram
-    participant Ops as Operations Engineer
-    participant ST as Signal Table (debezium_signal)
-    participant DC as Debezium Connector
-    participant BL as Binlog Stream
-    participant MT as Main Table (inventory.orders)
-    participant K as Kafka
-
-    Note over Ops,ST: Phase 1: Send Signal
-    Ops->>ST: INSERT INTO debezium_signal<br/>(id, type, data)<br/>VALUES (UUID(), 'execute-snapshot', ...)
-
-    Note over ST,DC: Phase 2: Debezium captures signal
-    BL->>DC: Binlog event: INSERT into debezium_signal
-    DC->>DC: Parse signal type: execute-snapshot
-    DC->>DC: Extract data-collections from JSON
-
-    Note over DC,MT: Phase 3: Execute snapshot
-    DC->>MT: SELECT * FROM orders<br/>WHERE id >= 1 AND id < 2049<br/>(Chunk 1)
-    DC->>K: Publish chunk 1 events
-
-    Note over DC,MT: Phase 4: Process binlog in parallel
-    BL->>DC: Binlog events during snapshot
-    DC->>K: Publish real-time CDC events
-
-    Note over DC,MT: Phase 5: Continue chunks
-    DC->>MT: SELECT * FROM orders<br/>WHERE id >= 2049 AND id < 4097<br/>(Chunk 2)
-    DC->>K: Publish chunk 2 events
-
-    Note over DC: Snapshot Complete
-`} />
+<SignalTableDiagram client:visible />
 
 **Ключевое отличие от Initial Snapshot:**
 - Signal table использует **сам binlog** для передачи команд Debezium
@@ -672,36 +613,7 @@ debezium_metrics_RemainingTableCount{context="snapshot",server="mysql-server"}
 
 ### Архитектура Read-Only Incremental Snapshot
 
-<Mermaid chart={`
-graph LR
-    subgraph "Aurora MySQL Cluster"
-        Writer[Writer Instance]
-        Replica[Read Replica]
-
-        Writer -->|Binlog Replication| Replica
-    end
-
-    subgraph "Kafka Cluster"
-        SignalTopic[Signal Topic:<br/>debezium-signal-mysql]
-        DataTopics[Data Topics:<br/>mysql-server.*]
-    end
-
-    subgraph "Operations"
-        Ops[Engineer]
-    end
-
-    subgraph "Debezium Connector"
-        DC[Connector<br/>Read-Only Mode]
-    end
-
-    Ops -->|kafka-console-producer| SignalTopic
-    DC -->|Read Binlog| Replica
-    DC -->|Consume Signals| SignalTopic
-    DC -->|Publish CDC Events| DataTopics
-
-    style Replica fill:#ADD8E6
-    style SignalTopic fill:#90EE90
-`} />
+<ChunkProcessingDiagram client:visible />
 
 **Workflow отличается:**
 1. **Signal table НЕ используется** (replica read-only)

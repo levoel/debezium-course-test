@@ -8,7 +8,7 @@ topics: ["mysql", "debezium", "multi-connector", "server-id", "topology"]
 prerequisites: ["module-8/04-mysql-connector-configuration", "module-8/06-schema-history-recovery"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { MultiConnectorArchitectureDiagram, ServerIdRegistryDiagram } from '../../../components/diagrams/module3/MultiConnectorDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Multi-Connector Deployments: Server ID Registry и Топологические Конфликты
@@ -84,30 +84,7 @@ ERROR 1236 (HY000): A slave with the same server_uuid/server_id as this slave ha
 2. **Даже остановленные коннекторы держат session** — MySQL не убивает replication connection мгновенно (timeout delays)
 3. **Conflict не разрешается автоматически** — нужно вручную kill connection или изменить `server_id`
 
-<Mermaid chart={`
-sequenceDiagram
-    participant ConnA as Connector A<br/>server_id: 184001
-    participant MySQL as MySQL Master
-    participant ConnB as Connector B<br/>server_id: 184001
-
-    ConnA->>MySQL: Register as slave 184001
-    MySQL-->>ConnA: ✅ Connected
-
-    Note over MySQL: Connector A active<br/>server_id 184001 registered
-
-    ConnB->>MySQL: Register as slave 184001
-    MySQL-->>ConnB: ❌ ERROR 1236<br/>Duplicate server_id!
-
-    Note over ConnB: Connector B stuck<br/>Cannot start
-
-    ConnA->>MySQL: Stop connector
-    Note over MySQL: Session timeout (30s-60s)<br/>184001 still registered
-
-    ConnB->>MySQL: Retry connection
-    MySQL-->>ConnB: ❌ Still registered!
-
-    Note over MySQL: Must wait for timeout<br/>or manually kill connection
-`} client:visible />
+<ServerIdRegistryDiagram client:visible />
 
 **Проверка активных replication connections:**
 
@@ -354,58 +331,7 @@ Kafka Connect хранит offsets (binlog positions) в `connect-offsets` то�
 
 ### Topic Isolation Visual
 
-<Mermaid chart={`
-flowchart TB
-    subgraph MYSQL["MySQL Cluster (ecommerce database)"]
-        direction TB
-        T1["Table: orders"]
-        T2["Table: order_items"]
-        T3["Table: users"]
-        T4["Table: profiles"]
-    end
-
-    subgraph CONN_A["Debezium Connector A<br/>(orders-cdc)"]
-        direction TB
-        CA_CONFIG["database.server.id: 184001<br/>database.server.name: mysql_orders<br/>table.include.list: orders, order_items<br/>schema.history: schema-history.mysql_orders"]
-    end
-
-    subgraph CONN_B["Debezium Connector B<br/>(users-cdc)"]
-        direction TB
-        CB_CONFIG["database.server.id: 184002<br/>database.server.name: mysql_users<br/>table.include.list: users, profiles<br/>schema.history: schema-history.mysql_users"]
-    end
-
-    subgraph KAFKA_A["Kafka Topics (Connector A)"]
-        direction TB
-        KA1["mysql_orders.ecommerce.orders"]
-        KA2["mysql_orders.ecommerce.order_items"]
-        KA3["schema-history.mysql_orders"]
-    end
-
-    subgraph KAFKA_B["Kafka Topics (Connector B)"]
-        direction TB
-        KB1["mysql_users.ecommerce.users"]
-        KB2["mysql_users.ecommerce.profiles"]
-        KB3["schema-history.mysql_users"]
-    end
-
-    T1 --> CONN_A
-    T2 --> CONN_A
-    T3 --> CONN_B
-    T4 --> CONN_B
-
-    CONN_A --> KA1
-    CONN_A --> KA2
-    CONN_A --> KA3
-
-    CONN_B --> KB1
-    CONN_B --> KB2
-    CONN_B --> KB3
-
-    style CONN_A fill:#1e3a5f,stroke:#3b82f6
-    style CONN_B fill:#14532d,stroke:#22c55e
-    style KA3 fill:#f59e0b,stroke:#fb923c
-    style KB3 fill:#f59e0b,stroke:#fb923c
-`} client:visible />
+<MultiConnectorArchitectureDiagram client:visible />
 
 **Key takeaway:** Два коннектора к одному MySQL cluster — это нормально. Но они MUST иметь:
 - Уникальные `server_id` (Registry pattern)

@@ -8,7 +8,7 @@ topics: ["aurora-mysql", "debezium", "snapshot", "cdc", "locks"]
 prerequisites: ["module-8/08-enhanced-binlog-architecture"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { SnapshotDecisionTreeDiagram, InitialSnapshotDiagram, NeverSnapshotDiagram } from '../../../components/diagrams/module3/AuroraSnapshotDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Aurora MySQL: Выбор Snapshot Mode для CDC
@@ -36,21 +36,7 @@ import Callout from '../../../components/Callout.tsx';
 
 ### Community MySQL: Глобальная блокировка (FLUSH TABLES)
 
-<Mermaid chart={`
-graph LR
-    D[Debezium Connector]
-    D -->|1. FLUSH TABLES WITH READ LOCK| DB[(MySQL Database)]
-    DB --> T1[Table 1]
-    DB --> T2[Table 2]
-    DB --> T3[Table 3]
-
-    style DB fill:#90EE90
-    style T1 fill:#FFB6C1
-    style T2 fill:#FFB6C1
-    style T3 fill:#FFB6C1
-
-    classDef locked fill:#FFB6C1,stroke:#FF0000,stroke-width:3px
-`} />
+<SnapshotDecisionTreeDiagram client:visible />
 
 **Community MySQL workflow:**
 1. `FLUSH TABLES WITH READ LOCK` — **вся база данных** блокирована для записи
@@ -69,24 +55,7 @@ graph LR
 
 ### Aurora MySQL: Table-level блокировки (LOCK TABLES)
 
-<Mermaid chart={`
-graph LR
-    D[Debezium Connector]
-    D -->|FLUSH TABLES blocked ❌| DB[(Aurora MySQL)]
-    D -->|2. Fallback: LOCK TABLES T1| T1[Table 1]
-    D -->|3. LOCK TABLES T2| T2[Table 2]
-    D -->|4. LOCK TABLES T3| T3[Table 3]
-    DB --> T1
-    DB --> T2
-    DB --> T3
-
-    style DB fill:#FFA500
-    style T1 fill:#ADD8E6
-    style T2 fill:#ADD8E6
-    style T3 fill:#ADD8E6
-
-    classDef partial fill:#ADD8E6,stroke:#0000FF,stroke-width:2px
-`} />
+<InitialSnapshotDiagram client:visible />
 
 **Aurora MySQL workflow:**
 1. Debezium пытается `FLUSH TABLES WITH READ LOCK` → **Access Denied error**
@@ -125,41 +94,7 @@ INFO: Flush tables with read lock failed, falling back to table-level locks
 
 ## Как Debezium адаптируется к Aurora: Snapshot Workflow
 
-<Mermaid chart={`
-sequenceDiagram
-    participant DC as Debezium Connector
-    participant AM as Aurora MySQL (writer)
-    participant T1 as Table 1 (inventory.customers)
-    participant T2 as Table 2 (inventory.orders)
-
-    Note over DC,AM: Phase 1: Detect Aurora (no global lock)
-    DC->>AM: FLUSH TABLES WITH READ LOCK
-    AM-->>DC: ❌ ERROR 1227: Access denied
-    DC->>DC: Fallback: use table-level locks
-
-    Note over DC,T1: Phase 2: Lock & read schema (per-table)
-    DC->>T1: LOCK TABLES inventory.customers READ
-    DC->>T1: Read schema (columns, indexes, PK)
-    DC->>T1: UNLOCK TABLES
-
-    DC->>T2: LOCK TABLES inventory.orders READ
-    DC->>T2: Read schema
-    DC->>T2: UNLOCK TABLES
-
-    Note over DC,AM: Phase 3: Start REPEATABLE READ transaction
-    DC->>AM: START TRANSACTION WITH CONSISTENT SNAPSHOT
-    DC->>AM: SHOW MASTER STATUS
-    AM-->>DC: File=mysql-bin.000003, Position=154
-
-    Note over DC,T1: Phase 4: Read data (no locks held)
-    DC->>T1: SELECT * FROM inventory.customers
-    DC->>T2: SELECT * FROM inventory.orders
-
-    Note over DC,AM: Phase 5: Commit & resume streaming
-    DC->>AM: COMMIT
-    DC->>DC: Save offset: mysql-bin.000003:154
-    DC->>AM: Resume streaming from saved position
-`} />
+{/* Detailed snapshot workflow covered by InitialSnapshotDiagram above */}
 
 **Ключевые моменты:**
 
@@ -546,41 +481,7 @@ echo "Schema freeze lifted: $(date)"
 
 ### Workflow: Aurora Snapshot → Bulk Load → Debezium Streaming
 
-<Mermaid chart={`
-sequenceDiagram
-    participant Ops as Operations Team
-    participant AM as Aurora MySQL (writer)
-    participant AS as Aurora Snapshot
-    participant RC as Restored Cluster
-    participant BL as Bulk Load Tool (JDBC/ETL)
-    participant K as Kafka
-    participant DC as Debezium Connector
-
-    Note over Ops,AM: Phase 1: Capture binlog position
-    Ops->>AM: SHOW MASTER STATUS
-    AM-->>Ops: File=mysql-bin.000005, Position=154
-    Note over Ops: Save: mysql-bin.000005:154
-
-    Note over Ops,AS: Phase 2: Create Aurora snapshot
-    Ops->>AM: aws rds create-db-cluster-snapshot
-    AM-->>AS: Snapshot created (30-60 min)
-
-    Note over Ops,RC: Phase 3: Restore to temp cluster
-    Ops->>AS: aws rds restore-db-cluster-from-snapshot
-    AS-->>RC: Restored cluster ready
-
-    Note over RC,BL: Phase 4: Bulk load data to Kafka
-    BL->>RC: SELECT * FROM large_table (batches)
-    BL->>K: Publish to Kafka topics
-
-    Note over DC,AM: Phase 5: Debezium streaming from binlog
-    Ops->>DC: Deploy connector (snapshot.mode=never)
-    DC->>AM: Resume from mysql-bin.000005:154
-    DC->>K: Stream CDC events
-
-    Note over Ops,RC: Phase 6: Cleanup
-    Ops->>RC: Delete restored cluster
-`} />
+<NeverSnapshotDiagram client:visible />
 
 ### Step-by-Step Implementation
 

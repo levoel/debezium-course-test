@@ -8,7 +8,7 @@ topics: ["mysql", "debezium", "ddl", "gh-ost", "pt-osc", "schema-migration"]
 prerequisites: ["module-8/01-binlog-architecture", "module-8/06-schema-history-recovery"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { GhOstFlowDiagram, PtOscFlowDiagram, DdlToolComparisonDiagram, GhostTableLifecycleDiagram } from '../../../components/diagrams/module3/DdlToolsDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Интеграция с gh-ost и pt-online-schema-change
@@ -35,20 +35,7 @@ ALTER TABLE orders ADD COLUMN status VARCHAR(20);
 3. **Table lock** — приложение не может писать в таблицу
 4. **Rename** — временная таблица заменяет оригинальную
 
-<Mermaid chart={`
-flowchart TB
-    START["ALTER TABLE orders<br/>ADD COLUMN status"] --> LOCK["🔒 LOCK TABLE<br/>(write lock)"]
-    LOCK --> CREATE["CREATE TABLE orders_tmp<br/>(new schema)"]
-    CREATE --> COPY["COPY 10M rows<br/>(может занять часы)"]
-    COPY --> RENAME["RENAME orders TO orders_old<br/>RENAME orders_tmp TO orders"]
-    RENAME --> UNLOCK["🔓 UNLOCK TABLE"]
-    UNLOCK --> DROP["DROP TABLE orders_old"]
-    DROP --> DONE["✅ Migration complete"]
-
-    style LOCK fill:#dc2626,stroke:#991b1b,color:#fff
-    style COPY fill:#ea580c,stroke:#c2410c,color:#fff
-    style UNLOCK fill:#10b981,stroke:#059669
-`} client:visible />
+<GhostTableLifecycleDiagram client:visible />
 
 **Проблемы:**
 
@@ -82,35 +69,7 @@ flowchart TB
 
 **Архитектура:** Triggerless, основан на чтении binlog.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph ORIGINAL["Оригинальная таблица"]
-        ORDERS["orders<br/>(id, customer_id, created_at)"]
-    end
-
-    subgraph GHOST["Ghost таблица (новая схема)"]
-        GHO["_orders_gho<br/>(id, customer_id, created_at, status)"]
-    end
-
-    subgraph CHANGELOG["Changelog таблица (метаданные)"]
-        GHC["_orders_ghc<br/>(id, last_update)"]
-    end
-
-    APP["Приложение<br/>INSERT/UPDATE/DELETE"] --> ORDERS
-    ORDERS --> BINLOG["MySQL Binlog"]
-
-    GHOST_PROCESS["gh-ost процесс"] --> |"1. Copy rows<br/>(chunked)"| GHO
-    BINLOG --> |"2. Read changes"| GHOST_PROCESS
-    GHOST_PROCESS --> |"3. Apply changes"| GHO
-    GHC --> |"Track progress"| GHOST_PROCESS
-
-    GHO -.->|"4. Atomic rename<br/>orders ↔ _orders_gho"| ORDERS
-
-    style ORDERS fill:#3b82f6,stroke:#1e40af
-    style GHO fill:#8b5cf6,stroke:#6d28d9
-    style GHC fill:#f59e0b,stroke:#d97706
-    style GHOST_PROCESS fill:#10b981,stroke:#059669
-`} client:visible />
+<GhOstFlowDiagram client:visible />
 
 **Принцип работы:**
 
@@ -159,33 +118,7 @@ gh-ost \
 
 **Архитектура:** Trigger-based.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph ORIGINAL["Оригинальная таблица"]
-        ORDERS["orders<br/>(id, customer_id, created_at)"]
-    end
-
-    subgraph NEW["Новая таблица"]
-        NEW_TBL["_orders_new<br/>(id, customer_id, created_at, status)"]
-    end
-
-    APP["Приложение<br/>INSERT/UPDATE/DELETE"] --> ORDERS
-    ORDERS --> |"AFTER INSERT trigger"| TRIGGER_INSERT["Copy to _orders_new"]
-    ORDERS --> |"AFTER UPDATE trigger"| TRIGGER_UPDATE["Update in _orders_new"]
-    ORDERS --> |"AFTER DELETE trigger"| TRIGGER_DELETE["Delete from _orders_new"]
-
-    TRIGGER_INSERT --> NEW_TBL
-    TRIGGER_UPDATE --> NEW_TBL
-    TRIGGER_DELETE --> NEW_TBL
-
-    PT_OSC["pt-online-schema-change<br/>процесс"] --> |"1. Copy rows<br/>(chunked)"| NEW_TBL
-
-    NEW_TBL -.->|"2. Atomic rename<br/>orders → _orders_old<br/>_orders_new → orders"| ORDERS
-
-    style ORDERS fill:#3b82f6,stroke:#1e40af
-    style NEW_TBL fill:#8b5cf6,stroke:#6d28d9
-    style PT_OSC fill:#10b981,stroke:#059669
-`} client:visible />
+<PtOscFlowDiagram client:visible />
 
 **Принцип работы:**
 
@@ -313,50 +246,7 @@ gh-ost --table=orders --alter="ADD COLUMN status VARCHAR(20)" --execute
 2. Фильтровать helper table события перед отправкой в Kafka
 3. Consumers видят только оригинальные таблицы
 
-<Mermaid chart={`
-flowchart LR
-    subgraph MYSQL["MySQL Server"]
-        ORDERS["orders table"]
-        GHO["_orders_gho table"]
-        GHC["_orders_ghc table"]
-    end
-
-    subgraph BINLOG["MySQL Binlog"]
-        B1["orders events"]
-        B2["_orders_gho events"]
-        B3["_orders_ghc events"]
-    end
-
-    subgraph DEBEZIUM["Debezium Connector"]
-        CAPTURE["Capture:<br/>table.include.list=mydb.*"]
-        FILTER["Filter SMT:<br/>regex !.*(gho|ghc|new|old)$"]
-    end
-
-    subgraph KAFKA["Kafka Topics"]
-        K1["mysql-server.mydb.orders<br/>(events published)"]
-        K2["_orders_gho events<br/>❌ FILTERED OUT"]
-        K3["_orders_ghc events<br/>❌ FILTERED OUT"]
-    end
-
-    ORDERS --> B1
-    GHO --> B2
-    GHC --> B3
-
-    B1 --> CAPTURE
-    B2 --> CAPTURE
-    B3 --> CAPTURE
-
-    CAPTURE --> FILTER
-
-    FILTER --> K1
-    FILTER -.-> K2
-    FILTER -.-> K3
-
-    style FILTER fill:#10b981,stroke:#059669
-    style K1 fill:#3b82f6,stroke:#1e40af
-    style K2 fill:#dc2626,stroke:#991b1b,color:#fff
-    style K3 fill:#dc2626,stroke:#991b1b,color:#fff
-`} client:visible />
+<DdlToolComparisonDiagram client:visible />
 
 ### Конфигурация с Filter SMT
 

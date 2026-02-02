@@ -8,7 +8,7 @@ topics: ["mysql", "debezium", "recovery", "snapshot-modes", "backup"]
 prerequisites: ["module-8/06-schema-history-recovery", "module-8/03-binlog-retention-heartbeat"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { RecoveryDecisionTreeDiagram, RecoveryFlowDiagram } from '../../../components/diagrams/module3/RecoveryDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Recovery Procedures: Binlog Loss и Schema History Corruption
@@ -45,38 +45,7 @@ Prevention всегда дешевле recovery:
 
 Когда connector падает, первый шаг — **диагностика типа сбоя** по error message.
 
-<Mermaid chart={`
-flowchart TD
-    START["Connector Failed<br/>❌ Status: FAILED"] --> ERROR["Читаем error message<br/>в connector logs"]
-
-    ERROR --> CHECK_BINLOG{"Contains:<br/>'binlog file', 'purged',<br/>'file not available'?"}
-    ERROR --> CHECK_HISTORY{"Contains:<br/>'db history topic',<br/>'partially missing'?"}
-    ERROR --> CHECK_SCHEMA{"Contains:<br/>'not found in schema',<br/>'column mismatch'?"}
-
-    CHECK_BINLOG -->|Yes| BINLOG_SCENARIO["SCENARIO 1:<br/>Binlog Position Loss"]
-    CHECK_HISTORY -->|Yes| HISTORY_SCENARIO["SCENARIO 2:<br/>Schema History Corruption"]
-    CHECK_SCHEMA -->|Yes| SCHEMA_SCENARIO["SCENARIO 3:<br/>Schema Mismatch"]
-
-    BINLOG_SCENARIO --> BINLOG_DIAG["Diagnosis:<br/>1. SHOW BINARY LOGS<br/>2. Check offset topic<br/>3. Compare positions"]
-    BINLOG_DIAG --> BINLOG_RECOVERY["Recovery:<br/>Option A: snapshot.mode=when_needed<br/>Option B: Delete offset + initial"]
-
-    HISTORY_SCENARIO --> HISTORY_DIAG["Diagnosis:<br/>1. kafka-topics describe<br/>2. Check retention config<br/>3. Count messages"]
-    HISTORY_DIAG --> DDL_CHECK{"DDL changes<br/>since last offset?"}
-    DDL_CHECK -->|No| HISTORY_RECOVERY_A["Recovery:<br/>snapshot.mode=recovery"]
-    DDL_CHECK -->|Yes| HISTORY_RECOVERY_B["Recovery:<br/>Fresh connector<br/>(new name)"]
-    DDL_CHECK -->|Has backup| HISTORY_RESTORE["Recovery:<br/>Restore from backup"]
-
-    SCHEMA_SCENARIO --> SCHEMA_DIAG["Diagnosis:<br/>Compare DB schema<br/>vs schema history topic"]
-    SCHEMA_DIAG --> SCHEMA_RECOVERY["Recovery:<br/>Depends on cause<br/>(see Scenario 2)"]
-
-    style BINLOG_SCENARIO fill:#f59e0b,stroke:#fb923c
-    style HISTORY_SCENARIO fill:#ef4444,stroke:#dc2626
-    style SCHEMA_SCENARIO fill:#f59e0b,stroke:#fb923c
-    style BINLOG_RECOVERY fill:#10b981,stroke:#22c55e
-    style HISTORY_RECOVERY_A fill:#10b981,stroke:#22c55e
-    style HISTORY_RECOVERY_B fill:#eab308,stroke:#facc15
-    style HISTORY_RESTORE fill:#10b981,stroke:#22c55e
-`} client:visible />
+<RecoveryDecisionTreeDiagram client:visible />
 
 **Error Message Patterns для быстрой диагностики:**
 
@@ -781,39 +750,7 @@ curl -X POST http://localhost:8083/connectors \
 
 ### Prevention: Defense in Depth
 
-<Mermaid chart={`
-flowchart TB
-    subgraph LAYER1["Layer 1: Infinite Retention"]
-        RET1["retention.ms=-1"]
-        RET2["retention.bytes=-1"]
-    end
-
-    subgraph LAYER2["Layer 2: Adequate Binlog Retention"]
-        BINLOG["binlog_expire_logs_seconds<br/>= max_downtime * safety_margin"]
-    end
-
-    subgraph LAYER3["Layer 3: Regular Backups"]
-        BACKUP["Daily backup schema history topic<br/>Retention: 30+ days"]
-    end
-
-    subgraph LAYER4["Layer 4: Monitoring"]
-        MON1["Alert: retention.ms != -1"]
-        MON2["Alert: topic message count drop"]
-        MON3["Alert: offset age vs oldest binlog"]
-    end
-
-    LAYER1 --> LAYER2
-    LAYER2 --> LAYER3
-    LAYER3 --> LAYER4
-
-    LAYER4 --> RESULT["99.9% uptime<br/>Minutes recovery (not hours)"]
-
-    style LAYER1 fill:#10b981,stroke:#22c55e
-    style LAYER2 fill:#3b82f6,stroke:#60a5fa
-    style LAYER3 fill:#f59e0b,stroke:#fb923c
-    style LAYER4 fill:#ef4444,stroke:#dc2626
-    style RESULT fill:#8b5cf6,stroke:#a78bfa
-`} client:visible />
+<RecoveryFlowDiagram client:visible />
 
 **Layer 1: Infinite Retention на Schema History Topic**
 

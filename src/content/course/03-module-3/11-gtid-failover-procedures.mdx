@@ -8,7 +8,7 @@ topics: ["mysql", "aurora", "gtid", "failover", "high-availability", "disaster-r
 prerequisites: ["module-8/02-gtid-mode-fundamentals", "module-8/04-mysql-connector-configuration"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { FailoverWithoutGtidSequence, FailoverWithGtidSequence, FailoverDecisionDiagram, GtidSetComparisonDiagram, ReplicaPromotionDiagram, ConnectorReconfigurationDiagram, FailoverTimelineDiagram } from '../../../components/diagrams/module3/GtidFailoverDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # GTID Failover: Процедуры переключения MySQL/Aurora
@@ -33,47 +33,13 @@ import Callout from '../../../components/Callout.tsx';
 
 Без GTID failover выглядит так:
 
-<Mermaid>
-```mermaid
-sequenceDiagram
-    participant D as Debezium
-    participant P1 as Primary (old)
-    participant P2 as Replica → Primary
-
-    D->>P1: Читаю binlog: mysql-bin.000015:2548
-    Note over P1: PRIMARY CRASHES
-    P1--xD: Connection lost
-    Note over P2: Promoted to PRIMARY
-    D->>P2: Пытаюсь читать mysql-bin.000015:2548
-    P2-->>D: ERROR: File not found or wrong position
-    Note over D: MANUAL INTERVENTION REQUIRED
-    Note over D: Инженер должен найти соответствующую позицию<br/>на новом primary вручную
-    Note over D: Или сделать FULL RESNAPSHOT (часы/дни)
-```
-</Mermaid>
+<FailoverWithoutGtidSequence client:visible />
 
 **Проблема**: Binlog файлы на replica имеют **другие имена и смещения**, чем на primary. Позиция `mysql-bin.000015:2548` бессмысленна на новом сервере.
 
 **С GTID failover автоматичен**:
 
-<Mermaid>
-```mermaid
-sequenceDiagram
-    participant D as Debezium
-    participant P1 as Primary (old)
-    participant P2 as Replica → Primary
-
-    D->>P1: Читаю binlog: GTID=...562:1-1000
-    Note over P1: PRIMARY CRASHES
-    P1--xD: Connection lost
-    Note over P2: Promoted to PRIMARY
-    D->>P2: Подключаюсь с GTID offset: ...562:1000
-    D->>P2: Запрашиваю события после GTID ...562:1000
-    P2->>D: Автоматически нахожу позицию
-    P2->>D: Отдаю события начиная с ...562:1001
-    Note over D,P2: CDC продолжается БЕЗ MANUAL INTERVENTION
-```
-</Mermaid>
+<FailoverWithGtidSequence client:visible />
 
 **Ключевое преимущество**: GTID **глобально уникален** - одинаков на всех серверах. Debezium может продолжить с той же позиции на любом сервере в топологии.
 
@@ -348,23 +314,7 @@ Debezium MySQL connector автоматически использует GTID, �
 
 **Heartbeat failover protection**:
 
-<Mermaid>
-```mermaid
-timeline
-    title Heartbeat Protection During Idle Period
-    Day 1 : Last INSERT в таблицу customers
-          : Offset: GTID ...562:1000
-    Day 2-6 : Таблица IDLE (no writes)
-            : Heartbeat updates offset каждые 10s
-            : Offset: GTID ...562:1050 (heartbeat GTIDs)
-    Day 7 : Binlog retention 7 дней
-          : mysql-bin.000001-000010 purged
-    Day 8 : Primary fails, failover to replica
-          : Offset указывает на GTID ...562:1050
-          : NEW PRIMARY имеет эту GTID (не purged)
-          : Connector продолжает работу!
-```
-</Mermaid>
+<FailoverDecisionDiagram client:visible />
 
 **Без heartbeat**:
 - Offset остается на GTID `...562:1000` (Day 1)
@@ -390,26 +340,7 @@ timeline
 
 Перед выполнением запланированного failover (planned maintenance) выполните эту проверку:
 
-<Mermaid>
-```mermaid
-graph TD
-    A[Start Pre-Failover Validation] --> B{Connector RUNNING?}
-    B -->|No| B1[Fix connector - abort failover]
-    B -->|Yes| C{Lag < 5 seconds?}
-    C -->|No| C1[Wait for lag to decrease]
-    C -->|Yes| D{GTID mode ON?}
-    D -->|No| D1[Enable GTID - abort failover]
-    D -->|Yes| E{Record Executed_Gtid_Set}
-    E --> F{Heartbeat events flowing?}
-    F -->|No| F1[Fix heartbeat - abort failover]
-    F -->|Yes| G[All checks passed - SAFE TO FAILOVER]
-
-    style G fill:#90EE90
-    style B1 fill:#FFB6C1
-    style D1 fill:#FFB6C1
-    style F1 fill:#FFB6C1
-```
-</Mermaid>
+{/* Pre-failover validation decision tree covered by FailoverDecisionDiagram above */}
 
 ### Step 1: Verify Connector Status
 
@@ -614,29 +545,7 @@ mysql> SELECT @@global.read_only;
 
 **Automatic Failover Timeline**:
 
-<Mermaid>
-```mermaid
-sequenceDiagram
-    participant App as Application
-    participant EP as Cluster Endpoint
-    participant P1 as Primary (instance-1)
-    participant R2 as Replica (instance-2)
-    participant RDS as RDS Control Plane
-
-    App->>EP: Write request
-    EP->>P1: Route to primary
-    Note over P1: PRIMARY CRASHES
-    P1--xEP: Connection lost
-    EP-->>App: Connection error
-    Note over RDS: Detects failure (30-60s)
-    RDS->>R2: Promote to PRIMARY
-    R2->>R2: SET read_only=OFF
-    RDS->>EP: Update DNS (10-30s)
-    App->>EP: Retry write request
-    EP->>R2: Route to NEW primary
-    R2-->>App: Success
-```
-</Mermaid>
+<ReplicaPromotionDiagram client:visible />
 
 **Expected timeline**:
 - **30-60 seconds** - RDS detects primary failure
@@ -767,21 +676,7 @@ curl -X POST http://localhost:8083/connectors/mysql-inventory-connector/restart
 
 ### Step 2: Verify GTID Continuity
 
-<Mermaid>
-```mermaid
-sequenceDiagram
-    participant DBA as Engineer
-    participant NP as New Primary
-    participant D as Debezium
-    participant K as Kafka Offset Storage
-
-    DBA->>NP: SHOW GLOBAL VARIABLES LIKE 'gtid_executed'
-    NP-->>DBA: ...562:1-10550
-    DBA->>K: Check Debezium offset
-    K-->>DBA: gtid_set: ...562:1-10500
-    Note over DBA: GTID continuity verified:<br/>Offset (10500) < Executed (10550)<br/>Gap = 50 GTIDs = normal lag
-```
-</Mermaid>
+<GtidSetComparisonDiagram client:visible />
 
 **Query new primary**:
 
@@ -956,25 +851,7 @@ Aurora Global Database использует **cross-region replication** с от
 
 ### Architecture
 
-<Mermaid>
-```mermaid
-graph LR
-    subgraph "US-East-1 (Primary Region)"
-        P1[Primary Writer<br/>UUID: 3e11fa47...]
-        R1[Reader Instance]
-    end
-
-    subgraph "EU-West-1 (Secondary Region)"
-        P2[Primary Writer<br/>UUID: 4f22gb58...]
-        R2[Reader Instance]
-    end
-
-    P1 -->|Replication<br/>< 1 second| P2
-
-    style P1 fill:#90EE90
-    style P2 fill:#FFE4B5
-```
-</Mermaid>
+<FailoverTimelineDiagram client:visible />
 
 **Key characteristic**: Каждый regional cluster имеет **свой server_uuid**.
 
