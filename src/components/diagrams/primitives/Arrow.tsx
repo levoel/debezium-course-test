@@ -33,14 +33,12 @@ export function Arrow({
   dashed = false,
   className = '',
 }: ArrowProps) {
-  const isVertical = direction === 'up' || direction === 'down';
   const paths = arrowheadPaths[direction];
 
   return (
     <div
       className={`
-        flex items-center justify-center
-        ${isVertical ? 'flex-row gap-1' : 'flex-col gap-0.5'}
+        flex items-center justify-center flex-col gap-0.5
         ${className}
       `.trim()}
     >
