@@ -8,7 +8,7 @@ topics: ["Docker", "Lab Environment", "Kafka", "PostgreSQL"]
 prerequisites: ["module-1/02-debezium-architecture"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { LabSetupDiagram } from '../../../../components/diagrams/module1';
 
 # Настройка лабораторного окружения
 
@@ -143,46 +143,7 @@ curl -s http://localhost:8083/connector-plugins | jq '.[].class'
 
 ## Архитектура окружения
 
-<Mermaid chart={`
-flowchart TB
-    subgraph DOCKER["Docker Compose Stack"]
-        direction TB
-
-        subgraph DATA["Data Layer"]
-            PG[(PostgreSQL<br/>:5433)]
-        end
-
-        subgraph STREAMING["Streaming Layer"]
-            KAFKA[Kafka<br/>:9092]
-            SR[Schema Registry<br/>:8081]
-            CONNECT[Debezium Connect<br/>:8083]
-        end
-
-        subgraph MONITORING["Monitoring"]
-            PROM[Prometheus<br/>:9090]
-            GRAF[Grafana<br/>:3000]
-        end
-
-        subgraph EXERCISES["Exercises"]
-            JUP[JupyterLab<br/>:8888]
-        end
-
-        PG -->|WAL| CONNECT
-        CONNECT -->|Events| KAFKA
-        KAFKA --> SR
-        CONNECT -->|Metrics| PROM
-        PROM --> GRAF
-        KAFKA -->|Consume| JUP
-        PG -->|Query| JUP
-    end
-
-    style PG fill:#3b82f6
-    style KAFKA fill:#8b5cf6
-    style CONNECT fill:#10b981
-    style JUP fill:#f59e0b
-    style GRAF fill:#ec4899
-    style PROM fill:#ef4444
-`} client:visible />
+<LabSetupDiagram />
 
 ## Справочник портов
 

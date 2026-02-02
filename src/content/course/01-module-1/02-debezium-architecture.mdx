@@ -8,7 +8,7 @@ topics: ["Debezium", "Kafka Connect", "Architecture"]
 prerequisites: ["module-1/01-cdc-fundamentals"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { DeploymentModesDiagram, KafkaConnectClusterDiagram, CdcEventFlowDiagram } from '../../../../components/diagrams/module1';
 
 # Архитектура Debezium
 
@@ -31,35 +31,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 Debezium можно развернуть тремя способами, каждый из которых подходит для разных сценариев.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph MODE1["Kafka Connect (рекомендуется)"]
-        direction LR
-        DB1[(Database)] --> CONN1[Debezium Connector]
-        CONN1 --> KC[Kafka Connect Cluster]
-        KC --> K1[Kafka]
-    end
-
-    subgraph MODE2["Debezium Server"]
-        direction LR
-        DB2[(Database)] --> DS[Debezium Server]
-        DS --> SINK[Cloud Sink]
-        SINK --> |"Pub/Sub, Kinesis,\nEventHub"| CLOUD[Cloud Services]
-    end
-
-    subgraph MODE3["Embedded Engine"]
-        direction LR
-        DB3[(Database)] --> EMB[Your Java App]
-        EMB --> |"Custom\nProcessing"| TARGET[Any Target]
-    end
-
-    style MODE1 fill:#14532d,stroke:#22c55e
-    style MODE2 fill:#1e3a5f,stroke:#3b82f6
-    style MODE3 fill:#4a1d1d,stroke:#ef4444
-    style KC fill:#10b981
-    style DS fill:#3b82f6
-    style EMB fill:#ef4444
-`} client:visible />
+<DeploymentModesDiagram />
 
 ### 1. Kafka Connect (рекомендуемый)
 
@@ -145,35 +117,7 @@ try (DebeziumEngine<ChangeEvent<String, String>> engine =
 
 Поскольку Kafka Connect — рекомендуемый режим, разберем его детальнее.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph CLUSTER["Kafka Connect Cluster"]
-        direction TB
-        W1[Worker 1]
-        W2[Worker 2]
-        W3[Worker 3]
-
-        W1 --- W2
-        W2 --- W3
-        W1 --- W3
-    end
-
-    subgraph TOPICS["Kafka Internal Topics"]
-        direction LR
-        CONFIG[connect-configs]
-        OFFSETS[connect-offsets]
-        STATUS[connect-status]
-    end
-
-    REST[REST API :8083] --> CLUSTER
-    CLUSTER --> TOPICS
-    CLUSTER --> DATA[Data Topics]
-
-    style CLUSTER fill:#14532d,stroke:#22c55e
-    style REST fill:#3b82f6
-    style TOPICS fill:#f59e0b
-    style DATA fill:#8b5cf6
-`} client:visible />
+<KafkaConnectClusterDiagram />
 
 ### Компоненты Kafka Connect
 
@@ -215,34 +159,7 @@ curl -X DELETE http://localhost:8083/connectors/postgres-connector
 
 Полный путь события от изменения в БД до потребителя:
 
-<Mermaid chart={`
-sequenceDiagram
-    participant App as Приложение
-    participant PG as PostgreSQL
-    participant WAL as WAL (pgoutput)
-    participant Deb as Debezium Connector
-    participant KC as Kafka Connect
-    participant K as Kafka Topic
-    participant C as Consumer
-
-    App->>PG: UPDATE customers SET name='Bob' WHERE id=1
-    PG->>WAL: Запись в transaction log
-
-    Note over WAL,Deb: Logical Replication Protocol
-
-    Deb->>WAL: Запрос изменений (replication slot)
-    WAL-->>Deb: Изменение в формате pgoutput
-    Deb->>Deb: Преобразование в CDC формат
-    Deb->>KC: Передача события
-    KC->>K: Публикация в topic inventory.public.customers
-    KC->>KC: Сохранение offset в connect-offsets
-
-    Note over K,C: Событие доступно потребителям
-
-    C->>K: poll()
-    K-->>C: CDC Event
-    C->>C: Обработка: op="u", before={...}, after={name:"Bob"}
-`} client:visible />
+<CdcEventFlowDiagram />
 
 ### Ключевые моменты
 

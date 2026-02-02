@@ -7,7 +7,7 @@ estimatedTime: 15
 topics: ["CDC", "Log-based Replication", "Data Synchronization"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { CdcComparisonDiagram, CdcSequenceDiagram } from '../../../../components/diagrams/module1';
 
 # Что такое Change Data Capture
 
@@ -38,30 +38,7 @@ WHERE updated_at > :last_sync_time;
 
 Каждая современная СУБД ведет журнал транзакций (WAL в PostgreSQL, binlog в MySQL). Этот журнал содержит **каждое изменение**, которое было зафиксировано в базе данных. CDC-системы читают этот журнал и преобразуют записи в поток событий.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph POLLING["Polling (традиционный подход)"]
-        direction LR
-        APP1[Приложение] -->|"SELECT каждые N минут"| DB1[(База данных)]
-        DB1 -->|"Результаты запроса"| APP1
-    end
-
-    subgraph CDC["Log-based CDC"]
-        direction LR
-        APP2[Приложение] -->|"INSERT/UPDATE/DELETE"| DB2[(База данных)]
-        DB2 -->|"Запись в WAL"| WAL[Transaction Log]
-        WAL -->|"Чтение изменений"| DEBEZIUM[Debezium]
-        DEBEZIUM -->|"Поток событий"| KAFKA[Kafka]
-    end
-
-    style POLLING fill:#7f1d1d,stroke:#ef4444
-    style CDC fill:#14532d,stroke:#22c55e
-    style DB1 fill:#3b82f6
-    style DB2 fill:#3b82f6
-    style WAL fill:#f59e0b
-    style DEBEZIUM fill:#10b981
-    style KAFKA fill:#8b5cf6
-`} client:visible />
+<CdcComparisonDiagram />
 
 ## Сравнение подходов: Polling vs Log-based CDC
 
@@ -86,30 +63,7 @@ flowchart TB
 
 ## Последовательность событий в CDC
 
-<Mermaid chart={`
-sequenceDiagram
-    participant App as Приложение
-    participant DB as PostgreSQL
-    participant WAL as Transaction Log
-    participant Deb as Debezium
-    participant K as Kafka
-    participant Consumer as Consumer
-
-    App->>DB: INSERT INTO customers (name) VALUES ('Alice')
-    DB->>WAL: Запись изменения
-    DB-->>App: OK
-
-    Note over WAL,Deb: ~миллисекунды
-
-    Deb->>WAL: Чтение новых записей
-    WAL-->>Deb: Изменение: INSERT customer
-    Deb->>K: CDC Event (op: "c", after: {name: "Alice"})
-    K-->>Deb: ACK
-
-    Consumer->>K: poll()
-    K-->>Consumer: CDC Event
-    Consumer->>Consumer: Обработка события
-`} client:visible />
+<CdcSequenceDiagram />
 
 ## Use Cases для CDC
 

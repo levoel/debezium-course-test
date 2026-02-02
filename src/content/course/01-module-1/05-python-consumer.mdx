@@ -8,7 +8,7 @@ topics: ["Python", "confluent-kafka", "Consumer", "Event Processing"]
 prerequisites: ["module-1/04-first-connector"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { PythonConsumerDiagram } from '../../../../components/diagrams/module1';
 
 # Потребление CDC событий на Python
 
@@ -251,16 +251,7 @@ DELETE FROM customers WHERE email = '[email protected]';
 
 ## Поток данных
 
-<Mermaid chart={`
-graph LR
-    PG[(PostgreSQL)] -->|WAL| Deb[Debezium]
-    Deb -->|CDC Events| K[Kafka Topic]
-    K -->|poll| Py[Python Consumer]
-
-    style PG fill:#4169E1,color:#fff
-    style K fill:#000,color:#fff
-    style Py fill:#3776AB,color:#fff
-`} client:visible />
+<PythonConsumerDiagram />
 
 ## Разбор poll() timeout
 

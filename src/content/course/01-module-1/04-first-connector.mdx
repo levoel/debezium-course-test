@@ -8,7 +8,7 @@ topics: ["Debezium", "PostgreSQL", "Kafka Connect", "REST API"]
 prerequisites: ["module-1/03-lab-setup"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { FirstConnectorDiagram } from '../../../../components/diagrams/module1';
 
 # Первый Debezium коннектор
 
@@ -234,28 +234,7 @@ DELETE FROM customers WHERE email = '[email protected]';
 
 ## Поток данных
 
-<Mermaid chart={`
-sequenceDiagram
-    participant App as psql
-    participant PG as PostgreSQL
-    participant WAL as WAL (Transaction Log)
-    participant Deb as Debezium Connector
-    participant K as Kafka Topic
-
-    Note over App,K: INSERT INTO customers...
-
-    App->>PG: INSERT INTO customers
-    PG->>WAL: Write to transaction log
-    PG-->>App: OK
-
-    Note over WAL,Deb: ~миллисекунды
-
-    Deb->>WAL: Read via logical replication
-    WAL-->>Deb: Change event
-    Deb->>K: Publish to inventory.public.customers
-
-    Note over K: Event available for consumers
-`} client:visible />
+<FirstConnectorDiagram />
 
 ## Типичные ошибки
 

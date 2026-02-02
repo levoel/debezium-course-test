@@ -8,7 +8,7 @@ topics: ["Debezium", "Event Structure", "JSON", "Python"]
 prerequisites: ["module-1/05-python-consumer"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { OperationTypesDiagram, EventStructureDiagram } from '../../../../components/diagrams/module1';
 
 # Структура CDC событий Debezium
 
@@ -79,20 +79,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ### Визуализация
 
-<Mermaid chart={`
-flowchart TB
-    subgraph "Типы операций CDC"
-        R["r (snapshot)<br/>before: null<br/>after: данные"]
-        C["c (create)<br/>before: null<br/>after: данные"]
-        U["u (update)<br/>before: старое<br/>after: новое"]
-        D["d (delete)<br/>before: данные<br/>after: null"]
-    end
-
-    style R fill:#4ade80,color:#000
-    style C fill:#60a5fa,color:#000
-    style U fill:#fbbf24,color:#000
-    style D fill:#f87171,color:#000
-`} client:visible />
+<OperationTypesDiagram />
 
 ## Ключевая ошибка: null в before/after
 
@@ -407,27 +394,7 @@ print(f"Время события: {format_event_time(event)}")
 
 ## Анатомия события
 
-<Mermaid chart={`
-graph TB
-    Event[CDC Event]
-
-    Event --> Schema[schema<br/>JSON Schema структуры]
-    Event --> Payload[payload<br/>Основные данные]
-
-    Payload --> Before[before<br/>Состояние ДО]
-    Payload --> After[after<br/>Состояние ПОСЛЕ]
-    Payload --> Source[source<br/>Метаданные]
-    Payload --> Op[op<br/>Тип операции]
-    Payload --> TsMs[ts_ms<br/>Время обработки]
-
-    Source --> Db[db, schema, table]
-    Source --> Lsn[lsn, txId]
-    Source --> Snapshot[snapshot]
-
-    style Event fill:#3b82f6,color:#fff
-    style Payload fill:#10b981,color:#fff
-    style Source fill:#f59e0b,color:#000
-`} client:visible />
+<EventStructureDiagram />
 
 ## Итоги модуля 1
 
