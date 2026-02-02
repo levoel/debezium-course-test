@@ -76,3 +76,27 @@ export interface SequenceMessageProps {
   tabIndex?: number;
   'aria-label'?: string;
 }
+
+// SequenceDiagram layout types
+export interface SequenceActorDef {
+  id: string;
+  label: string;
+  variant?: SequenceActorVariant;
+  tooltip?: React.ReactNode;
+}
+
+export interface SequenceMessageDef {
+  id: string;
+  from: string;
+  to: string;
+  label: string;
+  variant?: SequenceMessageVariant;
+  tooltip?: React.ReactNode;
+}
+
+export interface SequenceDiagramProps {
+  actors: SequenceActorDef[];
+  messages: SequenceMessageDef[];
+  messageSpacing?: number;
+  className?: string;
+}
