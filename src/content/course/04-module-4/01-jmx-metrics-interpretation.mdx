@@ -8,7 +8,7 @@ topics: ["jmx", "metrics", "monitoring", "observability"]
 prerequisites: ["module-2/03-incremental-snapshots"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { JmxMetricsPipelineDiagram, LagCalculationDiagram, StalenessScenariosDiagram, DiagnosticDecisionTreeDiagram } from '../../../components/diagrams/module4';
 
 # JMX Метрики Debezium: Интерпретация и мониторинг
 
@@ -30,26 +30,7 @@ CDC pipeline — это real-time система. В отличие от batch j
 
 Debezium экспортирует метрики через **JMX (Java Management Extensions)**. JMX — стандартный механизм мониторинга Java-приложений.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph CONNECT["Kafka Connect JVM"]
-        DBZ["Debezium Connector"]
-        JMX["JMX MBeans"]
-        EXPORTER["JMX Exporter<br/>Java Agent"]
-        DBZ -->|"Регистрирует метрики"| JMX
-        JMX -->|"Expose HTTP :9404"| EXPORTER
-    end
-
-    EXPORTER -->|"/metrics<br/>Prometheus format"| PROM["Prometheus"]
-    PROM -->|"PromQL queries"| GRAFANA["Grafana"]
-    PROM -->|"Alert rules"| ALERT["Alertmanager"]
-
-    style DBZ fill:#8b5cf6
-    style JMX fill:#3b82f6
-    style EXPORTER fill:#f59e0b
-    style PROM fill:#e11d48
-    style GRAFANA fill:#10b981
-`} client:visible />
+<JmxMetricsPipelineDiagram client:load />
 
 **Поток метрик:**
 1. Debezium регистрирует метрики как JMX MBeans
@@ -114,22 +95,7 @@ Debezium организует метрики по **контекстам** (cont
 MilliSecondsBehindSource = current_time - event_timestamp_in_db
 ```
 
-<Mermaid chart={`
-flowchart LR
-    subgraph DB["PostgreSQL"]
-        TX["Transaction<br/>timestamp: 10:00:00.000"]
-    end
-
-    subgraph DEBEZIUM["Debezium"]
-        PROC["Обработка<br/>time: 10:00:00.150"]
-        LAG["MilliSecondsBehindSource<br/>= 150ms"]
-    end
-
-    TX -->|"WAL event"| PROC
-    PROC --> LAG
-
-    style LAG fill:#f59e0b
-`} client:visible />
+<LagCalculationDiagram client:load />
 
 **Интерпретация:**
 - **0-500ms** — нормально (processing overhead)
@@ -150,30 +116,7 @@ debezium_metrics_MilliSecondsBehindSource{connector="inventory-connector"}
 
 **Зачем нужна:** MilliSecondsBehindSource обновляется только при получении событий. Если событий нет — метрика "замирает".
 
-<Mermaid chart={`
-flowchart TB
-    subgraph SCENARIO1["Сценарий: Нормальная работа"]
-        direction LR
-        A1["Events поступают"] --> B1["MilliSecondsBehindSource: 100ms"]
-        B1 --> C1["MilliSecondsSinceLastEvent: 50ms"]
-    end
-
-    subgraph SCENARIO2["Сценарий: Нет активности в БД"]
-        direction LR
-        A2["Нет новых транзакций"] --> B2["MilliSecondsBehindSource: 100ms<br/>(не обновляется!)"]
-        B2 --> C2["MilliSecondsSinceLastEvent: 5 минут"]
-    end
-
-    subgraph SCENARIO3["Сценарий: Коннектор застрял"]
-        direction LR
-        A3["Ошибка чтения WAL"] --> B3["MilliSecondsBehindSource: 100ms<br/>(замер)"]
-        B3 --> C3["MilliSecondsSinceLastEvent: 10 минут"]
-    end
-
-    style SCENARIO1 fill:#14532d
-    style SCENARIO2 fill:#1e3a5f
-    style SCENARIO3 fill:#7f1d1d
-`} client:visible />
+<StalenessScenariosDiagram client:load />
 
 **Интерпретация:**
 - **До 30s** — нормально
@@ -213,28 +156,7 @@ Queue utilization % = 100 * (1 - QueueRemainingCapacity / QueueTotalCapacity)
 
 Когда возникает проблема — используйте этот decision tree.
 
-<Mermaid chart={`
-flowchart TD
-    START["Проблема с CDC pipeline"] --> Q1{"MilliSecondsBehindSource<br/>растет?"}
-
-    Q1 -->|"Да"| Q2{"Queue utilization<br/>>80%?"}
-    Q1 -->|"Нет, стабильно"| Q3{"MilliSecondsSinceLastEvent<br/>>30s?"}
-
-    Q2 -->|"Да"| KAFKA["Kafka write bottleneck<br/>- Проверить Kafka broker<br/>- Проверить producer latency<br/>- Увеличить max.batch.size"]
-    Q2 -->|"Нет"| WAL["WAL processing slow<br/>- Большие транзакции?<br/>- Много обновлений?<br/>- LOB columns?"]
-
-    Q3 -->|"Да"| Q4{"Connected = true?"}
-    Q3 -->|"Нет"| OK["Pipeline здоров"]
-
-    Q4 -->|"Нет"| CONN["Потеря соединения<br/>- Проверить БД<br/>- Проверить credentials<br/>- Network issues?"]
-    Q4 -->|"Да"| STALE["Нет активности или застрял<br/>- БД idle? (OK)<br/>- Heartbeat настроен?<br/>- Slot wal_status?"]
-
-    style KAFKA fill:#f59e0b
-    style WAL fill:#3b82f6
-    style CONN fill:#ef4444
-    style STALE fill:#8b5cf6
-    style OK fill:#10b981
-`} client:visible />
+<DiagnosticDecisionTreeDiagram client:load />
 
 ### Сценарий 1: "Коннектор отстает" (Lag growing)
 

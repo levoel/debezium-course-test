@@ -8,7 +8,7 @@ topics: ["alerting", "grafana", "slo", "incident-response"]
 prerequisites: ["module-3/03-grafana-dashboard-lab"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { AlertComparisonDiagram, AlertSeverityHierarchyDiagram, BatchInsertSpikeDiagram, NotificationRoutingDiagram } from '../../../components/diagrams/module4';
 
 # Детекция отставания и настройка алертов
 
@@ -18,26 +18,7 @@ Dashboard показывает "что происходит", но требуе�
 
 ### Визуализация vs Алертинг
 
-<Mermaid chart={`
-graph LR
-    subgraph "Без алертов"
-        A[Lag растет] --> B[Никто не смотрит]
-        B --> C[SLO нарушен]
-        C --> D[Клиент жалуется]
-        D --> E[Начинаем разбираться]
-    end
-
-    subgraph "С алертами"
-        F[Lag растет] --> G[Warning через 2 мин]
-        G --> H[Инженер проверяет]
-        H --> I[Проблема решена]
-        I --> J[SLO соблюден]
-    end
-
-    style C fill:#ef4444,color:#fff
-    style D fill:#ef4444,color:#fff
-    style J fill:#22c55e,color:#fff
-`} client:visible />
+<AlertComparisonDiagram client:load />
 
 ### SLO для CDC Pipeline
 
@@ -59,21 +40,7 @@ graph LR
 
 Не все проблемы одинаково критичны. Правильная иерархия предотвращает "alert fatigue":
 
-<Mermaid chart={`
-graph TB
-    subgraph "Alert Hierarchy"
-        W[Warning<br/>Investigate during business hours]
-        C[Critical<br/>Immediate action required]
-        E[Emergency<br/>Wake up on-call engineer]
-    end
-
-    W --> |"Не решено за 30 мин"| C
-    C --> |"Не решено за 15 мин"| E
-
-    style W fill:#eab308,color:#000
-    style C fill:#f97316,color:#fff
-    style E fill:#ef4444,color:#fff
-`} client:visible />
+<AlertSeverityHierarchyDiagram client:load />
 
 ### Рекомендуемые пороги для CDC
 
@@ -90,13 +57,7 @@ graph TB
 
 CDC pipeline **нормально** имеет кратковременные spike-и lag:
 
-<Mermaid chart={`
-graph LR
-    subgraph "Batch INSERT (1000 rows)"
-        A[INSERT 1000 rows] --> B[Lag spike 3s]
-        B --> C[Processing...] --> D[Lag снова 0.2s]
-    end
-`} client:visible />
+<BatchInsertSpikeDiagram client:load />
 
 Если алертить на каждый spike более 1s:
 
@@ -261,13 +222,7 @@ Notification policies маршрутизируют алерты к правил�
   - Group interval: `5m`
   - Repeat interval: `4h`
 
-<Mermaid chart={`
-graph TD
-    A[Alert fires] --> B{severity?}
-    B -->|warning| C[Email to team]
-    B -->|critical| D[Slack + Email]
-    D --> E[Repeat every 4h if not resolved]
-`} client:visible />
+<NotificationRoutingDiagram client:load />
 
 ## Понимание MilliSecondsBehindSource
 

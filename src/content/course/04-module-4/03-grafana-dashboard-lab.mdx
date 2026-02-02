@@ -8,7 +8,7 @@ topics: ["grafana", "dashboards", "visualization", "prometheus"]
 prerequisites: ["module-3/02-prometheus-metrics-collection"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { DashboardArchitectureDiagram, PanelRowLayoutDiagram, HealthStatesComparisonDiagram } from '../../../components/diagrams/module4';
 
 # Лабораторная: построение Grafana дашборда для CDC
 
@@ -58,31 +58,7 @@ Grafana уже настроена с Prometheus datasource через provisioni
 
 Эффективный CDC дашборд организован по принципу "от общего к частному":
 
-<Mermaid chart={`
-graph TB
-    subgraph "Row 1: Health Overview"
-        A[Status<br/>Stat Panel]
-        B[Current Lag<br/>Gauge]
-        C[Events/sec<br/>Stat]
-        D[Queue Usage<br/>Gauge]
-    end
-
-    subgraph "Row 2: Time Series"
-        E[Lag Trend<br/>Time Series]
-        F[Throughput<br/>Time Series]
-        G[Queue Utilization<br/>Time Series]
-    end
-
-    subgraph "Row 3: Details"
-        H[Staleness<br/>Time Series]
-        I[Transactions<br/>Time Series]
-    end
-
-    style A fill:#22c55e,color:#fff
-    style B fill:#eab308,color:#000
-    style C fill:#3b82f6,color:#fff
-    style D fill:#8b5cf6,color:#fff
-`} client:visible />
+<DashboardArchitectureDiagram client:load />
 
 **Row 1 (Health Overview):** Мгновенное состояние — оператор видит "все в порядке" или "требуется внимание" за секунду.
 
@@ -205,15 +181,7 @@ rate(debezium_metrics_TotalNumberOfEventsSeen{context="streaming"}[1m])
 
 После первых четырех панелей ваш дашборд должен выглядеть так:
 
-<Mermaid chart={`
-graph LR
-    subgraph "Row 1: Health Overview (4 panels)"
-        A["Connected"]
-        B["0.3s lag"]
-        C["125.4 events/sec"]
-        D["12% queue"]
-    end
-`} client:visible />
+<PanelRowLayoutDiagram client:load />
 
 ### Шаг 6: Панель Lag Trend (Time Series)
 
@@ -380,34 +348,7 @@ labs/monitoring/grafana/dashboards/debezium-production.json
 
 ## Интерпретация дашборда
 
-<Mermaid chart={`
-graph TB
-    subgraph "Здоровый CDC Pipeline"
-        A["Status: Connected"]
-        B["Lag: 0.1-0.5s"]
-        C["Queue: 5-20%"]
-        D["Throughput: стабильный"]
-    end
-
-    subgraph "Требует внимания"
-        E["Status: Connected"]
-        F["Lag: 5-30s Warning"]
-        G["Queue: 50-80%"]
-        H["Throughput: снижается"]
-    end
-
-    subgraph "Критическое состояние"
-        I["Status: Connected или нет"]
-        J["Lag: более 30s Critical"]
-        K["Queue: более 90%"]
-        L["Throughput: падает/нуль"]
-    end
-
-    A --> E --> I
-    B --> F --> J
-    C --> G --> K
-    D --> H --> L
-`} client:visible />
+<HealthStatesComparisonDiagram client:load />
 
 ### Типичные сценарии
 

@@ -8,7 +8,7 @@ topics: ["prometheus", "jmx-exporter", "promql", "metrics-collection"]
 prerequisites: ["module-3/01-jmx-metrics-interpretation"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { PrometheusScrapingDiagram } from '../../../components/diagrams/module4';
 
 # Prometheus: Сбор метрик Debezium
 
@@ -18,36 +18,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 Prometheus использует **pull-модель**: он периодически запрашивает метрики с целевых endpoints.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph CONNECT["Kafka Connect Container"]
-        JVM["Debezium JVM"]
-        JMX["JMX MBeans"]
-        EXPORTER["JMX Exporter<br/>Agent на :9404"]
-        JVM --> JMX
-        JMX --> EXPORTER
-    end
-
-    subgraph PROM["Prometheus Container"]
-        SCRAPER["Scraper<br/>каждые 15s"]
-        TSDB["Time Series DB"]
-        SCRAPER --> TSDB
-    end
-
-    EXPORTER -->|"GET /metrics"| SCRAPER
-
-    subgraph CLIENTS["Потребители"]
-        GRAFANA["Grafana<br/>Dashboards"]
-        ALERTMGR["Alertmanager<br/>Notifications"]
-    end
-
-    TSDB --> GRAFANA
-    TSDB --> ALERTMGR
-
-    style EXPORTER fill:#f59e0b
-    style SCRAPER fill:#e11d48
-    style TSDB fill:#8b5cf6
-`} client:visible />
+<PrometheusScrapingDiagram client:load />
 
 **Компоненты:**
 
