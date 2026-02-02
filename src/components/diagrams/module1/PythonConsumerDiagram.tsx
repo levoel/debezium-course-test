@@ -14,7 +14,7 @@ import { DiagramTooltip } from '../primitives/Tooltip';
  */
 export function PythonConsumerDiagram() {
   return (
-    <div className="flex flex-col md:flex-row items-center justify-center gap-4 py-6">
+    <div className="flex flex-col md:flex-row items-center justify-center gap-4 py-6 mb-8">
       {/* PostgreSQL */}
       <DiagramTooltip content="Источник данных. Изменения захватываются через logical replication без нагрузки на production запросы.">
         <FlowNode variant="database" tabIndex={0}>
