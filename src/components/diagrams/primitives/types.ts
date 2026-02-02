@@ -22,3 +22,26 @@ export interface ArrowProps {
   dashed?: boolean;
   className?: string;
 }
+
+// DiagramContainer types
+export type ContainerColor = 'emerald' | 'blue' | 'rose' | 'amber' | 'purple' | 'neutral';
+
+export interface DiagramContainerProps {
+  title: string;
+  description?: string;
+  color?: ContainerColor;
+  recommended?: boolean;
+  children: React.ReactNode;
+  className?: string;
+}
+
+// DiagramTooltip types
+export interface DiagramTooltipProps {
+  content: React.ReactNode;
+  children: React.ReactNode;
+  side?: 'top' | 'right' | 'bottom' | 'left';
+  sideOffset?: number;
+  delayDuration?: number;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
