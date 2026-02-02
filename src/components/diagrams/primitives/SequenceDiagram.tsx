@@ -93,13 +93,70 @@ export function SequenceDiagram({
           const toX = getActorCenterX(msg.to);
           const y = 20 + i * messageSpacing;
 
+          const isSelfMessage = msg.from === msg.to;
           const isLeftToRight = toX > fromX;
           const arrowheadSize = 8;
           const lineStyle =
             msg.variant === 'return' ? { strokeDasharray: '4 2' } : {};
           const arrowFill = msg.variant === 'sync' ? 'currentColor' : 'none';
 
-          // Arrow path - arrowhead at destination end
+          // Self-message: draw a loop to the right
+          if (isSelfMessage) {
+            const loopWidth = 40;
+            const loopHeight = 20;
+            const loopPath = `M${fromX},${y - loopHeight / 2} L${fromX + loopWidth},${y - loopHeight / 2} L${fromX + loopWidth},${y + loopHeight / 2} L${fromX},${y + loopHeight / 2}`;
+            const selfArrowPath = `M${fromX + arrowheadSize},${y + loopHeight / 2 - arrowheadSize / 2} L${fromX},${y + loopHeight / 2} L${fromX + arrowheadSize},${y + loopHeight / 2 + arrowheadSize / 2}`;
+
+            const selfMessageContent = (
+              <g
+                key={msg.id}
+                className="text-gray-400"
+                tabIndex={msg.tooltip ? 0 : undefined}
+                role={msg.tooltip ? 'button' : undefined}
+                style={{ cursor: msg.tooltip ? 'pointer' : undefined }}
+                aria-label={msg.label}
+              >
+                {/* Loop path */}
+                <path
+                  d={loopPath}
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  fill="none"
+                  {...lineStyle}
+                />
+
+                {/* Arrowhead */}
+                <path
+                  d={selfArrowPath}
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  fill={arrowFill}
+                  strokeLinejoin="round"
+                />
+
+                {/* Label */}
+                <text
+                  x={fromX + loopWidth + 8}
+                  y={y}
+                  textAnchor="start"
+                  className="text-xs fill-gray-300"
+                >
+                  {msg.label}
+                </text>
+              </g>
+            );
+
+            if (msg.tooltip) {
+              return (
+                <DiagramTooltip key={msg.id} content={msg.tooltip}>
+                  {selfMessageContent}
+                </DiagramTooltip>
+              );
+            }
+            return selfMessageContent;
+          }
+
+          // Regular message: arrow from one actor to another
           const arrowPath = isLeftToRight
             ? `M${toX - arrowheadSize},${y - arrowheadSize / 2} L${toX},${y} L${toX - arrowheadSize},${y + arrowheadSize / 2}`
             : `M${toX + arrowheadSize},${y - arrowheadSize / 2} L${toX},${y} L${toX + arrowheadSize},${y + arrowheadSize / 2}`;
