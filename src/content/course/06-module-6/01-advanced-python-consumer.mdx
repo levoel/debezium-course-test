@@ -8,7 +8,7 @@ topics: ["Python", "confluent-kafka", "Exactly-Once", "Error Handling", "Transac
 prerequisites: ["module-1/05-python-consumer"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { AtLeastOnceVsExactlyOnceDiagram, RebalancingSequenceDiagram } from '../../../components/diagrams/module6';
 
 # Продвинутые паттерны Python Consumer
 
@@ -51,32 +51,7 @@ Kafka предоставляет три гарантии доставки соо
 - Использует транзакционный API Kafka
 - Применяется для критичных операций (финансы, платежи, inventory)
 
-<Mermaid chart={`
-graph TD
-    subgraph "At-Least-Once"
-        A1[Получить сообщение] --> A2[Обработать]
-        A2 --> A3[Commit offset]
-        A3 --> A4{Crash?}
-        A4 -->|До commit| A5[Повторная обработка]
-        A4 -->|После commit| A6[OK]
-    end
-
-    subgraph "Exactly-Once"
-        B1[Получить сообщение] --> B2[Begin Transaction]
-        B2 --> B3[Обработать]
-        B3 --> B4[Produce результат]
-        B4 --> B5[Commit offset в транзакции]
-        B5 --> B6[Commit Transaction]
-        B6 --> B7{Crash?}
-        B7 -->|До commit| B8[Rollback всей транзакции]
-        B7 -->|После commit| B9[OK атомарно]
-    end
-
-    style A5 fill:#ff6b6b
-    style B8 fill:#ff6b6b
-    style A6 fill:#51cf66
-    style B9 fill:#51cf66
-`} client:visible />
+<AtLeastOnceVsExactlyOnceDiagram client:load />
 
 **Когда использовать какую семантику:**
 
@@ -347,24 +322,7 @@ finally:
 
 Consumer group координируется через Group Coordinator. Если consumer не вызывает `poll()` в течение `max.poll.interval.ms`, он считается "мертвым" и выгоняется из группы.
 
-<Mermaid chart={`
-sequenceDiagram
-    participant C as Consumer
-    participant GC as Group Coordinator
-    participant K as Kafka
-
-    C->>K: poll() - получить сообщение
-    Note over C: Обработка (3 минуты)
-    C->>K: poll() - следующее сообщение
-
-    Note over GC: max.poll.interval.ms = 5 минут
-    Note over GC: Если poll() не вызван 5 минут → REBALANCE
-
-    C->>K: poll() после 6 минут
-    GC-->>C: ❌ Rebalancing triggered
-    Note over C: Consumer removed from group
-    Note over C: Partitions reassigned
-`} client:visible />
+<RebalancingSequenceDiagram client:load />
 
 **Параметры управления rebalancing:**
 

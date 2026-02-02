@@ -8,7 +8,12 @@ topics: ["Feature Engineering", "Machine Learning", "Real-Time", "Feature Store"
 prerequisites: ["module-5/06-etl-elt-patterns"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  BatchFeaturesProblemDiagram,
+  RealTimeFeaturesPipelineDiagram,
+  CustomerBehaviorFeaturesDiagram,
+  FeatureStoreArchitectureDiagram
+} from '../../../components/diagrams/module6';
 
 # Real-time Feature Engineering для ML
 
@@ -20,18 +25,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ### Traditional ML: Batch Features (проблема staleness)
 
-<Mermaid chart={`
-flowchart LR
-    subgraph BATCH["Traditional Batch Pipeline"]
-        DB["PostgreSQL"] -->|"Daily dump"| ETL["ETL Job<br/>Runs at 2am"]
-        ETL --> DW["Data Warehouse"]
-        DW -->|"Feature query"| FS["Feature Store"]
-        FS -->|"Features<br/>(12h old)"| ML["ML Model"]
-    end
-
-    style ETL fill:#f59e0b
-    style FS fill:#f59e0b
-`} client:visible />
+<BatchFeaturesProblemDiagram client:load />
 
 **Проблема:**
 - Features обновляются раз в сутки
@@ -41,18 +35,7 @@ flowchart LR
 
 ### Real-time ML: CDC-Driven Features
 
-<Mermaid chart={`
-flowchart LR
-    subgraph RT["Real-time CDC Pipeline"]
-        DB["PostgreSQL"] -->|"CDC events<br/>(ms latency)"| KAFKA["Kafka"]
-        KAFKA --> SPARK["PySpark<br/>Feature Computation"]
-        SPARK -->|"Fresh features<br/>(seconds old)"| REDIS["Feature Store<br/>(Redis)"]
-        REDIS -->|"Real-time lookup"| ML["ML Model"]
-    end
-
-    style SPARK fill:#10b981
-    style REDIS fill:#10b981
-`} client:visible />
+<RealTimeFeaturesPipelineDiagram client:load />
 
 **Преимущества:**
 - **Свежие features**: обновляются при каждом CDC событии (latency в секундах, не часах)
@@ -178,37 +161,7 @@ derived_df = features_df.withColumn(
 
 ### Architecture
 
-<Mermaid chart={`
-flowchart TB
-    subgraph SOURCE["Source Database"]
-        ORDERS_TABLE["orders table<br/>(PostgreSQL)"]
-    end
-
-    subgraph CDC["CDC Layer"]
-        DEBEZIUM["Debezium Connector"]
-        KAFKA["Kafka Topic<br/>dbserver1.public.orders"]
-    end
-
-    subgraph COMPUTE["Feature Computation"]
-        PYSPARK["PySpark Streaming<br/>Window Aggregations"]
-        WATERMARK["Watermark<br/>(1 hour late data)"]
-    end
-
-    subgraph SINK["Feature Store"]
-        REDIS["Redis<br/>(Online Store)"]
-        BATCH["Parquet<br/>(Offline Store)"]
-    end
-
-    ORDERS_TABLE -->|"CDC events"| DEBEZIUM
-    DEBEZIUM -->|"Publish"| KAFKA
-    KAFKA -->|"Read stream"| PYSPARK
-    PYSPARK --> WATERMARK
-    WATERMARK -->|"foreachBatch"| REDIS
-    WATERMARK -->|"Batch export"| BATCH
-
-    style PYSPARK fill:#8b5cf6
-    style REDIS fill:#10b981
-`} client:visible />
+<CustomerBehaviorFeaturesDiagram client:load />
 
 ### Implementation: Compute Customer Features
 
@@ -469,34 +422,7 @@ query = customer_features \
 
 ### Feast Architecture
 
-<Mermaid chart={`
-flowchart TB
-    subgraph OFFLINE["Offline Store (Training)"]
-        PARQUET["Parquet Files<br/>(Data Lake)"]
-        FEAST_OFFLINE["Feast Offline API<br/>get_historical_features()"]
-    end
-
-    subgraph ONLINE["Online Store (Serving)"]
-        REDIS_FEAST["Redis<br/>(Feature Cache)"]
-        FEAST_ONLINE["Feast Online API<br/>get_online_features()"]
-    end
-
-    subgraph SOURCES["Feature Sources"]
-        SPARK["PySpark Streaming"] --> REDIS_FEAST
-        SPARK --> PARQUET
-    end
-
-    subgraph CONSUMERS["Consumers"]
-        TRAINING["Training Pipeline"] --> FEAST_OFFLINE
-        INFERENCE["Inference Service"] --> FEAST_ONLINE
-    end
-
-    FEAST_OFFLINE --> PARQUET
-    FEAST_ONLINE --> REDIS_FEAST
-
-    style FEAST_OFFLINE fill:#8b5cf6
-    style FEAST_ONLINE fill:#10b981
-`} client:visible />
+<FeatureStoreArchitectureDiagram client:load />
 
 ### Feast Integration Pattern
 

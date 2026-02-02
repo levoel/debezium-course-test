@@ -8,7 +8,12 @@ topics: ["PySpark", "Spark", "Structured Streaming", "Kafka", "Watermarks"]
 prerequisites: ["module-5/04-pyflink-stateful-processing"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  PyflinkVsPysparkComparisonDiagram,
+  StructuredStreamingConceptDiagram,
+  PysparkWatermarkDiagram,
+  MicroBatchVsContinuousDiagram
+} from '../../../components/diagrams/module6';
 
 # PySpark Structured Streaming с Kafka
 
@@ -20,27 +25,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ### Ключевые различия
 
-<Mermaid chart={`
-flowchart TB
-    subgraph PYFLINK["PyFlink Philosophy"]
-        direction TB
-        F1["Pure Streaming<br/>Event-by-event processing"]
-        F2["Low Latency<br/>Millisecond response"]
-        F3["Exactly-Once<br/>Strong guarantees"]
-        F4["Complex CEP<br/>Pattern matching"]
-    end
-
-    subgraph PYSPARK["PySpark Philosophy"]
-        direction TB
-        S1["Unified Batch + Streaming<br/>Same API for both"]
-        S2["Micro-batching<br/>Second-scale latency"]
-        S3["Data Lake Native<br/>Parquet, Delta, Iceberg"]
-        S4["ML Integration<br/>Spark MLlib ecosystem"]
-    end
-
-    style PYFLINK fill:#3b82f6
-    style PYSPARK fill:#8b5cf6
-`} client:visible />
+<PyflinkVsPysparkComparisonDiagram client:load />
 
 **Таблица выбора:**
 
@@ -67,28 +52,7 @@ flowchart TB
 
 ### Концептуальная модель
 
-<Mermaid chart={`
-flowchart LR
-    subgraph INPUT["Input Stream"]
-        K1["Kafka Topic<br/>Unbounded table"]
-    end
-
-    subgraph PROCESSING["Spark Processing"]
-        DF["DataFrame API<br/>select, filter, groupBy"]
-        TRIGGER["Trigger<br/>Micro-batch intervals"]
-    end
-
-    subgraph OUTPUT["Output Stream"]
-        SINK["Sink<br/>Parquet, Kafka, Console"]
-    end
-
-    K1 -->|readStream| DF
-    DF -->|writeStream| TRIGGER
-    TRIGGER --> SINK
-
-    style DF fill:#8b5cf6
-    style TRIGGER fill:#f59e0b
-`} client:visible />
+<StructuredStreamingConceptDiagram client:load />
 
 **Ключевые концепции:**
 
@@ -243,25 +207,7 @@ current_df.printSchema()
 
 ### Проблема: Late Data
 
-<Mermaid chart={`
-sequenceDiagram
-    participant Source as Kafka Topic
-    participant Spark as Spark Streaming
-    participant Output as Aggregation Result
-
-    Note over Source,Output: Window: 10:00-10:05
-    Source->>Spark: Event at 10:01 (arrives at 10:01)
-    Source->>Spark: Event at 10:03 (arrives at 10:03)
-    Note over Spark: Process window 10:00-10:05
-    Spark->>Output: Result: 2 events
-
-    Note over Source,Output: Window already processed!
-    Source->>Spark: Event at 10:02 (arrives at 10:10!)
-    Note over Spark: Too late! Window already closed.
-    Spark--xOutput: Event dropped (silent data loss)
-
-    style Spark fill:#ef4444
-`} client:visible />
+<PysparkWatermarkDiagram client:load />
 
 **Без watermark:** Spark не знает, когда можно finalize результат окна. Late events drop silently.
 
@@ -321,31 +267,7 @@ result_df = watermarked_df \
 
 ### Checkpoint Architecture
 
-<Mermaid chart={`
-flowchart TB
-    subgraph PROCESSING["Spark Streaming Query"]
-        direction TB
-        READ["Read batch from Kafka<br/>Offsets: 100-200"]
-        PROCESS["Process transformations<br/>Aggregations, filters"]
-        WRITE["Write to output sink<br/>Parquet, Kafka"]
-    end
-
-    subgraph CHECKPOINT["Checkpoint Directory"]
-        direction TB
-        OFFSETS["offsets/<br/>Kafka offsets"]
-        STATE["state/<br/>Aggregation state"]
-        METADATA["metadata<br/>Query config"]
-    end
-
-    READ --> PROCESS
-    PROCESS --> WRITE
-    WRITE -->|Atomic commit| CHECKPOINT
-
-    CHECKPOINT -.->|Recovery| READ
-
-    style CHECKPOINT fill:#10b981
-    style WRITE fill:#8b5cf6
-`} client:visible />
+<MicroBatchVsContinuousDiagram client:load />
 
 **Что сохраняется в checkpoint:**
 

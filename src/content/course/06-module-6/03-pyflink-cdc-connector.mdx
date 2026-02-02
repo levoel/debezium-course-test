@@ -8,7 +8,7 @@ topics: ["PyFlink", "Flink", "Stream Processing", "Kafka Connector", "Table API"
 prerequisites: ["module-5/02-pandas-integration"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { PandasVsPyflinkComparisonDiagram, PyflinkCdcArchitectureDiagram } from '../../../components/diagrams/module6';
 
 # PyFlink CDC Connector — настройка и использование
 
@@ -22,27 +22,7 @@ Pandas отлично подходит для **batch-анализа** CDC со�
 
 ### Pandas vs PyFlink: В чём разница?
 
-<Mermaid chart={`
-flowchart TB
-    subgraph PANDAS["Pandas (Batch)"]
-        direction TB
-        P1["1. Накопить события"] --> P2["2. Загрузить в DataFrame"]
-        P2 --> P3["3. Обработать batch"]
-        P3 --> P4["4. Записать результат"]
-        P4 --> P1
-    end
-
-    subgraph FLINK["PyFlink (Streaming)"]
-        direction TB
-        F1["Непрерывный поток"] --> F2["Обработка event-by-event"]
-        F2 --> F3["Stateful агрегации"]
-        F3 --> F4["Непрерывный вывод"]
-        F4 --> F2
-    end
-
-    style PANDAS fill:#f59e0b
-    style FLINK fill:#10b981
-`} client:visible />
+<PandasVsPyflinkComparisonDiagram client:load />
 
 **Ключевые отличия:**
 
@@ -360,38 +340,7 @@ result_table.execute().print()
 
 ## Архитектура PyFlink CDC Pipeline
 
-<Mermaid chart={`
-flowchart TB
-    subgraph SOURCE["PostgreSQL"]
-        PG["orders table"]
-    end
-
-    subgraph DEBEZIUM["Debezium Connector"]
-        DEB["CDC events"]
-    end
-
-    subgraph KAFKA["Kafka"]
-        TOPIC["dbserver1.public.orders<br/>Debezium envelope"]
-    end
-
-    subgraph PYFLINK["PyFlink Job"]
-        direction TB
-        KAFKAC["Kafka Connector<br/>orders_cdc table"]
-        VIEW["VIEW orders_current<br/>extract after state"]
-        SQL["SQL Query<br/>aggregations/joins"]
-        KAFKAC --> VIEW --> SQL
-    end
-
-    subgraph SINK["Output"]
-        OUT["Kafka topic / Database / File"]
-    end
-
-    PG --> DEB --> TOPIC --> KAFKAC
-    SQL --> OUT
-
-    style PYFLINK fill:#8b5cf6
-    style KAFKA fill:#3b82f6
-`} client:visible />
+<PyflinkCdcArchitectureDiagram client:load />
 
 ## Лабораторная работа: PyFlink CDC Source
 

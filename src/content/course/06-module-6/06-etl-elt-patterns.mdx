@@ -8,7 +8,13 @@ topics: ["ETL", "ELT", "Data Lake", "Parquet", "Delta Lake", "CDC Patterns"]
 prerequisites: ["module-5/05-pyspark-structured-streaming"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  TraditionalEtlDiagram,
+  ModernEltDiagram,
+  CdcToDataLakeDiagram,
+  AppendOnlyHistoryDiagram,
+  OperationSeparationDiagram
+} from '../../../components/diagrams/module6';
 
 # ETL/ELT паттерны с CDC данными
 
@@ -20,15 +26,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ### Traditional ETL
 
-<Mermaid chart={`
-flowchart LR
-    SOURCE["Source DB<br/>(PostgreSQL)"] -->|Extract| STAGE["Staging Area"]
-    STAGE -->|Transform| ETL["ETL Engine<br/>Filter, aggregate,<br/>join, clean"]
-    ETL -->|Load| DW["Data Warehouse<br/>(Clean, aggregated)"]
-
-    style ETL fill:#f59e0b
-    style DW fill:#10b981
-`} client:visible />
+<TraditionalEtlDiagram client:load />
 
 **ETL паттерн:**
 
@@ -48,15 +46,7 @@ flowchart LR
 
 ### Modern ELT
 
-<Mermaid chart={`
-flowchart LR
-    SOURCE["Source DB<br/>(PostgreSQL)"] -->|Extract| CDC["CDC Stream<br/>(Debezium)"]
-    CDC -->|Load Raw| LAKE["Data Lake<br/>(Parquet, Delta)"]
-    LAKE -->|Transform| DW["Data Warehouse<br/>(dbt, Spark SQL)"]
-
-    style LAKE fill:#3b82f6
-    style DW fill:#10b981
-`} client:visible />
+<ModernEltDiagram client:load />
 
 **ELT паттерн:**
 
@@ -92,27 +82,7 @@ flowchart LR
 
 ### Advantages of CDC → Data Lake
 
-<Mermaid chart={`
-flowchart TB
-    subgraph SOURCE["Transactional Database"]
-        TX["Customer changes<br/>INSERT, UPDATE, DELETE"]
-    end
-
-    subgraph LAKE["Data Lake (Parquet)"]
-        direction TB
-        RAW["Raw CDC events<br/>(append-only log)"]
-        SNAP["Latest snapshot<br/>(current state)"]
-        HISTORY["Change history<br/>(audit trail)"]
-    end
-
-    TX -->|Debezium CDC| RAW
-    RAW --> SNAP
-    RAW --> HISTORY
-
-    style RAW fill:#3b82f6
-    style SNAP fill:#10b981
-    style HISTORY fill:#8b5cf6
-`} client:visible />
+<CdcToDataLakeDiagram client:load />
 
 **Преимущества:**
 
@@ -244,22 +214,7 @@ WHERE rn = 1 AND _operation != 'd';
 
 ### Architecture
 
-<Mermaid chart={`
-flowchart TB
-    CDC["CDC Stream<br/>(Kafka)"] --> FILTER{"Operation Type"}
-
-    FILTER -->|op = 'c'| INSERT["INSERT Stream"]
-    FILTER -->|op = 'u'| UPDATE["UPDATE Stream"]
-    FILTER -->|op = 'd'| DELETE["DELETE Stream"]
-
-    INSERT -->|append| APPEND["Append Table<br/>(Parquet)"]
-    UPDATE -->|upsert| UPSERT["Upsert Logic<br/>(Delta Lake MERGE)"]
-    DELETE -->|soft delete| SOFT["Soft Delete<br/>(add deleted_at)"]
-
-    style INSERT fill:#10b981
-    style UPDATE fill:#3b82f6
-    style DELETE fill:#ef4444
-`} client:visible />
+<AppendOnlyHistoryDiagram client:load />
 
 **Implementation:**
 
@@ -483,16 +438,7 @@ query = current_state \
 
 ### PySpark Guarantees
 
-<Mermaid chart={`
-flowchart LR
-    KAFKA_IN["Kafka Source"] -->|exactly-once read| SPARK["PySpark Streaming"]
-    SPARK -->|at-least-once write| KAFKA_OUT["Kafka Sink"]
-    SPARK -->|idempotent write| PARQUET["Parquet/Delta"]
-
-    style SPARK fill:#f59e0b
-    style PARQUET fill:#10b981
-    style KAFKA_OUT fill:#ef4444
-`} client:visible />
+<OperationSeparationDiagram client:load />
 
 **What PySpark provides:**
 

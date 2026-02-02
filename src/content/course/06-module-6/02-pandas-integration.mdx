@@ -8,7 +8,7 @@ topics: ["Python", "Pandas", "DataFrame", "CDC", "Data Analysis"]
 prerequisites: ["module-5/01-advanced-python-consumer"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { CdcEventStructureDiagram } from '../../../components/diagrams/module6';
 
 # Интеграция CDC событий с Pandas
 
@@ -134,26 +134,7 @@ pd.to_datetime(df['ts_ms'], unit='ms')  # dtype: datetime64[us]
 
 Прежде чем преобразовывать в DataFrame, вспомним структуру CDC события:
 
-<Mermaid chart={`
-graph TD
-    Event[CDC Event JSON] --> Schema[schema]
-    Event --> Payload[payload]
-
-    Payload --> Before[before: {...}]
-    Payload --> After[after: {...}]
-    Payload --> Op[op: 'c' | 'u' | 'd' | 'r']
-    Payload --> TsMs[ts_ms: 1738425600000]
-    Payload --> Source[source: {...}]
-
-    Before --> BeforeFields[id, customer_id, total, ...]
-    After --> AfterFields[id, customer_id, total, ...]
-    Source --> SourceFields[db, table, lsn, ...]
-
-    style Payload fill:#4169E1,color:#fff
-    style Op fill:#ff6b6b,color:#fff
-    style Before fill:#51cf66,color:#000
-    style After fill:#51cf66,color:#000
-`} client:visible />
+<CdcEventStructureDiagram client:load />
 
 ### Ключевые поля для DataFrame
 

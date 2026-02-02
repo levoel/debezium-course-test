@@ -8,7 +8,16 @@ topics: ["PyFlink", "Windows", "Aggregations", "Joins", "Watermarks", "State"]
 prerequisites: ["module-5/03-pyflink-cdc-connector"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  StatefulOperationsDiagram,
+  OutOfOrderEventsSequenceDiagram,
+  WatermarkProgressDiagram,
+  TumblingWindowsDiagram,
+  SlidingWindowsDiagram,
+  SessionWindowsDiagram,
+  TemporalJoinSequenceDiagram,
+  StateGrowthDiagram
+} from '../../../components/diagrams/module6';
 
 # Stateful Stream Processing в PyFlink
 
@@ -42,28 +51,7 @@ stream.group_by('customer_id').sum('total')  # ???
 
 ### Что нужно состояние для?
 
-<Mermaid chart={`
-flowchart TB
-    subgraph STATEFUL["Stateful Operations"]
-        direction TB
-        AGG["Aggregations<br/>COUNT, SUM, AVG по группам"]
-        JOIN["Joins<br/>Обогащение данными из другого stream"]
-        DEDUP["Deduplication<br/>Отбрасывание дубликатов по ключу"]
-        SESSION["Sessionization<br/>Группировка событий по сессиям"]
-    end
-
-    subgraph STATE["Managed State"]
-        direction TB
-        MEMORY["State хранится<br/>в памяти или RocksDB"]
-        CHECKPOINT["Периодические checkpoints<br/>для fault tolerance"]
-        RESTORE["Восстановление при сбоях"]
-    end
-
-    STATEFUL --> STATE
-
-    style STATEFUL fill:#8b5cf6
-    style STATE fill:#3b82f6
-`} client:visible />
+<StatefulOperationsDiagram client:load />
 
 **Примеры:**
 
@@ -87,27 +75,7 @@ flowchart TB
 
 В distributed systems события **не приходят в порядке event time**:
 
-<Mermaid chart={`
-sequenceDiagram
-    participant DB as PostgreSQL
-    participant K1 as Kafka Partition 1
-    participant K2 as Kafka Partition 2
-    participant Flink as PyFlink
-
-    Note over DB,Flink: Event time порядок: E1 (10:00) → E2 (10:01) → E3 (10:02)
-
-    DB->>K1: E1 (event_time=10:00)
-    DB->>K2: E2 (event_time=10:01)
-    DB->>K1: E3 (event_time=10:02)
-
-    Note over K1,K2: Network delay на K1
-
-    K2->>Flink: E2 (10:01) прибыл первым
-    K1->>Flink: E3 (10:02) прибыл вторым
-    K1->>Flink: E1 (10:00) прибыл последним (late!)
-
-    Note over Flink: Processing time порядок: E2 → E3 → E1<br/>Но event time порядок: E1 → E2 → E3
-`} client:visible />
+<OutOfOrderEventsSequenceDiagram client:load />
 
 **Почему это происходит:**
 
@@ -130,29 +98,7 @@ sequenceDiagram
 
 **Watermark** — это маркер, который говорит Flink: "Все события с event_time < W уже прибыли (скорее всего)".
 
-<Mermaid chart={`
-flowchart LR
-    subgraph TIMELINE["Event Time Timeline"]
-        direction LR
-        T1["10:00"] --> T2["10:01"] --> T3["10:02"] --> T4["10:03"] --> T5["10:04"]
-    end
-
-    subgraph WATERMARK["Watermark Progress"]
-        direction TB
-        W["Watermark: 10:02<br/>(события до 10:02 прибыли)"]
-    end
-
-    TIMELINE --> WATERMARK
-
-    subgraph ACTION["Flink Action"]
-        direction TB
-        CLOSE["Закрыть windows<br/>с end_time ≤ 10:02"]
-    end
-
-    WATERMARK --> ACTION
-
-    style WATERMARK fill:#f59e0b
-`} client:visible />
+<WatermarkProgressDiagram client:load />
 
 **Как работает:**
 
@@ -225,18 +171,7 @@ stream.window(...).sideOutputLateData(late_tag)
 
 ### Концепция
 
-<Mermaid chart={`
-gantt
-    title Tumbling Windows (размер = 5 минут)
-    dateFormat HH:mm
-    axisFormat %H:%M
-
-    section Windows
-    Window 1 (10:00-10:05) :w1, 10:00, 5m
-    Window 2 (10:05-10:10) :w2, 10:05, 5m
-    Window 3 (10:10-10:15) :w3, 10:10, 5m
-    Window 4 (10:15-10:20) :w4, 10:15, 5m
-`} client:visible />
+<TumblingWindowsDiagram client:load />
 
 **Характеристики:**
 
@@ -347,17 +282,7 @@ result.execute().print()
 
 ### Концепция
 
-<Mermaid chart={`
-gantt
-    title Sliding Windows (размер = 10 минут, slide = 5 минут)
-    dateFormat HH:mm
-    axisFormat %H:%M
-
-    section Windows
-    Window 1 (10:00-10:10) :w1, 10:00, 10m
-    Window 2 (10:05-10:15) :w2, 10:05, 10m
-    Window 3 (10:10-10:20) :w3, 10:10, 10m
-`} client:visible />
+<SlidingWindowsDiagram client:load />
 
 **Характеристики:**
 
@@ -412,24 +337,7 @@ result = table_env.sql_query("""
 
 ### Концепция
 
-<Mermaid chart={`
-gantt
-    title Session Windows (gap = 30 минут)
-    dateFormat HH:mm
-    axisFormat %H:%M
-
-    section User 1
-    Session 1 :s1, 10:00, 15m
-    Gap (30 min) :crit, 10:15, 30m
-    Session 2 :s2, 10:45, 10m
-
-    section Events
-    Event 1 : milestone, 10:00, 0m
-    Event 2 : milestone, 10:05, 0m
-    Event 3 : milestone, 10:15, 0m
-    Event 4 : milestone, 10:45, 0m
-    Event 5 : milestone, 10:50, 0m
-`} client:visible />
+<SessionWindowsDiagram client:load />
 
 **Характеристики:**
 
@@ -512,24 +420,7 @@ JOIN products p ON o.product_id = p.product_id
 
 ### Решение: FOR SYSTEM_TIME AS OF
 
-<Mermaid chart={`
-sequenceDiagram
-    participant Orders as Orders Stream
-    participant Products as Products Table (Versioned)
-    participant Join as Temporal Join
-
-    Note over Products: Version 1: product_id=101, price=100.00 (09:00)
-    Orders->>Join: order_id=1, product_id=101, order_time=09:30
-    Join->>Products: Get product AS OF 09:30
-    Products->>Join: price=100.00 (version 1)
-    Join->>Orders: Enriched: order_id=1, price=100.00
-
-    Note over Products: Version 2: product_id=101, price=120.00 (10:00)
-    Orders->>Join: order_id=2, product_id=101, order_time=10:30
-    Join->>Products: Get product AS OF 10:30
-    Products->>Join: price=120.00 (version 2)
-    Join->>Orders: Enriched: order_id=2, price=120.00
-`} client:visible />
+<TemporalJoinSequenceDiagram client:load />
 
 **Temporal join** использует **event time** из orders для поиска **правильной версии** product.
 
@@ -622,19 +513,7 @@ Stateful operations создают **managed state** в памяти:
 
 **Проблема:** State растёт unbounded → OutOfMemoryError → job failure.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph GROWTH["State Growth"]
-        direction TB
-        T1["Day 1: 1 GB state"]
-        T2["Day 7: 10 GB state"]
-        T3["Day 30: 50 GB state"]
-        T4["Day 90: OOM crash!"]
-        T1 --> T2 --> T3 --> T4
-    end
-
-    style T4 fill:#ef4444
-`} client:visible />
+<StateGrowthDiagram client:load />
 
 ### Решение 1: State TTL (Time-To-Live)
 
