@@ -7,7 +7,7 @@ estimatedTime: 25
 topics: ["scaling", "tasks", "performance", "architecture"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { TasksMaxMythDiagram, WalSequentialDiagram, SingleTaskArchitectureDiagram, MultipleConnectorsDiagram, DownstreamParallelizationDiagram, ScalingDecisionFrameworkDiagram } from '../../../components/diagrams/module4';
 
 # Масштабирование коннектора: Правда о tasks.max
 
@@ -21,31 +21,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 > **Reality:** PostgreSQL коннектор Debezium **ВСЕГДА использует только 1 task**, независимо от значения `tasks.max`. Это не баг — это архитектурное ограничение.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph MYTH["МИФ: tasks.max=4"]
-        direction LR
-        PG1["PostgreSQL"] --> T1["Task 1"]
-        PG1 --> T2["Task 2"]
-        PG1 --> T3["Task 3"]
-        PG1 --> T4["Task 4"]
-        T1 --> K1["Kafka"]
-        T2 --> K1
-        T3 --> K1
-        T4 --> K1
-    end
-
-    subgraph REALITY["РЕАЛЬНОСТЬ: tasks.max игнорируется"]
-        direction LR
-        PG2["PostgreSQL<br/>WAL"] --> SINGLE["Task 1<br/>(ЕДИНСТВЕННЫЙ)"]
-        SINGLE --> K2["Kafka"]
-        IGNORED["tasks.max = 4<br/>(игнорируется)"]
-    end
-
-    style MYTH fill:#7f1d1d,stroke:#ef4444
-    style REALITY fill:#14532d,stroke:#22c55e
-    style IGNORED fill:#92400e,stroke:#f59e0b
-`} client:visible />
+<TasksMaxMythDiagram client:load />
 
 ### Доказательство
 
@@ -80,26 +56,7 @@ curl http://localhost:8083/connectors/inventory-connector/status | jq '.tasks | 
 
 ### WAL — последовательный журнал
 
-<Mermaid chart={`
-flowchart LR
-    subgraph WAL["PostgreSQL WAL (Write-Ahead Log)"]
-        direction LR
-        E1["Event 1<br/>LSN: 0/1000"]
-        E2["Event 2<br/>LSN: 0/1001"]
-        E3["Event 3<br/>LSN: 0/1002"]
-        E4["Event 4<br/>LSN: 0/1003"]
-        E5["Event 5<br/>LSN: 0/1004"]
-        E1 --> E2 --> E3 --> E4 --> E5
-    end
-
-    subgraph READER["Logical Decoding"]
-        SLOT["Replication Slot<br/>position: 0/1002"]
-    end
-
-    SLOT -->|"Читает последовательно<br/>от restart_lsn"| E3
-
-    style SLOT fill:#f59e0b
-`} client:visible />
+<WalSequentialDiagram client:load />
 
 WAL — это **последовательный** журнал транзакций. Logical decoding читает его **строго по порядку** от позиции `restart_lsn`. Невозможно распараллелить чтение, потому что:
 
@@ -119,34 +76,7 @@ WAL — это **последовательный** журнал транзак�
 
 ### Архитектурная причина
 
-<Mermaid chart={`
-flowchart TB
-    subgraph POSTGRES["PostgreSQL"]
-        WAL["WAL Stream"]
-        SLOT["Replication Slot"]
-    end
-
-    subgraph DEBEZIUM["Debezium Connector"]
-        READER["WAL Reader<br/>(1 поток)"]
-        QUEUE["Internal Queue<br/>(8192 events)"]
-        WRITER["Kafka Writer<br/>(1 поток)"]
-    end
-
-    subgraph KAFKA["Kafka"]
-        TOPIC["Topic Partitions"]
-    end
-
-    WAL -->|"Logical Decoding"| SLOT
-    SLOT -->|"Sequential read"| READER
-    READER -->|"Events"| QUEUE
-    QUEUE -->|"Batch write"| WRITER
-    WRITER -->|"ProducerRecord"| TOPIC
-
-    NOTE["WAL Reader - bottleneck<br/>Один поток на один<br/>replication slot"]
-
-    style NOTE fill:#f59e0b
-    style READER fill:#ef4444
-`} client:visible />
+<SingleTaskArchitectureDiagram client:load />
 
 ## Реальные стратегии масштабирования
 
@@ -156,34 +86,7 @@ flowchart TB
 
 **Когда использовать:** Разные наборы таблиц имеют независимых потребителей.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph DB["PostgreSQL"]
-        ORDERS["orders<br/>order_items"]
-        INVENTORY["products<br/>inventory"]
-        CUSTOMERS["customers<br/>addresses"]
-    end
-
-    subgraph CONNECTORS["Debezium Connectors"]
-        C1["orders-connector<br/>task=1"]
-        C2["inventory-connector<br/>task=1"]
-        C3["customers-connector<br/>task=1"]
-    end
-
-    subgraph KAFKA["Kafka Topics"]
-        T1["orders.public.orders<br/>orders.public.order_items"]
-        T2["inventory.public.products<br/>inventory.public.inventory"]
-        T3["customers.public.customers<br/>customers.public.addresses"]
-    end
-
-    ORDERS --> C1 --> T1
-    INVENTORY --> C2 --> T2
-    CUSTOMERS --> C3 --> T3
-
-    style C1 fill:#3b82f6
-    style C2 fill:#8b5cf6
-    style C3 fill:#10b981
-`} client:visible />
+<MultipleConnectorsDiagram client:load />
 
 **Конфигурация:**
 
@@ -229,36 +132,7 @@ flowchart LR
 
 **Когда использовать:** Один коннектор, но нужна параллельная обработка.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph DB["PostgreSQL"]
-        TABLE["orders table"]
-    end
-
-    subgraph DEBEZIUM["Debezium"]
-        CONN["Single Connector<br/>task=1"]
-    end
-
-    subgraph KAFKA["Kafka"]
-        TOPIC["orders topic<br/>8 partitions"]
-    end
-
-    subgraph CONSUMERS["Consumers"]
-        C1["Consumer 1<br/>partitions 0-1"]
-        C2["Consumer 2<br/>partitions 2-3"]
-        C3["Consumer 3<br/>partitions 4-5"]
-        C4["Consumer 4<br/>partitions 6-7"]
-    end
-
-    TABLE --> CONN --> TOPIC
-    TOPIC --> C1
-    TOPIC --> C2
-    TOPIC --> C3
-    TOPIC --> C4
-
-    style TOPIC fill:#f59e0b
-    style CONSUMERS fill:#14532d,stroke:#22c55e
-`} client:visible />
+<DownstreamParallelizationDiagram client:load />
 
 **Как работает:**
 1. Debezium пишет события в Kafka topic
@@ -360,32 +234,7 @@ kafka-topics --create \
 
 ## Decision Framework: Выбор стратегии
 
-<Mermaid chart={`
-flowchart TD
-    START["Нужно больше throughput"] --> Q1{"Текущий throughput?"}
-
-    Q1 -->|"Меньше 7K/sec"| TUNE["Стратегия 3:<br/>Performance Tuning"]
-    Q1 -->|"Около 7K/sec или больше"| Q2{"Таблицы независимы?"}
-
-    Q2 -->|"Да"| MULTI["Стратегия 1:<br/>Multiple Connectors"]
-    Q2 -->|"Нет"| Q3{"Нужен ordering per-key?"}
-
-    Q3 -->|"Да"| DOWNSTREAM["Стратегия 2:<br/>Downstream Parallelization"]
-    Q3 -->|"Нет"| HYBRID["Комбинация:<br/>Multiple + Downstream"]
-
-    TUNE --> CHECK1{"Достаточно?"}
-    CHECK1 -->|"Нет"| Q2
-    CHECK1 -->|"Да"| DONE["Done"]
-
-    MULTI --> DONE
-    DOWNSTREAM --> DONE
-    HYBRID --> DONE
-
-    style TUNE fill:#3b82f6
-    style MULTI fill:#8b5cf6
-    style DOWNSTREAM fill:#10b981
-    style HYBRID fill:#f59e0b
-`} client:visible />
+<ScalingDecisionFrameworkDiagram client:load />
 
 ## Anti-Patterns
 

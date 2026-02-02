@@ -7,7 +7,7 @@ estimatedTime: 40
 topics: ["disaster-recovery", "offsets", "backup", "runbooks"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { FailureModesDiagram, StateStorageLocationsDiagram, OrphanedSlotCleanupDiagram } from '../../../components/diagrams/module4';
 
 # Disaster Recovery: Процедуры восстановления CDC
 
@@ -17,32 +17,7 @@ CDC pipeline — это stateful система. Состояние хранит
 
 ## Что может пойти не так
 
-<Mermaid chart={`
-flowchart TB
-    subgraph FAILURES["Возможные отказы"]
-        F1["Kafka Connect crash<br/>Offsets в connect-offsets"]
-        F2["Connector deletion<br/>Offsets сохранены, slot может быть orphaned"]
-        F3["Database failover<br/>Slot потерян (Aurora до PG17)"]
-        F4["Kafka cluster failure<br/>Offsets потеряны"]
-    end
-
-    subgraph IMPACT["Последствия"]
-        I1["Connector restart from last offset"]
-        I2["Slot cleanup needed"]
-        I3["Data loss between failover and slot recreation"]
-        I4["Full resnapshot required"]
-    end
-
-    F1 --> I1
-    F2 --> I2
-    F3 --> I3
-    F4 --> I4
-
-    style F1 fill:#1e3a5f
-    style F2 fill:#92400e
-    style F3 fill:#7f1d1d
-    style F4 fill:#581c87
-`} client:visible />
+<FailureModesDiagram client:load />
 
 ### Severity Matrix
 
@@ -58,33 +33,7 @@ flowchart TB
 
 ### Где хранится состояние
 
-<Mermaid chart={`
-flowchart LR
-    subgraph KAFKA["Kafka Cluster"]
-        CONFIGS["connect-configs<br/>Connector configurations"]
-        OFFSETS["connect-offsets<br/>Consumer positions"]
-        STATUS["connect-statuses<br/>Task states"]
-    end
-
-    subgraph POSTGRES["PostgreSQL"]
-        SLOT["Replication Slot<br/>restart_lsn position"]
-        WAL["WAL Segments<br/>Retained for slot"]
-    end
-
-    subgraph CONNECT["Kafka Connect"]
-        WORKER["Worker Process"]
-        CONNECTOR["Debezium Connector"]
-    end
-
-    WORKER -->|"Read configs"| CONFIGS
-    CONNECTOR -->|"Track position"| OFFSETS
-    WORKER -->|"Report status"| STATUS
-    CONNECTOR -->|"Read from"| SLOT
-    SLOT -->|"Hold"| WAL
-
-    style OFFSETS fill:#f59e0b
-    style SLOT fill:#10b981
-`} client:visible />
+<StateStorageLocationsDiagram client:load />
 
 ### connect-offsets Topic
 
@@ -333,27 +282,7 @@ WHERE slot_type = 'logical'
 
 ### Безопасный cleanup
 
-<Mermaid chart={`
-flowchart TD
-    START["Найден inactive slot"] --> Q1{"Коннектор существует?"}
-
-    Q1 -->|"Да"| Q2{"Коннектор PAUSED?"}
-    Q1 -->|"Нет"| Q3{"Документация<br/>подтверждает удаление?"}
-
-    Q2 -->|"Да"| WAIT["Подождать resume<br/>или связаться с владельцем"]
-    Q2 -->|"Нет"| CHECK["Проверить логи коннектора"]
-
-    Q3 -->|"Да"| DROP["DROP SLOT<br/>(безопасно)"]
-    Q3 -->|"Нет"| ESCALATE["Эскалировать к владельцу"]
-
-    CHECK --> Q4{"Коннектор failed?"}
-    Q4 -->|"Да"| RESTART["Restart task"]
-    Q4 -->|"Нет"| INVESTIGATE["Investigate further"]
-
-    style DROP fill:#14532d,stroke:#22c55e
-    style ESCALATE fill:#f59e0b
-    style WAIT fill:#3b82f6
-`} client:visible />
+<OrphanedSlotCleanupDiagram client:load />
 
 **Cleanup script:**
 

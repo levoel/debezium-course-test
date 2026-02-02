@@ -7,7 +7,7 @@ estimatedTime: 30
 topics: ["wal-management", "heartbeat", "replication-slots", "production"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { LowTrafficWalScenarioDiagram, MultiLayerDefenseDiagram, HeartbeatFlowDiagram } from '../../../components/diagrams/module4';
 
 # WAL Bloat и Heartbeat
 
@@ -21,34 +21,7 @@ WAL bloat - это одна из **самых частых production-пробл
 
 ### Сценарий: Low-Traffic Table
 
-<Mermaid chart={`
-sequenceDiagram
-    participant Orders as orders table
-    participant Slot as Replication Slot
-    participant WAL as WAL Segments
-    participant Disk as Disk Space
-
-    Note over Orders: Активная таблица - 1000 записей/час
-    Orders->>Slot: CDC события
-    Slot->>Slot: restart_lsn продвигается
-    WAL->>WAL: Старые сегменты удаляются
-    Disk->>Disk: Стабильно 1GB
-
-    Note over Orders: ---
-    Note over Orders: Low-traffic таблица - 1 запись/день
-
-    rect rgb(127, 29, 29)
-        Note over Orders,Disk: ПРОБЛЕМА: Slot не продвигается!
-        loop 7 дней
-            Orders->>Orders: Нет изменений
-            Slot->>Slot: restart_lsn НЕ МЕНЯЕТСЯ
-            WAL->>WAL: +500 MB/день накапливается
-        end
-        Disk->>Disk: 3.5 GB consumed
-    end
-
-    Note over Disk: День 14: Disk full!
-`} client:visible />
+<LowTrafficWalScenarioDiagram client:load />
 
 **Механизм проблемы:**
 
@@ -71,39 +44,7 @@ sequenceDiagram
 
 Правильная защита требует нескольких уровней. Один слой может отказать - многослойность обеспечивает resilience.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph THREAT["Угроза: WAL Bloat"]
-        direction LR
-        ABANDONED["Abandoned Slot"]
-        LOWTRAFFIC["Low-Traffic Table"]
-        SLOW["Slow Consumer"]
-    end
-
-    subgraph DEFENSE["Многослойная защита"]
-        direction TB
-
-        L1["Layer 1: max_slot_wal_keep_size<br/>PostgreSQL parameter<br/>Жесткий лимит WAL на slot"]
-        L2["Layer 2: Heartbeat<br/>Debezium configuration<br/>Принудительное продвижение slot"]
-        L3["Layer 3: Monitoring<br/>pg_replication_slots<br/>Алерты на lag и wal_status"]
-        L4["Layer 4: Runbooks<br/>Операционные процедуры<br/>Чеклисты реагирования"]
-
-        L1 --> L2 --> L3 --> L4
-    end
-
-    THREAT --> DEFENSE
-
-    L1 -.->|"Invalidates slot<br/>at limit"| PROTECTED["Protected"]
-    L2 -.->|"Advances slot<br/>every 10s"| PROTECTED
-    L3 -.->|"Alert before<br/>critical"| PROTECTED
-    L4 -.->|"Human can<br/>intervene"| PROTECTED
-
-    style L1 fill:#14532d,stroke:#22c55e
-    style L2 fill:#1e3a5f,stroke:#3b82f6
-    style L3 fill:#92400e,stroke:#f59e0b
-    style L4 fill:#581c87,stroke:#a855f7
-    style PROTECTED fill:#10b981
-`} client:visible />
+<MultiLayerDefenseDiagram client:load />
 
 ## Layer 1: max_slot_wal_keep_size
 
@@ -166,31 +107,7 @@ Value: 10737418240 (в байтах = 10GB)
 
 Heartbeat заставляет slot продвигаться даже когда мониторируемые таблицы не меняются.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph DEBEZIUM["Debezium Connector"]
-        HB["Heartbeat Timer<br/>каждые 10 сек"]
-    end
-
-    subgraph PG["PostgreSQL"]
-        FUNC["pg_logical_emit_message()"]
-        WAL["WAL"]
-        SLOT["Replication Slot<br/>restart_lsn"]
-    end
-
-    subgraph KAFKA["Kafka"]
-        HBT["__debezium-heartbeat.prefix"]
-    end
-
-    HB -->|"SELECT pg_logical_emit_message(...)"| FUNC
-    FUNC -->|"Записывает<br/>logical message"| WAL
-    WAL -->|"Debezium читает<br/>heartbeat event"| SLOT
-    SLOT -->|"restart_lsn<br/>ПРОДВИГАЕТСЯ"| SLOT
-    HB -->|"Heartbeat event"| HBT
-
-    style HB fill:#f59e0b
-    style SLOT fill:#14532d,stroke:#22c55e
-`} client:visible />
+<HeartbeatFlowDiagram client:load />
 
 ### pg_logical_emit_message() vs Heartbeat Table
 
