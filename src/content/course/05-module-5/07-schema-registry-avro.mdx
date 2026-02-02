@@ -8,7 +8,9 @@ topics: ["schema-registry", "avro", "serialization"]
 prerequisites: ["module-4/06-outbox-implementation"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  SchemaRegistryIntegrationDiagram,
+} from '../../../components/diagrams/module5';
 
 # Schema Registry и Avro сериализация
 
@@ -89,50 +91,9 @@ magic_byte schema_id                  binary_data
 
 ## Архитектура Schema Registry с Debezium
 
-<Mermaid chart={`
-flowchart TB
-    subgraph POSTGRES["PostgreSQL"]
-        TABLE["customers table"]
-        WAL["WAL"]
-        TABLE -->|"INSERT/UPDATE"| WAL
-    end
-
-    subgraph CONNECT["Kafka Connect"]
-        DBZ["Debezium Connector"]
-        AVRO_CONV["AvroConverter"]
-        DBZ -->|"CDC event"| AVRO_CONV
-    end
-
-    subgraph REGISTRY["Schema Registry :8081"]
-        SCHEMAS["Schema Storage<br/>(Kafka topic _schemas)"]
-        CACHE["Schema Cache"]
-    end
-
-    subgraph KAFKA["Kafka"]
-        TOPIC["dbserver1.inventory.customers<br/>(Avro binary)"]
-    end
-
-    subgraph CONSUMER["Consumer"]
-        CONSUMER_AVRO["AvroDeserializer"]
-        APP["Application Logic"]
-        CONSUMER_AVRO --> APP
-    end
-
-    AVRO_CONV -->|"1. Check schema for table"| REGISTRY
-    REGISTRY -->|"2a. Schema exists → return ID"| AVRO_CONV
-    REGISTRY -.->|"2b. New schema → register & return ID"| AVRO_CONV
-    AVRO_CONV -->|"3. Serialize with schema ID"| TOPIC
-
-    TOPIC -->|"4. Binary message"| CONSUMER_AVRO
-    CONSUMER_AVRO -->|"5. Fetch schema by ID"| CACHE
-    CACHE -.->|"6. Cache miss"| SCHEMAS
-
-    style DBZ fill:#8b5cf6
-    style AVRO_CONV fill:#3b82f6
-    style REGISTRY fill:#f59e0b
-    style SCHEMAS fill:#10b981
-    style TOPIC fill:#e11d48
-`} client:visible />
+<div className="not-prose">
+  <SchemaRegistryIntegrationDiagram client:load />
+</div>
 
 **Поток работы:**
 

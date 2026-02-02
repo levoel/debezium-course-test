@@ -8,7 +8,11 @@ topics: ["predicates", "filtering", "smt", "groovy"]
 prerequisites: ["module-4/01-smt-overview"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  PredicateEvaluationDiagram,
+  PredicateCombinationDiagram,
+  FilterDecisionTreeDiagram,
+} from '../../../components/diagrams/module5';
 
 # Predicates и фильтрация событий
 
@@ -86,24 +90,9 @@ PostgreSQL DDL операции генерируют специальные со
 
 **Predicate** — это условие (condition), которое определяет, применять ли SMT к конкретному сообщению.
 
-<Mermaid chart={`
-flowchart TB
-    MSG["Incoming Message"]
-    PRED{"Predicate<br/>IsDataEvent?"}
-    SMT["SMT<br/>ExtractNewRecordState"]
-    SKIP["Skip SMT<br/>(pass through)"]
-    OUTPUT["To Kafka"]
-
-    MSG --> PRED
-    PRED -->|"TRUE<br/>(DML event)"| SMT
-    PRED -->|"FALSE<br/>(heartbeat)"| SKIP
-    SMT --> OUTPUT
-    SKIP --> OUTPUT
-
-    style PRED fill:#8b5cf6
-    style SMT fill:#3b82f6
-    style SKIP fill:#6b7280
-`} client:visible />
+<div className="not-prose">
+  <PredicateEvaluationDiagram client:load />
+</div>
 
 **Идея:** SMT применяется только если predicate вернул `true`.
 
@@ -286,29 +275,9 @@ Kafka Connect (требуется версия 2.6+) предоставляет 
 1. `unwrap` применяется только к топикам `dbserver1.inventory.*` (исключая heartbeat)
 2. `mask` применяется только к топику `customers` (не маскируем поля в `orders`)
 
-<Mermaid chart={`
-flowchart TB
-    MSG["Message<br/>topic: dbserver1.inventory.customers"]
-
-    subgraph SMT1["SMT: unwrap"]
-        P1{"IsDataEvent<br/>pattern: dbserver1.inventory.*"}
-        UNWRAP["ExtractNewRecordState"]
-        P1 -->|"TRUE"| UNWRAP
-    end
-
-    subgraph SMT2["SMT: mask"]
-        P2{"IsCustomerTable<br/>pattern: .*customers"}
-        MASK["MaskField"]
-        P2 -->|"TRUE"| MASK
-    end
-
-    MSG --> SMT1
-    UNWRAP --> SMT2
-    MASK --> OUTPUT["To Kafka<br/>{id, name, email: null, phone: null}"]
-
-    style P1 fill:#8b5cf6
-    style P2 fill:#8b5cf6
-`} client:visible />
+<div className="not-prose">
+  <PredicateCombinationDiagram client:load />
+</div>
 
 ## Filter SMT с Groovy — Продвинутая фильтрация
 
@@ -442,21 +411,9 @@ Filter → Unwrap → Route → Mask
 
 Когда использовать предикаты, а когда Filter SMT?
 
-<Mermaid chart={`
-flowchart TD
-    START["Нужна фильтрация?"] --> Q1{"Условие зависит от<br/>содержимого message?"}
-
-    Q1 -->|"НЕТ<br/>(только topic/tombstone/header)"| PRED["Используйте Predicate<br/>- TopicNameMatches<br/>- RecordIsTombstone<br/>- HasHeaderKey"]
-
-    Q1 -->|"ДА<br/>(нужен доступ к value.after)"| Q2{"Простое условие<br/>(1-2 поля)?"}
-
-    Q2 -->|"ДА"| FILTER["Filter SMT<br/>+ Groovy condition"]
-    Q2 -->|"НЕТ<br/>(сложная логика)"| STREAMS["Kafka Streams<br/>или ksqlDB"]
-
-    style PRED fill:#10b981
-    style FILTER fill:#3b82f6
-    style STREAMS fill:#8b5cf6
-`} client:visible />
+<div className="not-prose">
+  <FilterDecisionTreeDiagram client:load />
+</div>
 
 **Рекомендации:**
 

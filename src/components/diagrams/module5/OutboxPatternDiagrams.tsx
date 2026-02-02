@@ -506,7 +506,7 @@ export function OutboxTransactionFlowDiagram() {
                 <strong>Outbox Event Insert</strong>
                 <p className="mt-1">
                   INSERT INTO outbox (aggregatetype, aggregateid, type, payload)
-                  VALUES ('Order', 'order-123', 'OrderApproved', '{...}').
+                  VALUES ('Order', 'order-123', 'OrderApproved', '&#123;...&#125;').
                 </p>
                 <p className="mt-2 text-blue-300">
                   В той же транзакции! Ключевая идея Outbox Pattern.

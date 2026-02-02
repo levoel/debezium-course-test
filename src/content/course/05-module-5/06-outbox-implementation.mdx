@@ -8,7 +8,9 @@ topics: ["outbox", "smt", "implementation", "lab"]
 prerequisites: ["module-4/05-outbox-pattern-theory"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  OutboxEventRouterSmtDiagram,
+} from '../../../components/diagrams/module5';
 
 # Outbox Implementation с Event Router SMT
 
@@ -22,38 +24,9 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 **Outbox Event Router** — это Single Message Transformation (SMT), которая преобразует CDC-события из outbox-таблицы в clean domain events.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph INPUT["Input: CDC Event"]
-        direction TB
-        CDC_BEFORE["before: null"]
-        CDC_AFTER["after:<br/>{<br/>  id: '550e8400...',<br/>  aggregatetype: 'Order',<br/>  aggregateid: 'order-123',<br/>  type: 'OrderApproved',<br/>  payload: {...}<br/>}"]
-        CDC_OP["op: 'c' (create)"]
-        CDC_SOURCE["source: {table: 'outbox', ...}"]
-    end
-
-    subgraph SMT["Outbox Event Router SMT"]
-        ROUTE["Route by aggregatetype"]
-        EXTRACT["Extract payload"]
-        KEY["Set Kafka key = aggregateid"]
-        HEADER["Add headers: id, type"]
-    end
-
-    subgraph OUTPUT["Output: Domain Event"]
-        direction TB
-        TOPIC["Topic: outbox.event.Order"]
-        KEY_OUT["Key: 'order-123'"]
-        VALUE_OUT["Value: {<br/>  orderId: '123',<br/>  amount: 299.99<br/>}"]
-        HEADERS["Headers:<br/>  id: '550e8400...'<br/>  type: 'OrderApproved'"]
-    end
-
-    INPUT --> SMT
-    SMT --> OUTPUT
-
-    style INPUT fill:#ef4444
-    style SMT fill:#f59e0b
-    style OUTPUT fill:#10b981
-`} client:visible />
+<div className="not-prose">
+  <OutboxEventRouterSmtDiagram client:load />
+</div>
 
 **Что делает SMT:**
 1. Reads outbox CDC event

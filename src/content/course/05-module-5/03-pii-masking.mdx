@@ -8,7 +8,10 @@ topics: ["pii", "masking", "gdpr", "smt", "security"]
 prerequisites: ["module-4/02-predicates-filtering"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  MaskFieldTransformDiagram,
+  UnwrapComparisonDiagram,
+} from '../../../components/diagrams/module5';
 
 # Маскирование PII данных с помощью SMT
 
@@ -32,28 +35,9 @@ CDC захватывает **все изменения** в таблице — �
 
 Команда аналитики может не иметь **clearance** для работы с PII, но нуждается в остальных полях (order_id, amount, status). MaskField позволяет дать доступ к событиям без раскрытия чувствительных данных.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph DB["PostgreSQL"]
-        TABLE["customers table<br/>id, name, email, ssn"]
-    end
-
-    subgraph DEBEZIUM["Debezium Connector"]
-        CDC["CDC Capture"]
-        MASK["MaskField SMT"]
-        CDC --> MASK
-    end
-
-    subgraph KAFKA["Kafka Topic"]
-        MASKED["Masked Events<br/>email: ***MASKED***<br/>ssn: ***MASKED***"]
-    end
-
-    TABLE -->|"Full data"| CDC
-    MASK -->|"Masked PII"| MASKED
-
-    style MASK fill:#f59e0b
-    style MASKED fill:#10b981
-`} client:visible />
+<div className="not-prose">
+  <MaskFieldTransformDiagram client:load />
+</div>
 
 ## MaskField SMT: Основы
 
@@ -190,21 +174,9 @@ MaskField работает по-разному в зависимости от т
 
 **Порядок имеет значение!**
 
-<Mermaid chart={`
-sequenceDiagram
-    participant E as Debezium Event
-    participant U as ExtractNewRecordState
-    participant M as MaskField
-    participant K as Kafka
-
-    E->>U: Full Debezium envelope
-    Note over U: Extract "after" field<br/>Add metadata
-
-    U->>M: Flattened record
-    Note over M: Mask ssn, email fields
-
-    M->>K: Masked flat record
-`} client:visible />
+<div className="not-prose">
+  <UnwrapComparisonDiagram client:load />
+</div>
 
 **Результат:**
 ```json

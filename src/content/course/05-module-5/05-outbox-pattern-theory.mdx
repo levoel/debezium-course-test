@@ -8,7 +8,12 @@ topics: ["outbox", "microservices", "patterns", "transactions"]
 prerequisites: ["module-4/04-content-based-routing"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  DualWriteProblemDiagram,
+  OutboxSolutionDiagram,
+  OutboxTransactionFlowDiagram,
+  MicroservicesOutboxDiagram,
+} from '../../../components/diagrams/module5';
 
 # Outbox Pattern: Теория и архитектура
 
@@ -38,21 +43,9 @@ def approve_order(order_id):
 
 **Что может пойти не так?**
 
-<Mermaid chart={`
-flowchart TB
-    START["approve_order(123)"] --> DB["UPDATE orders<br/>SET status = 'APPROVED'"]
-    DB --> COMMIT["COMMIT"]
-    COMMIT --> KAFKA["kafka_producer.send(...)"]
-
-    KAFKA --> OK{"Success?"}
-
-    OK -->|"YES"| SUCCESS["✅ БД обновлена<br/>✅ Событие отправлено<br/>Consistency OK"]
-    OK -->|"NO"| FAIL["✅ БД обновлена<br/>❌ Событие НЕ отправлено<br/>💥 Data loss!"]
-
-    style SUCCESS fill:#10b981
-    style FAIL fill:#ef4444
-    style KAFKA fill:#f59e0b
-`} client:visible />
+<div className="not-prose">
+  <DualWriteProblemDiagram client:load />
+</div>
 
 **Проблемы:**
 
@@ -71,53 +64,9 @@ Outbox Pattern использует фундаментальную идею: **�
 
 **Ключевая концепция:** Вместо UPDATE + SEND делаем UPDATE + INSERT в одной транзакции. CDC-система (Debezium) автоматически публикует события из outbox-таблицы.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph APP["Application"]
-        direction TB
-        BIZ["Business Logic"]
-        TX["BEGIN TRANSACTION"]
-        UPD["UPDATE orders"]
-        INS["INSERT INTO outbox"]
-        COMMIT["COMMIT"]
-
-        BIZ --> TX
-        TX --> UPD
-        UPD --> INS
-        INS --> COMMIT
-    end
-
-    subgraph DB["PostgreSQL"]
-        ORDERS[("orders table")]
-        OUTBOX[("outbox table")]
-        WAL["Write-Ahead Log"]
-
-        ORDERS -.->|"Atomic write"| WAL
-        OUTBOX -.->|"Atomic write"| WAL
-    end
-
-    subgraph CDC["Debezium"]
-        DBZ["Debezium Connector"]
-        SMT["Outbox Event Router SMT"]
-
-        DBZ -->|"Reads WAL"| SMT
-    end
-
-    subgraph KAFKA["Apache Kafka"]
-        TOPIC["order-events topic"]
-    end
-
-    COMMIT -->|"1. Atomic commit"| ORDERS
-    COMMIT -->|"1. Atomic commit"| OUTBOX
-    WAL -->|"2. CDC capture"| DBZ
-    SMT -->|"3. Publish"| TOPIC
-
-    style APP fill:#8b5cf6
-    style DB fill:#3b82f6
-    style CDC fill:#f59e0b
-    style KAFKA fill:#10b981
-    style TX fill:#ef4444
-`} client:visible />
+<div className="not-prose">
+  <OutboxSolutionDiagram client:load />
+</div>
 
 **Поток данных:**
 
@@ -266,20 +215,9 @@ Outbox Pattern — не magic. Важно понимать, что он дает
 
 **At-least-once** означает: событие доставится хотя бы один раз, возможно больше.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph SCENARIO1["Нормальный flow"]
-        A1["INSERT outbox"] --> B1["Debezium читает"] --> C1["Kafka receives"] --> D1["Debezium offset commit"]
-    end
-
-    subgraph SCENARIO2["Retry scenario"]
-        A2["INSERT outbox"] --> B2["Debezium читает"] --> C2["Kafka receives"] --> D2["Debezium crash<br/>(offset не committed)"]
-        D2 --> E2["Debezium restart"] --> F2["Reads SAME event"] --> G2["Kafka receives AGAIN"]
-    end
-
-    style SCENARIO1 fill:#10b981
-    style SCENARIO2 fill:#f59e0b
-`} client:visible />
+<div className="not-prose">
+  <OutboxTransactionFlowDiagram client:load />
+</div>
 
 **Следствие:** Consumers должны обрабатывать duplicate events idempotently.
 
@@ -359,51 +297,9 @@ WHERE created_at < NOW() - INTERVAL '1 hour';
 
 ## Архитектурная диаграмма: Microservices с Outbox
 
-<Mermaid chart={`
-flowchart TB
-    subgraph ORDER_SERVICE["Order Service"]
-        ORDER_API["REST API"]
-        ORDER_DB[("PostgreSQL<br/>orders + outbox")]
-        ORDER_API -->|"UPDATE + INSERT outbox"| ORDER_DB
-    end
-
-    subgraph PAYMENT_SERVICE["Payment Service"]
-        PAYMENT_API["REST API"]
-        PAYMENT_DB[("PostgreSQL<br/>payments + outbox")]
-        PAYMENT_API -->|"UPDATE + INSERT outbox"| PAYMENT_DB
-    end
-
-    subgraph CDC["CDC Infrastructure"]
-        DBZ_ORDER["Debezium Connector<br/>(Order Service)"]
-        DBZ_PAYMENT["Debezium Connector<br/>(Payment Service)"]
-    end
-
-    subgraph KAFKA["Apache Kafka"]
-        TOPIC_ORDER["outbox.event.Order"]
-        TOPIC_PAYMENT["outbox.event.Payment"]
-    end
-
-    subgraph NOTIFICATION["Notification Service"]
-        CONSUMER["Kafka Consumer"]
-        CONSUMER_DB[("PostgreSQL<br/>notifications")]
-        CONSUMER --> CONSUMER_DB
-    end
-
-    ORDER_DB -->|"CDC capture"| DBZ_ORDER
-    PAYMENT_DB -->|"CDC capture"| DBZ_PAYMENT
-
-    DBZ_ORDER -->|"Publish"| TOPIC_ORDER
-    DBZ_PAYMENT -->|"Publish"| TOPIC_PAYMENT
-
-    TOPIC_ORDER --> CONSUMER
-    TOPIC_PAYMENT --> CONSUMER
-
-    style ORDER_SERVICE fill:#8b5cf6
-    style PAYMENT_SERVICE fill:#3b82f6
-    style CDC fill:#f59e0b
-    style KAFKA fill:#10b981
-    style NOTIFICATION fill:#ec4899
-`} client:visible />
+<div className="not-prose">
+  <MicroservicesOutboxDiagram client:load />
+</div>
 
 **Flow:**
 1. Order Service обновляет orders + INSERT в outbox (атомарно)

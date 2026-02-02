@@ -8,7 +8,10 @@ topics: ["schema-evolution", "compatibility", "schema-registry"]
 prerequisites: ["module-4/07-schema-registry-avro"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  SchemaCompatibilityDiagram,
+  EvolutionDecisionTreeDiagram,
+} from '../../../components/diagrams/module5';
 
 # Schema Evolution и управление совместимостью
 
@@ -20,36 +23,9 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 В микросервисной архитектуре CDC события потребляют десятки сервисов. Каждый сервис обновляется независимо. **Изменение схемы может сломать consumers, которые не обновились**.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph DATABASE["PostgreSQL"]
-        TABLE["customers table<br/>v1: id, name, email<br/>v2: id, name, email, phone"]
-    end
-
-    subgraph CDC["Debezium"]
-        CONNECTOR["Connector<br/>Schema v2"]
-    end
-
-    subgraph KAFKA["Kafka Topic"]
-        MESSAGES["Mixed messages:<br/>Schema v1 events<br/>Schema v2 events"]
-    end
-
-    subgraph CONSUMERS["Consumers"]
-        C1["Service A<br/>Code expects v1"]
-        C2["Service B<br/>Code expects v2"]
-        C3["Service C<br/>Code expects v1"]
-    end
-
-    TABLE --> CONNECTOR
-    CONNECTOR --> MESSAGES
-    MESSAGES --> C1
-    MESSAGES --> C2
-    MESSAGES --> C3
-
-    style C1 fill:#ef4444
-    style C2 fill:#10b981
-    style C3 fill:#ef4444
-`} client:visible />
+<div className="not-prose">
+  <SchemaCompatibilityDiagram client:load />
+</div>
 
 **Проблема:**
 - Connector начинает отправлять события с новым полем `phone` (schema v2)
@@ -174,24 +150,9 @@ Schema Registry поддерживает несколько **compatibility mode
 
 ## Decision Tree: Какой режим выбрать?
 
-<Mermaid chart={`
-flowchart TD
-    START["Выбор compatibility mode"]
-
-    Q1{"Можете ли вы контролировать<br/>порядок deployment?"}
-    Q1 -->|"Да"| Q2{"Consumers обновляются<br/>быстро (minutes-hours)?"}
-    Q1 -->|"Нет"| FULL["FULL<br/>Максимальная безопасность<br/>Минимум flexibility"]
-
-    Q2 -->|"Да"| BACKWARD["BACKWARD (default)<br/>Рекомендуется<br/>Consumers first deployment"]
-    Q2 -->|"Нет"| Q3{"Consumers могут отставать<br/>на несколько версий?"}
-
-    Q3 -->|"Да"| BACKWARD_TRANS["BACKWARD_TRANSITIVE<br/>Для long-running consumers"]
-    Q3 -->|"Нет"| BACKWARD
-
-    style BACKWARD fill:#10b981
-    style BACKWARD_TRANS fill:#3b82f6
-    style FULL fill:#f59e0b
-`} client:visible />
+<div className="not-prose">
+  <EvolutionDecisionTreeDiagram client:load />
+</div>
 
 **Рекомендация для большинства CDC систем:** BACKWARD (default).
 

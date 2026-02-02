@@ -8,7 +8,11 @@ topics: ["routing", "smt", "multi-tenant", "regional"]
 prerequisites: ["module-4/03-pii-masking"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  ContentBasedRouterDiagram,
+  MultiTenantRoutingDiagram,
+  RegionBasedRoutingDiagram,
+} from '../../../components/diagrams/module5';
 
 # Content-Based Event Routing
 
@@ -26,31 +30,9 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 У вас единая база данных с колонкой `tenant_id`. Каждый tenant должен получать **только свои события** из отдельного топика.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph DB["PostgreSQL"]
-        TABLE["orders<br/>tenant_id: 'acme'<br/>tenant_id: 'globex'"]
-    end
-
-    subgraph DEBEZIUM["Debezium + Routing SMT"]
-        CDC["CDC Capture"]
-        ROUTE["ContentBasedRouter"]
-        CDC --> ROUTE
-    end
-
-    subgraph KAFKA["Kafka Topics"]
-        T1["orders-acme"]
-        T2["orders-globex"]
-    end
-
-    TABLE --> CDC
-    ROUTE -->|"tenant_id='acme'"| T1
-    ROUTE -->|"tenant_id='globex'"| T2
-
-    style ROUTE fill:#f59e0b
-    style T1 fill:#3b82f6
-    style T2 fill:#8b5cf6
-`} client:visible />
+<div className="not-prose">
+  <MultiTenantRoutingDiagram client:load />
+</div>
 
 **Без routing:** Один топик `orders`, consumers фильтруют по `tenant_id` → избыточный трафик.
 **С routing:** Отдельные топики, каждый consumer подписан только на нужный топик → эффективно.
@@ -70,32 +52,9 @@ flowchart LR
 
 У вас sharded таблицы (`customers_shard_0`, `customers_shard_1`, ..., `customers_shard_9`). Downstream нужен **единый топик** `customers` для удобства обработки.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph DB["PostgreSQL"]
-        S0["customers_shard_0"]
-        S1["customers_shard_1"]
-        S9["customers_shard_9"]
-    end
-
-    subgraph DEBEZIUM["Debezium + Routing SMT"]
-        CDC["CDC Capture"]
-        ROUTE["ByLogicalTableRouter"]
-        CDC --> ROUTE
-    end
-
-    subgraph KAFKA["Kafka Topics"]
-        UNIFIED["customers<br/>(unified topic)"]
-    end
-
-    S0 --> CDC
-    S1 --> CDC
-    S9 --> CDC
-    ROUTE --> UNIFIED
-
-    style ROUTE fill:#f59e0b
-    style UNIFIED fill:#10b981
-`} client:visible />
+<div className="not-prose">
+  <ContentBasedRouterDiagram client:load />
+</div>
 
 ## ByLogicalTableRouter: Regex-based Routing
 
@@ -230,18 +189,9 @@ USER kafka
 
 **Как работает:**
 
-<Mermaid chart={`
-flowchart TD
-    START["Debezium Event"] --> UNWRAP["ExtractNewRecordState"]
-    UNWRAP --> ROUTE{"ContentBasedRouter<br/>Evaluate Groovy expression"}
-
-    ROUTE -->|"region == 'EU'"| EU["Topic: orders-eu"]
-    ROUTE -->|"region != 'EU'"| US["Topic: orders-us"]
-
-    style ROUTE fill:#f59e0b
-    style EU fill:#3b82f6
-    style US fill:#8b5cf6
-`} client:visible />
+<div className="not-prose">
+  <RegionBasedRoutingDiagram client:load />
+</div>
 
 **Результат:**
 - Событие с `"region": "EU"` → топик `orders-eu`

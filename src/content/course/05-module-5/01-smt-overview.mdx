@@ -8,7 +8,13 @@ topics: ["smt", "transformations", "kafka-connect"]
 prerequisites: ["module-3/07-disaster-recovery-procedures"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import {
+  ConsumerComplexityDiagram,
+  SmtSolutionDiagram,
+  SmtExecutionModelDiagram,
+  SmtChainOrderDiagram,
+  SmtDecisionFrameworkDiagram,
+} from '../../../components/diagrams/module5';
 
 # Single Message Transformations: Обзор
 
@@ -22,18 +28,9 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ### Проблема: Сложность на стороне консьюмеров
 
-<Mermaid chart={`
-flowchart LR
-    DB["PostgreSQL"] --> DEBEZIUM["Debezium"]
-    DEBEZIUM -->|"Envelope format<br/>{before, after, op, ...}"| KAFKA["Kafka Topic"]
-    KAFKA --> C1["Consumer 1<br/>Extract after field"]
-    KAFKA --> C2["Consumer 2<br/>Extract after field"]
-    KAFKA --> C3["Consumer 3<br/>Extract after field"]
-
-    style C1 fill:#f59e0b
-    style C2 fill:#f59e0b
-    style C3 fill:#f59e0b
-`} client:visible />
+<div className="not-prose">
+  <ConsumerComplexityDiagram client:load />
+</div>
 
 **Без SMT:** Каждый консьюмер должен:
 1. Парсить Debezium envelope (`before`, `after`, `op`, `source`)
@@ -45,20 +42,9 @@ flowchart LR
 
 ### Решение: Трансформации на уровне Kafka Connect
 
-<Mermaid chart={`
-flowchart LR
-    DB["PostgreSQL"] --> DEBEZIUM["Debezium"]
-    DEBEZIUM -->|"Envelope"| SMT["SMT Chain<br/>1. Filter<br/>2. Unwrap<br/>3. Mask"]
-    SMT -->|"Flat JSON<br/>{id, name, email: '***'}"| KAFKA["Kafka Topic"]
-    KAFKA --> C1["Consumer 1<br/>Simple parsing"]
-    KAFKA --> C2["Consumer 2<br/>Simple parsing"]
-    KAFKA --> C3["Consumer 3<br/>Simple parsing"]
-
-    style SMT fill:#8b5cf6
-    style C1 fill:#10b981
-    style C2 fill:#10b981
-    style C3 fill:#10b981
-`} client:visible />
+<div className="not-prose">
+  <SmtSolutionDiagram client:load />
+</div>
 
 **С SMT:** Трансформация выполняется **до публикации** в Kafka:
 - Консьюмеры получают готовый формат данных
@@ -73,28 +59,9 @@ flowchart LR
 
 ### Execution Model
 
-<Mermaid chart={`
-flowchart TB
-    subgraph CONNECT["Kafka Connect Worker"]
-        direction TB
-        SOURCE["Source Connector<br/>(Debezium)"]
-        SMT1["SMT 1: Filter"]
-        SMT2["SMT 2: ExtractNewRecordState"]
-        SMT3["SMT 3: MaskField"]
-        PRODUCER["Kafka Producer"]
-
-        SOURCE -->|"SourceRecord"| SMT1
-        SMT1 -->|"Filtered record"| SMT2
-        SMT2 -->|"Flattened record"| SMT3
-        SMT3 -->|"Masked record"| PRODUCER
-    end
-
-    PRODUCER -->|"ProducerRecord"| KAFKA["Kafka Broker"]
-
-    style SMT1 fill:#3b82f6
-    style SMT2 fill:#3b82f6
-    style SMT3 fill:#3b82f6
-`} client:visible />
+<div className="not-prose">
+  <SmtExecutionModelDiagram client:load />
+</div>
 
 **Ключевые свойства:**
 
@@ -239,22 +206,9 @@ Debezium 2.5.4 предоставляет набор production-ready SMT для
 
 **Критически важно:** Порядок SMT имеет значение. Каждый SMT получает output предыдущего.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph ORDER["Стандартный порядок SMT Chain"]
-        direction TB
-        F["1. Filter<br/>(работает с envelope)"]
-        U["2. Unwrap<br/>(flatten payload)"]
-        R["3. Route<br/>(работает с flat data)"]
-        M["4. Mask<br/>(работает с flat data)"]
-        F --> U --> R --> M
-    end
-
-    style F fill:#ef4444
-    style U fill:#3b82f6
-    style R fill:#8b5cf6
-    style M fill:#f59e0b
-`} client:visible />
+<div className="not-prose">
+  <SmtChainOrderDiagram client:load />
+</div>
 
 **Стандартный порядок:**
 
@@ -336,18 +290,6 @@ flowchart LR
 
 SMT выполняются **синхронно** в потоке Kafka Connect. Каждая миллисекунда — это задержка публикации в Kafka.
 
-<Mermaid chart={`
-flowchart LR
-    subgraph LATENCY["End-to-end latency"]
-        DB["DB transaction<br/>commit"] --> READ["Debezium read<br/>WAL<br/>+5ms"]
-        READ --> SMT["SMT processing<br/>+3ms"]
-        SMT --> KAFKA["Kafka write<br/>+2ms"]
-    end
-
-    KAFKA --> TOTAL["Total lag:<br/>10ms"]
-
-    style SMT fill:#f59e0b
-`} client:visible />
 
 **Типичные overhead:**
 
@@ -410,15 +352,9 @@ SMT — это не универсальный инструмент. Есть з
 
 ### Decision Framework
 
-```
-Нужна трансформация?
-│
-├─ Работает с одним сообщением? ────────────── НЕТ ──→ Kafka Streams
-│  ├─ ДА ──→ Требует состояния? ─────────────── ДА ──→ Kafka Streams
-│            └─ НЕТ ──→ Требует external call? ─ ДА ──→ Kafka Streams
-│                      └─ НЕТ ──→ Overhead менее 10ms? ── ДА ──→ SMT подходит
-│                                                    └─ НЕТ ──→ Kafka Streams
-```
+<div className="not-prose">
+  <SmtDecisionFrameworkDiagram client:load />
+</div>
 
 ## Полный каталог Debezium SMT
 
