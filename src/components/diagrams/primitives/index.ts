@@ -13,3 +13,4 @@ export { DiagramTooltip } from './Tooltip';
 export { SequenceActor } from './SequenceActor';
 export { SequenceLifeline } from './SequenceLifeline';
 export { SequenceMessage } from './SequenceMessage';
+export { SequenceDiagram } from './SequenceDiagram';
