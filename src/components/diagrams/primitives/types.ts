@@ -45,3 +45,34 @@ export interface DiagramTooltipProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
+
+// Sequence diagram types
+export type SequenceActorVariant = 'database' | 'service' | 'queue' | 'external';
+
+export interface SequenceActorProps {
+  children: React.ReactNode;
+  variant?: SequenceActorVariant;
+  className?: string;
+  onClick?: () => void;
+  tabIndex?: number;
+  'aria-label'?: string;
+}
+
+export interface SequenceLifelineProps {
+  height: number;
+  className?: string;
+}
+
+export type SequenceMessageVariant = 'sync' | 'async' | 'return';
+
+export interface SequenceMessageProps {
+  fromX: number;
+  toX: number;
+  y: number;
+  label: string;
+  variant?: SequenceMessageVariant;
+  className?: string;
+  onClick?: () => void;
+  tabIndex?: number;
+  'aria-label'?: string;
+}
