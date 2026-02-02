@@ -6,14 +6,10 @@
 export type FlowNodeVariant = 'database' | 'connector' | 'cluster' | 'sink' | 'app' | 'target';
 export type ArrowDirection = 'right' | 'down' | 'left' | 'up';
 
-export interface FlowNodeProps {
+export interface FlowNodeProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   variant?: FlowNodeVariant;
   size?: 'sm' | 'md' | 'lg';
-  className?: string;
-  onClick?: () => void;
-  tabIndex?: number;
-  'aria-label'?: string;
 }
 
 export interface ArrowProps {
@@ -35,15 +31,12 @@ export interface DiagramContainerProps {
   className?: string;
 }
 
-// DiagramTooltip types
+// DiagramTooltip types (click-based popover for Safari compatibility)
 export interface DiagramTooltipProps {
   content: React.ReactNode;
   children: React.ReactNode;
   side?: 'top' | 'right' | 'bottom' | 'left';
   sideOffset?: number;
-  delayDuration?: number;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
 }
 
 // Sequence diagram types

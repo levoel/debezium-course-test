@@ -31,8 +31,7 @@ export const FlowNode = forwardRef<HTMLDivElement, FlowNodeProps>(
       size = 'md',
       className = '',
       onClick,
-      tabIndex,
-      'aria-label': ariaLabel,
+      ...rest
     },
     ref
   ) {
@@ -41,6 +40,7 @@ export const FlowNode = forwardRef<HTMLDivElement, FlowNodeProps>(
     return (
       <div
         ref={ref}
+        {...rest}
         className={`
           rounded-xl border backdrop-blur-md
           font-medium text-center
@@ -53,9 +53,6 @@ export const FlowNode = forwardRef<HTMLDivElement, FlowNodeProps>(
           ${className}
         `.trim()}
         onClick={onClick}
-        tabIndex={tabIndex ?? (isInteractive ? 0 : undefined)}
-        role={isInteractive ? 'button' : undefined}
-        aria-label={ariaLabel}
       >
         {children}
       </div>
