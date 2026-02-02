@@ -22,9 +22,9 @@ export function BinlogRetentionFlowDiagram() {
     <div className="space-y-6">
       {/* Timeline */}
       <DiagramContainer title="Binlog Retention Problem" color="rose">
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col items-center gap-4">
           {/* Day 1 */}
-          <div className="flex items-center gap-4">
+          <div>
             <DiagramTooltip content="Debezium активно читает события из binlog. Offset сохранен: mysql-bin.000010:154. Все работает нормально.">
               <FlowNode variant="connector" tabIndex={0} size="sm">
                 <div className="text-xs">
@@ -39,7 +39,7 @@ export function BinlogRetentionFlowDiagram() {
           <Arrow direction="down" />
 
           {/* Day 3 */}
-          <div className="flex items-center gap-4">
+          <div>
             <DiagramTooltip content="Debezium offline из-за обновления, проблемы Kafka, или сетевого сбоя. Offset не обновляется.">
               <FlowNode variant="sink" tabIndex={0} size="sm">
                 <div className="text-xs">
@@ -54,7 +54,7 @@ export function BinlogRetentionFlowDiagram() {
           <Arrow direction="down" />
 
           {/* Day 8 */}
-          <div className="flex items-center gap-4">
+          <div>
             <DiagramTooltip content="MySQL purge: binlog_expire_logs_seconds=7 дней истек. Файлы mysql-bin.000001 - 000012 удалены. Offset Debezium указывает на несуществующий файл.">
               <FlowNode variant="database" tabIndex={0} size="sm">
                 <div className="text-xs">
@@ -69,7 +69,7 @@ export function BinlogRetentionFlowDiagram() {
           <Arrow direction="down" />
 
           {/* Day 9 */}
-          <div className="flex items-center gap-4">
+          <div>
             <DiagramTooltip content="Debezium возвращается online, пытается читать mysql-bin.000010. Файл не найден! Требуется full resnapshot базы данных.">
               <FlowNode variant="app" tabIndex={0} size="sm">
                 <div className="text-xs">
