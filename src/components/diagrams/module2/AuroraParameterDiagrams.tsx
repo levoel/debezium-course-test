@@ -201,7 +201,7 @@ export function AuroraSetupProcessDiagram() {
           <div className="text-xs text-gray-400">
             Без reboot Writer Instance параметры НЕ применяются.
             <br />
-            <code className="bg-gray-800 px-1 rounded">SHOW wal_level;</code> покажет <code className="bg-gray-800 px-1 rounded">replica</code> вместо <code className="bg-gray-800 px-1 rounded">logical</code>
+            <code className="bg-gray-800 px-1 rounded text-[11px]">SHOW wal_level;</code> покажет <code className="bg-gray-800 px-1 rounded text-[11px]">replica</code> вместо <code className="bg-gray-800 px-1 rounded text-[11px]">logical</code>
             <br />
             Debezium выдаст ошибку: "wal_level must be logical to use logical replication"
           </div>
@@ -210,7 +210,7 @@ export function AuroraSetupProcessDiagram() {
 
       {/* Verification checklist */}
       <DiagramContainer title="Проверка после настройки" color="emerald" className="max-w-lg mx-auto">
-        <div className="text-xs text-gray-400 space-y-1 font-mono">
+        <div className="text-[11px] text-gray-400 space-y-1 font-mono">
           <div>SHOW wal_level; -- должен быть 'logical'</div>
           <div>SHOW rds.logical_replication; -- должен быть 'on'</div>
           <div>SHOW max_replication_slots; -- минимум 10</div>

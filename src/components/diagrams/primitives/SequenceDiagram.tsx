@@ -57,21 +57,26 @@ export function SequenceDiagram({
 
   return (
     <div className={`relative ${className}`}>
-      {/* Actor row */}
-      <div className="flex justify-around mb-4">
-        {actors.map((actor) =>
-          actor.tooltip ? (
-            <DiagramTooltip key={actor.id} content={actor.tooltip}>
-              <SequenceActor variant={actor.variant} tabIndex={0}>
+      {/* Actor row - use grid to match lifeline positions exactly */}
+      <div
+        className="grid mb-4"
+        style={{ gridTemplateColumns: `repeat(${actors.length}, 1fr)` }}
+      >
+        {actors.map((actor) => (
+          <div key={actor.id} className="flex justify-center">
+            {actor.tooltip ? (
+              <DiagramTooltip content={actor.tooltip}>
+                <SequenceActor variant={actor.variant} tabIndex={0}>
+                  {actor.label}
+                </SequenceActor>
+              </DiagramTooltip>
+            ) : (
+              <SequenceActor variant={actor.variant}>
                 {actor.label}
               </SequenceActor>
-            </DiagramTooltip>
-          ) : (
-            <SequenceActor key={actor.id} variant={actor.variant}>
-              {actor.label}
-            </SequenceActor>
-          )
-        )}
+            )}
+          </div>
+        ))}
       </div>
 
       {/* SVG for lifelines and messages */}

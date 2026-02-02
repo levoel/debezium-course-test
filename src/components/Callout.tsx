@@ -9,25 +9,25 @@ const Callout: React.FC<CalloutProps> = ({ type = 'note', children }) => {
   const styles = {
     note: {
       bg: 'bg-blue-500/10 backdrop-blur-sm',
-      border: 'border-l-4 border-blue-500',
+      border: 'border-l-4 border-blue-400/70',
       icon: 'ℹ️',
       title: 'Note',
     },
     tip: {
       bg: 'bg-green-500/10 backdrop-blur-sm',
-      border: 'border-l-4 border-green-500',
+      border: 'border-l-4 border-emerald-400/70',
       icon: '💡',
       title: 'Tip',
     },
     warning: {
-      bg: 'bg-yellow-500/10 backdrop-blur-sm',
-      border: 'border-l-4 border-yellow-500',
+      bg: 'bg-amber-500/10 backdrop-blur-sm',
+      border: 'border-l-4 border-amber-400/70',
       icon: '⚠️',
       title: 'Warning',
     },
     danger: {
-      bg: 'bg-red-500/10 backdrop-blur-sm',
-      border: 'border-l-4 border-red-500',
+      bg: 'bg-rose-500/10 backdrop-blur-sm',
+      border: 'border-l-4 border-rose-400/70',
       icon: '🚨',
       title: 'Danger',
     },

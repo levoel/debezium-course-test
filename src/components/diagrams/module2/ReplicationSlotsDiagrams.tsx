@@ -127,10 +127,16 @@ export function SlotLifecycleDiagram() {
           </FlowNode>
         </DiagramTooltip>
 
-        {/* Bidirectional arrows */}
-        <div className="flex items-center gap-4">
-          <Arrow direction="down" label="Отключение" />
-          <Arrow direction="up" label="Переподключение" />
+        {/* Bidirectional arrows with labels on sides */}
+        <div className="flex items-center justify-center gap-6 my-2">
+          <div className="flex flex-col items-center">
+            <Arrow direction="down" />
+            <span className="text-xs text-gray-400">Отключение</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <Arrow direction="up" />
+            <span className="text-xs text-gray-400">Переподключение</span>
+          </div>
         </div>
 
         {/* Inactive */}

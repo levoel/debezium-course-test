@@ -96,7 +96,9 @@ export function PhysicalVsLogicalDiagram() {
  */
 export function LogicalDecodingComponentsDiagram() {
   return (
-    <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4 flex-wrap">
+    <div className="flex flex-col items-center gap-4">
+      {/* Main pipeline row */}
+      <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
       <DiagramTooltip content="Write-Ahead Log — журнал транзакций PostgreSQL. При wal_level=logical содержит дополнительные данные для декодирования: OID таблиц, tuple data. Гарантирует durability всех изменений.">
         <FlowNode variant="sink" tabIndex={0}>
           WAL
@@ -135,13 +137,15 @@ export function LogicalDecodingComponentsDiagram() {
         </FlowNode>
       </DiagramTooltip>
 
-      <Arrow direction="right" />
+      <Arrow direction="right" className="hidden md:flex" />
+      <Arrow direction="down" className="md:hidden" />
 
       <DiagramTooltip content="Брокер сообщений, хранящий CDC-события в топиках. Обеспечивает durability и доставку потребителям. Поддерживает replay событий при необходимости.">
         <FlowNode variant="cluster" tabIndex={0}>
           Kafka
         </FlowNode>
       </DiagramTooltip>
+      </div>
     </div>
   );
 }

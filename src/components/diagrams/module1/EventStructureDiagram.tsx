@@ -7,6 +7,7 @@
  */
 
 import { FlowNode } from '../primitives/FlowNode';
+import { Arrow } from '../primitives/Arrow';
 import { DiagramContainer } from '../primitives/DiagramContainer';
 import { DiagramTooltip } from '../primitives/Tooltip';
 
@@ -17,50 +18,62 @@ export function OperationTypesDiagram() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* r - snapshot */}
-      <DiagramContainer title="r (snapshot)" color="emerald" className="flex justify-center items-center py-8">
+      <DiagramContainer title="r (snapshot)" color="emerald" className="py-6">
         <DiagramTooltip content="Read операция при начальном snapshot. Debezium читает существующие записи при первом запуске. Поле source.snapshot='true'.">
-          <FlowNode variant="database" tabIndex={0} size="md">
-            <div className="text-center">
-              <div className="font-semibold">before: null</div>
-              <div className="font-semibold">after: данные</div>
-            </div>
-          </FlowNode>
+          <div className="flex items-center justify-center gap-3" tabIndex={0}>
+            <FlowNode variant="sink" size="sm">
+              <span className="text-gray-400">null</span>
+            </FlowNode>
+            <Arrow direction="right" />
+            <FlowNode variant="database" size="sm">
+              данные
+            </FlowNode>
+          </div>
         </DiagramTooltip>
       </DiagramContainer>
 
       {/* c - create */}
-      <DiagramContainer title="c (create)" color="blue" className="flex justify-center items-center py-8">
+      <DiagramContainer title="c (create)" color="blue" className="py-6">
         <DiagramTooltip content="INSERT операция. Новая запись добавлена в таблицу. Поле before=null, данные в after.">
-          <FlowNode variant="connector" tabIndex={0} size="md">
-            <div className="text-center">
-              <div className="font-semibold">before: null</div>
-              <div className="font-semibold">after: данные</div>
-            </div>
-          </FlowNode>
+          <div className="flex items-center justify-center gap-3" tabIndex={0}>
+            <FlowNode variant="sink" size="sm">
+              <span className="text-gray-400">null</span>
+            </FlowNode>
+            <Arrow direction="right" />
+            <FlowNode variant="connector" size="sm">
+              данные
+            </FlowNode>
+          </div>
         </DiagramTooltip>
       </DiagramContainer>
 
       {/* u - update */}
-      <DiagramContainer title="u (update)" color="amber" className="flex justify-center items-center py-8">
+      <DiagramContainer title="u (update)" color="amber" className="py-6">
         <DiagramTooltip content="UPDATE операция. Изменение существующей записи. Оба поля before и after заполнены для сравнения.">
-          <FlowNode variant="cluster" tabIndex={0} size="md">
-            <div className="text-center">
-              <div className="font-semibold">before: старое</div>
-              <div className="font-semibold">after: новое</div>
-            </div>
-          </FlowNode>
+          <div className="flex items-center justify-center gap-3" tabIndex={0}>
+            <FlowNode variant="cluster" size="sm">
+              старое
+            </FlowNode>
+            <Arrow direction="right" />
+            <FlowNode variant="cluster" size="sm">
+              новое
+            </FlowNode>
+          </div>
         </DiagramTooltip>
       </DiagramContainer>
 
       {/* d - delete */}
-      <DiagramContainer title="d (delete)" color="rose" className="flex justify-center items-center py-8">
+      <DiagramContainer title="d (delete)" color="rose" className="py-6">
         <DiagramTooltip content="DELETE операция. Запись удалена. Поле after=null, удаленные данные в before для аудита.">
-          <FlowNode variant="sink" tabIndex={0} size="md">
-            <div className="text-center">
-              <div className="font-semibold">before: данные</div>
-              <div className="font-semibold">after: null</div>
-            </div>
-          </FlowNode>
+          <div className="flex items-center justify-center gap-3" tabIndex={0}>
+            <FlowNode variant="app" size="sm">
+              данные
+            </FlowNode>
+            <Arrow direction="right" />
+            <FlowNode variant="sink" size="sm">
+              <span className="text-gray-400">null</span>
+            </FlowNode>
+          </div>
         </DiagramTooltip>
       </DiagramContainer>
     </div>

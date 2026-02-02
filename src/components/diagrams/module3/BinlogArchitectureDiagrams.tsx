@@ -118,32 +118,24 @@ export function RowFormatDiagram() {
 
       {/* ROW format output */}
       <DiagramContainer title="ROW формат" color="emerald" recommended>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           <DiagramTooltip content="Первое UPDATE_ROWS_EVENT: before содержит старое значение цены 100, after содержит новое значение 110. Позволяет consumer вычислить точное изменение.">
-            <FlowNode variant="connector" tabIndex={0}>
-              <div className="text-xs font-mono text-left">
-                UPDATE_ROWS_EVENT<br />
-                Row 1: before={'{'}{`id:1, price:100`}{'}'}<br />
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;after={'{'}{`id:1, price:110`}{'}'}
-              </div>
-            </FlowNode>
+            <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-lg px-3 py-2 text-xs font-mono text-emerald-200" tabIndex={0}>
+              UPDATE_ROWS_EVENT<br />
+              Row 1: before={'{id:1, price:100}'} after={'{id:1, price:110}'}
+            </div>
           </DiagramTooltip>
 
           <DiagramTooltip content="Второе UPDATE_ROWS_EVENT для следующей строки. ROW формат детерминированный - одинаковый результат на любой реплике.">
-            <FlowNode variant="connector" tabIndex={0}>
-              <div className="text-xs font-mono text-left">
-                Row 2: before={'{'}{`id:2, price:200`}{'}'}<br />
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;after={'{'}{`id:2, price:220`}{'}'}
-              </div>
-            </FlowNode>
+            <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-lg px-3 py-2 text-xs font-mono text-emerald-200" tabIndex={0}>
+              Row 2: before={'{id:2, price:200}'} after={'{id:2, price:220}'}
+            </div>
           </DiagramTooltip>
 
           <DiagramTooltip content="Продолжение для всех затронутых строк. Массовый UPDATE может генерировать много событий. Debezium обрабатывает их последовательно.">
-            <FlowNode variant="connector" tabIndex={0}>
-              <div className="text-xs font-mono">
-                Row N: ...
-              </div>
-            </FlowNode>
+            <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-lg px-3 py-2 text-xs font-mono text-emerald-200 text-center" tabIndex={0}>
+              Row N: ...
+            </div>
           </DiagramTooltip>
         </div>
 

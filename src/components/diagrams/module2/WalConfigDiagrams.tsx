@@ -167,12 +167,12 @@ export function WorkloadWalImpactDiagram() {
         <DiagramContainer title="Влияние REPLICA IDENTITY" color="amber" className="max-w-lg">
           <div className="text-xs text-gray-400 text-center space-y-2">
             <div>
-              <strong className="text-amber-300">DEFAULT:</strong> UPDATE/DELETE логирует только PK
+              <strong className="text-amber-400/80">DEFAULT:</strong> UPDATE/DELETE логирует только PK
             </div>
             <div>
-              <strong className="text-amber-300">FULL:</strong> UPDATE/DELETE логирует полную строку до и после
+              <strong className="text-amber-400/80">FULL:</strong> UPDATE/DELETE логирует полную строку до и после
             </div>
-            <div className="text-rose-400">
+            <div className="text-rose-400/80">
               FULL может увеличить WAL на 30-50% для UPDATE-heavy таблиц!
             </div>
           </div>

@@ -32,7 +32,7 @@ export function LabSetupDiagram() {
       {/* Container Grid: 2x2 on desktop, single column on mobile */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* DATA Subgroup */}
-        <DiagramContainer title="DATA" color="purple" className="h-fit">
+        <DiagramContainer title="DATA" color="purple" className="min-h-[160px]">
           <div className="flex flex-col items-center gap-4">
             <DiagramTooltip content="База данных с wal_level=logical и настроенными replication slots. Порт 5433 (не 5432!) чтобы избежать конфликта с локальной установкой PostgreSQL.">
               <FlowNode variant="database" tabIndex={0}>
@@ -45,7 +45,7 @@ export function LabSetupDiagram() {
         </DiagramContainer>
 
         {/* STREAMING Subgroup */}
-        <DiagramContainer title="STREAMING" color="blue" className="h-fit">
+        <DiagramContainer title="STREAMING" color="blue" className="min-h-[160px]">
           <div className="flex flex-col items-center gap-4">
             <div className="flex flex-wrap justify-center gap-3">
               <DiagramTooltip content="Apache Kafka в KRaft режиме (без ZooKeeper). Confluent Platform 7.8.1. Хранит CDC-события и internal топики Kafka Connect.">
@@ -76,7 +76,7 @@ export function LabSetupDiagram() {
         </DiagramContainer>
 
         {/* MONITORING Subgroup */}
-        <DiagramContainer title="MONITORING" color="rose" className="h-fit">
+        <DiagramContainer title="MONITORING" color="rose" className="min-h-[160px]">
           <div className="flex flex-col items-center gap-4">
             <div className="flex flex-wrap justify-center gap-3">
               <DiagramTooltip content="Сбор метрик из Kafka Connect через JMX. Хранит time-series данные для мониторинга CDC pipeline.">
@@ -99,7 +99,7 @@ export function LabSetupDiagram() {
         </DiagramContainer>
 
         {/* EXERCISES Subgroup */}
-        <DiagramContainer title="EXERCISES" color="amber" className="h-fit">
+        <DiagramContainer title="EXERCISES" color="amber" className="min-h-[160px]">
           <div className="flex flex-col items-center gap-4">
             <DiagramTooltip content="Python окружение для экспериментов. confluent-kafka библиотека уже установлена. Подключается к Kafka как kafka:9092 (внутренняя сеть Docker).">
               <FlowNode variant="app" tabIndex={0}>

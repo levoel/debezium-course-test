@@ -2,16 +2,29 @@
  * Arrow - SVG directional arrow connector for diagrams
  *
  * Supports 4 directions, optional labels, and dashed variant for
- * optional/async flows.
+ * optional/async flows. Renders a proper line with arrowhead.
  */
 
 import type { ArrowProps, ArrowDirection } from './types';
 
-const arrowPaths: Record<ArrowDirection, string> = {
-  right: 'M9 5l7 7-7 7',
-  down: 'M5 9l7 7 7-7',
-  left: 'M15 19l-7-7 7-7',
-  up: 'M19 15l-7-7-7 7',
+// SVG paths for arrowheads at the end of lines
+const arrowheadPaths: Record<ArrowDirection, { line: string; head: string }> = {
+  right: {
+    line: 'M4 12 L16 12',
+    head: 'M14 8 L20 12 L14 16',
+  },
+  down: {
+    line: 'M12 4 L12 16',
+    head: 'M8 14 L12 20 L16 14',
+  },
+  left: {
+    line: 'M20 12 L8 12',
+    head: 'M10 8 L4 12 L10 16',
+  },
+  up: {
+    line: 'M12 20 L12 8',
+    head: 'M8 10 L12 4 L16 10',
+  },
 };
 
 export function Arrow({
@@ -21,6 +34,7 @@ export function Arrow({
   className = '',
 }: ArrowProps) {
   const isVertical = direction === 'up' || direction === 'down';
+  const paths = arrowheadPaths[direction];
 
   return (
     <div
@@ -32,18 +46,25 @@ export function Arrow({
     >
       <div className={`flex items-center justify-center ${isVertical ? '' : 'px-2'}`}>
         <svg
-          className="w-6 h-6 text-gray-400"
+          className="w-8 h-8 text-gray-400"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
           aria-hidden="true"
         >
+          {/* Line */}
+          <path
+            strokeLinecap="round"
+            strokeWidth={2}
+            strokeDasharray={dashed ? '4 2' : undefined}
+            d={paths.line}
+          />
+          {/* Arrowhead */}
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            strokeDasharray={dashed ? '4 2' : undefined}
-            d={arrowPaths[direction]}
+            d={paths.head}
           />
         </svg>
       </div>
