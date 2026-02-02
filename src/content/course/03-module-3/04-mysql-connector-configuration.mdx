@@ -8,7 +8,7 @@ topics: ["mysql", "debezium", "kafka-connect", "cdc", "rest-api"]
 prerequisites: ["module-8/03-binlog-retention-heartbeat"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { MysqlConnectorDataFlowDiagram } from '../../../components/diagrams/module3/ConnectorConfigDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Настройка MySQL CDC коннектора
@@ -383,30 +383,7 @@ SHOW VARIABLES LIKE 'server_id';
 
 **Как работает initial snapshot**:
 
-<Mermaid>
-```mermaid
-sequenceDiagram
-    participant C as Connector
-    participant M as MySQL
-    participant K as Kafka
-
-    Note over C: Snapshot Phase START
-    C->>M: SET GLOBAL read_lock = ON (if allowed)
-    C->>M: SELECT * FROM customers
-    M-->>C: 100,000 rows
-    C->>K: Publish 100,000 events to mysql-server.inventory.customers
-    C->>M: SELECT * FROM orders
-    M-->>C: 500,000 rows
-    C->>K: Publish 500,000 events to mysql-server.inventory.orders
-    C->>M: UNLOCK TABLES
-    Note over C: Snapshot Phase COMPLETE
-
-    Note over C: Streaming Phase START
-    C->>M: Start reading binlog from GTID position
-    M-->>C: Stream INSERT/UPDATE/DELETE events
-    C->>K: Publish real-time CDC events
-```
-</Mermaid>
+<MysqlConnectorDataFlowDiagram client:visible />
 
 **Duration snapshot для больших таблиц**:
 

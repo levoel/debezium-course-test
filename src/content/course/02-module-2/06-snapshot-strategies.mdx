@@ -18,7 +18,7 @@ import { SnapshotDataLossDiagram, TraditionalSnapshotDiagram, IncrementalSnapsho
 
 CDC захватывает только **изменения** — INSERT, UPDATE, DELETE. Но что насчет миллиона записей, которые уже существуют в таблице? Без снэпшота consumer увидит только новые изменения, а существующие данные останутся невидимыми.
 
-<SnapshotDataLossDiagram />
+<SnapshotDataLossDiagram client:load />
 
 ## Режимы snapshot в Debezium
 
@@ -60,7 +60,7 @@ Debezium предлагает несколько режимов снэпшота
 
 Во время снэпшота коннектор **не обрабатывает** новые изменения из WAL. Все CDC-события накапливаются в replication slot, увеличивая WAL retention.
 
-<TraditionalSnapshotDiagram />
+<TraditionalSnapshotDiagram client:load />
 
 ### 2. Нет возобновляемости
 
@@ -81,7 +81,7 @@ Debezium предлагает несколько режимов снэпшота
 | Блокировки таблиц | Возможны | Минимальные |
 | Управление | Автоматически при старте | По запросу через signaling table |
 
-<IncrementalSnapshotDiagram />
+<IncrementalSnapshotDiagram client:load />
 
 ### Как работает incremental snapshot
 
@@ -133,7 +133,7 @@ Streaming события отличаются отсутствием `snapshot: 
 
 ## Выбор стратегии: Decision Framework
 
-<SnapshotDecisionDiagram />
+<SnapshotDecisionDiagram client:load />
 
 ### Рекомендации по сценариям
 

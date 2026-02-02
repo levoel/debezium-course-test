@@ -8,7 +8,7 @@ topics: ["mysql", "debezium", "schema-history", "recovery", "kafka"]
 prerequisites: ["module-8/05-binlog-wal-comparison"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { SchemaHistoryFlowDiagram, SchemaRecoveryPathsDiagram, SchemaHistoryCorruptionDiagram } from '../../../components/diagrams/module3/SchemaHistoryDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Schema History Topic: Критический Компонент Recovery
@@ -71,34 +71,7 @@ WRITE_ROWS_EVENT:
 
 **Откуда коннектор получает эту информацию?** Из schema history topic.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph POSTGRES["PostgreSQL CDC"]
-        direction TB
-        WAL1["WAL Event<br/>schema: {id, name, email}<br/>payload: {1, Alice, alice@...}"]
-        DEB1["Debezium"]
-        KAFKA1["Kafka Topic"]
-
-        WAL1 -->|"Self-contained"| DEB1
-        DEB1 --> KAFKA1
-    end
-
-    subgraph MYSQL["MySQL CDC"]
-        direction TB
-        BINLOG["Binlog Event<br/>table_id: 108<br/>raw_bytes: [1, Alice, alice@...]"]
-        HIST["Schema History Topic<br/>CREATE TABLE customers<br/>(id INT, name VARCHAR, email VARCHAR)"]
-        DEB2["Debezium"]
-        KAFKA2["Kafka Topic"]
-
-        BINLOG --> DEB2
-        HIST -->|"Schema lookup"| DEB2
-        DEB2 --> KAFKA2
-    end
-
-    style POSTGRES fill:#1e3a5f,stroke:#3b82f6
-    style MYSQL fill:#14532d,stroke:#22c55e
-    style HIST fill:#f59e0b,stroke:#fb923c
-`} client:visible />
+<SchemaHistoryFlowDiagram client:visible />
 
 **Вывод:** Schema history topic — это память коннектора о DDL-изменениях. Без него MySQL connector не может восстановиться после перезапуска.
 
@@ -191,34 +164,7 @@ QUERY_EVENT:
 
 При перезапуске коннектор должен восстановить схему всех таблиц на момент сохранённого offset.
 
-<Mermaid chart={`
-sequenceDiagram
-    participant Conn as Debezium Connector
-    participant Offset as Kafka Connect Offsets
-    participant History as Schema History Topic
-    participant Binlog as MySQL Binlog
-
-    Note over Conn: Connector перезапускается
-
-    Conn->>Offset: Где я остановился?
-    Offset-->>Conn: mysql-bin.000003, pos: 5000
-
-    Conn->>History: Читает ВСЮ историю DDL
-    History-->>Conn: CREATE TABLE customers (id, name, email)
-    History-->>Conn: ALTER TABLE customers ADD COLUMN phone
-    History-->>Conn: CREATE TABLE orders (...)
-
-    Note over Conn: Применяет DDL последовательно,<br/>останавливается на position < 5000
-
-    Conn->>Binlog: Возобновляет чтение с 5000
-    Binlog-->>Conn: TABLE_MAP table_id=108 (customers)
-
-    Note over Conn: Знает схему customers:<br/>{id, name, email, phone}
-
-    Binlog-->>Conn: WRITE_ROWS table_id=108,<br/>data=[1, Alice, alice@..., +1234567890]
-
-    Conn->>Conn: Декодирует: id=1, name=Alice,<br/>email=alice@..., phone=+1234567890
-`} client:visible />
+<SchemaRecoveryPathsDiagram client:visible />
 
 **Ключевой момент:** Коннектор читает schema history topic **от начала до конца**, применяя DDL последовательно до сохранённого binlog offset. Это даёт ему точное состояние схемы на момент остановки.
 
@@ -483,16 +429,7 @@ null    {"ddl":"ALTER TABLE `customers` ADD COLUMN `phone` VARCHAR(20)","positio
 
 **Процесс recovery:**
 
-<Mermaid chart={`
-flowchart TB
-    START["Connector Start"] --> OFFSET["Read Kafka Connect offset:<br/>mysql-bin.000005, pos: 3000"]
-    OFFSET --> HISTORY["Read Schema History Topic<br/>from beginning"]
-    HISTORY --> APPLY["Apply DDL sequentially<br/>up to position < 3000"]
-    APPLY --> RESUME["Resume binlog reading<br/>from position 3000"]
-    RESUME --> SUCCESS["✅ Seamless resume"]
-
-    style SUCCESS fill:#10b981,stroke:#22c55e
-`} client:visible />
+<SchemaHistoryCorruptionDiagram client:visible />
 
 **Действия администратора:** Никаких. Recovery автоматический.
 

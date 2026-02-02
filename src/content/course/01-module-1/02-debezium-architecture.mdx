@@ -31,7 +31,7 @@ import { DeploymentModesDiagram, KafkaConnectClusterDiagram, CdcEventFlowDiagram
 
 Debezium можно развернуть тремя способами, каждый из которых подходит для разных сценариев.
 
-<DeploymentModesDiagram />
+<DeploymentModesDiagram client:load />
 
 ### 1. Kafka Connect (рекомендуемый)
 
@@ -117,7 +117,7 @@ try (DebeziumEngine<ChangeEvent<String, String>> engine =
 
 Поскольку Kafka Connect — рекомендуемый режим, разберем его детальнее.
 
-<KafkaConnectClusterDiagram />
+<KafkaConnectClusterDiagram client:load />
 
 ### Компоненты Kafka Connect
 
@@ -159,7 +159,7 @@ curl -X DELETE http://localhost:8083/connectors/postgres-connector
 
 Полный путь события от изменения в БД до потребителя:
 
-<CdcEventFlowDiagram />
+<CdcEventFlowDiagram client:load />
 
 ### Ключевые моменты
 

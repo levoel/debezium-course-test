@@ -18,7 +18,7 @@ import { WalLevelHierarchyDiagram, WorkloadWalImpactDiagram } from '../../../com
 
 PostgreSQL поддерживает три уровня детализации WAL. Для CDC требуется `logical`.
 
-<WalLevelHierarchyDiagram />
+<WalLevelHierarchyDiagram client:load />
 
 | Уровень | Для чего | Объем WAL |
 |---------|----------|-----------|
@@ -89,7 +89,7 @@ SHOW max_slot_wal_keep_size;       -- 10GB или больше
 
 Включение `wal_level=logical` увеличивает объем WAL. Важно понимать, насколько.
 
-<WorkloadWalImpactDiagram />
+<WorkloadWalImpactDiagram client:load />
 
 ### Почему UPDATE дороже INSERT?
 

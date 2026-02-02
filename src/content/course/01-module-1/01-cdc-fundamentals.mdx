@@ -38,7 +38,7 @@ WHERE updated_at > :last_sync_time;
 
 Каждая современная СУБД ведет журнал транзакций (WAL в PostgreSQL, binlog в MySQL). Этот журнал содержит **каждое изменение**, которое было зафиксировано в базе данных. CDC-системы читают этот журнал и преобразуют записи в поток событий.
 
-<CdcComparisonDiagram />
+<CdcComparisonDiagram client:load />
 
 ## Сравнение подходов: Polling vs Log-based CDC
 
@@ -63,7 +63,7 @@ WHERE updated_at > :last_sync_time;
 
 ## Последовательность событий в CDC
 
-<CdcSequenceDiagram />
+<CdcSequenceDiagram client:load />
 
 ## Use Cases для CDC
 

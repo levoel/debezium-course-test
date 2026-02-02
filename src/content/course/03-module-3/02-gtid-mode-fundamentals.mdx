@@ -8,7 +8,7 @@ topics: ["mysql", "gtid", "replication", "failover"]
 prerequisites: ["module-8/01-binlog-architecture"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { GtidAnatomyDiagram, GtidReplicationDiagram, GtidFailoverComparisonDiagram } from '../../../components/diagrams/module3/GtidDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # GTID Mode: Глобальные идентификаторы транзакций
@@ -46,18 +46,7 @@ GTID - это глобальные идентификаторы, которые 
 
 GTID состоит из двух частей, разделенных двоеточием:
 
-<Mermaid>
-```mermaid
-graph LR
-    A["GTID"] --> B["source_id"]
-    A --> C["transaction_id"]
-    B --> D["3E11FA47-71CA-11E1-9E33-C80AA9429562"]
-    C --> E["23"]
-
-    style D fill:#e1f5ff
-    style E fill:#ffe1e1
-```
-</Mermaid>
+<GtidAnatomyDiagram client:visible />
 
 ### source_id (Server UUID)
 
@@ -110,22 +99,7 @@ graph LR
 
 ### 1. Failover Resilience (Устойчивость к failover)
 
-<Mermaid>
-```mermaid
-sequenceDiagram
-    participant D as Debezium
-    participant P1 as Primary (old)
-    participant P2 as Primary (new)
-
-    D->>P1: Читаю изменения (GTID: ...562:1-100)
-    Note over P1: PRIMARY CRASHES
-    P1--xD: Connection lost
-    D->>P2: Переключаюсь на новый primary
-    D->>P2: Запрашиваю изменения после GTID ...562:100
-    P2->>D: Отдаю транзакции начиная с ...562:101
-    Note over D,P2: CDC продолжается БЕЗ resnapshot!
-```
-</Mermaid>
+<GtidReplicationDiagram client:visible />
 
 Без GTID Debezium не сможет продолжить - он знает только файл и смещение на старом сервере, которые бессмысленны на новом.
 
@@ -394,29 +368,7 @@ Debezium хранит **и GTID, и file:position** для обратной со
 
 ### Failover scenario с Debezium
 
-<Mermaid>
-```mermaid
-sequenceDiagram
-    participant D as Debezium Connector
-    participant K as Kafka (offset storage)
-    participant M1 as MySQL Primary (old)
-    participant M2 as MySQL Primary (new)
-
-    D->>M1: Читаю события (gtid_set: ...562:1-100)
-    D->>K: Сохраняю offset: gtid_set=...562:100
-    Note over M1: PRIMARY CRASHES
-    M1--xD: Connection lost
-    Note over D: Connector перезапускается
-    D->>K: Загружаю последний offset
-    K->>D: gtid_set=...562:100
-    D->>M2: Подключаюсь к новому primary
-    D->>M2: SET @gtid_next='AUTOMATIC'
-    D->>M2: START TRANSACTION READ ONLY
-    D->>M2: Запрашиваю события после gtid_set ...562:100
-    M2->>D: Отдаю события начиная с ...562:101
-    Note over D,M2: CDC работает без resnapshot!
-```
-</Mermaid>
+<GtidFailoverComparisonDiagram client:visible />
 
 Ключевой момент: Debezium может переключиться на новый primary, используя тот же самый GTID, потому что GTID глобально уникален.
 

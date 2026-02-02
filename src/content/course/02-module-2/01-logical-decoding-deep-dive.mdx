@@ -18,7 +18,7 @@ import { PhysicalVsLogicalDiagram, LogicalDecodingComponentsDiagram, Publication
 
 PostgreSQL поддерживает два типа репликации. Понимание разницы критически важно для настройки CDC.
 
-<PhysicalVsLogicalDiagram />
+<PhysicalVsLogicalDiagram client:load />
 
 | Характеристика | Физическая | Логическая |
 |----------------|------------|------------|
@@ -35,7 +35,7 @@ PostgreSQL поддерживает два типа репликации. Пон
 
 ### Компоненты Logical Decoding
 
-<LogicalDecodingComponentsDiagram />
+<LogicalDecodingComponentsDiagram client:load />
 
 **WAL (Write-Ahead Log)** — журнал транзакций, куда PostgreSQL записывает каждое изменение ДО применения к таблицам. Гарантирует durability.
 
@@ -84,12 +84,12 @@ PostgreSQL поддерживает два типа репликации. Пон
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    WAL Record                        │
+│                    WAL Record                       │
 ├─────────────────────────────────────────────────────┤
 │ LSN (Log Sequence Number): 0/1A3B4C0                │
-│ Transaction ID: 12345                                │
+│ Transaction ID: 12345                               │
 │ Timestamp: 2026-02-01 10:30:00.123                  │
-│ Operation: UPDATE                                    │
+│ Operation: UPDATE                                   │
 │ Relation: public.customers (OID: 16384)             │
 │ Old tuple key: {id: 1}                              │
 │ New tuple: {id: 1, name: 'Alice', email: '...'}     │
@@ -106,7 +106,7 @@ PostgreSQL поддерживает два типа репликации. Пон
 
 **Publication** — это набор таблиц, изменения которых будут доступны для логической репликации. Debezium использует publications для фильтрации таблиц.
 
-<PublicationsDiagram />
+<PublicationsDiagram client:load />
 
 ### Создание Publication
 
@@ -234,7 +234,7 @@ WHERE relname = 'customers';
 
 Соединим все компоненты в единый поток.
 
-<LogicalDecodingSequenceDiagram />
+<LogicalDecodingSequenceDiagram client:load />
 
 ### Ключевые точки
 

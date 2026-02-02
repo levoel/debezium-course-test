@@ -8,7 +8,7 @@ topics: ["mysql", "postgresql", "binlog", "wal", "cdc", "comparison"]
 prerequisites: ["module-8/04-mysql-connector-configuration", "module-2/01-logical-decoding-deep-dive"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { DetailedArchitectureComparisonDiagram, EventFormatComparisonDiagram, ReplicationModesDiagram, SlotVsBinlogDiagram, CdcReadinessDiagram } from '../../../components/diagrams/module3/BinlogWalComparisonDiagrams';
 
 # Binlog vs WAL: Архитектурное Сравнение
 
@@ -53,33 +53,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 ### PostgreSQL: Server-Side Position (Replication Slot)
 
-<Mermaid chart={`
-sequenceDiagram
-    participant Debezium as Debezium Connector
-    participant Postgres as PostgreSQL Server
-    participant Slot as Replication Slot
-
-    Debezium->>Postgres: CREATE_REPLICATION_SLOT 'debezium_slot'
-    Postgres->>Slot: Создать slot с restart_lsn
-    Note over Slot: Server запомнил позицию
-
-    loop Чтение изменений
-        Debezium->>Postgres: Прочитать WAL с restart_lsn
-        Postgres-->>Debezium: События с LSN
-        Debezium->>Postgres: Подтвердить confirmed_flush_lsn
-        Postgres->>Slot: Обновить confirmed_flush_lsn
-    end
-
-    Note over Slot: WAL до confirmed_flush_lsn<br/>может быть удален
-    Note over Slot: WAL после restart_lsn<br/>СОХРАНЯЕТСЯ ОБЯЗАТЕЛЬНО
-
-    Debezium--xPostgres: Connector упал
-    Note over Slot: Slot ОСТАЕТСЯ ACTIVE=FALSE<br/>WAL продолжает накапливаться
-
-    Debezium->>Postgres: Переподключение
-    Postgres-->>Debezium: Продолжить с restart_lsn
-    Note over Debezium: Ни одно событие не потеряно
-`} client:visible />
+<SlotVsBinlogDiagram client:visible />
 
 **Преимущества server-side tracking:**
 - Сервер гарантирует сохранение WAL до подтверждения клиента
@@ -93,40 +67,7 @@ sequenceDiagram
 
 ### MySQL: Client-Side Position (Kafka Connect Offsets)
 
-<Mermaid chart={`
-sequenceDiagram
-    participant Debezium as Debezium Connector
-    participant Kafka as Kafka Connect Offsets
-    participant MySQL as MySQL Server
-
-    Debezium->>MySQL: Подключиться к binlog
-    Note over MySQL: Сервер НЕ создает state
-
-    loop Чтение изменений
-        MySQL-->>Debezium: События с GTID
-        Debezium->>Debezium: Обработать события
-        Debezium->>Kafka: Сохранить offset (GTID position)
-        Note over Kafka: Клиент сам хранит позицию
-    end
-
-    MySQL->>MySQL: binlog_expire_logs_seconds (7 дней)
-    Note over MySQL: Сервер чистит binlog<br/>НЕЗАВИСИМО от Debezium
-
-    Debezium--xKafka: Connector упал
-
-    rect rgb(100, 30, 30)
-        Note over MySQL: Если Debezium не стартует<br/>7+ дней, binlog удаляется
-        MySQL->>MySQL: Purge old binlog files
-        Note over MySQL: gtid_purged обновляется
-    end
-
-    Debezium->>Kafka: Прочитать сохраненный offset
-    Kafka-->>Debezium: Последний GTID: server_uuid:150
-    Debezium->>MySQL: Запросить GTID 150+
-    MySQL-->>Debezium: ERROR: gtid_purged > 150
-
-    Note over Debezium: Невозможно восстановить<br/>Требуется полный snapshot
-`} client:visible />
+<EventFormatComparisonDiagram client:visible />
 
 **Преимущества client-side tracking:**
 - Нет server-side state — чище для сервера
@@ -270,25 +211,7 @@ WRITE_ROWS_EVENT: table_id=108
 - Восстанавливает mapping: `table_id → schema` для каждого GTID
 - Корректно декодирует старые binlog события при recovery
 
-<Mermaid chart={`
-flowchart TB
-    subgraph POSTGRESQL["PostgreSQL CDC"]
-        WAL[WAL Events] -->|"Каждое событие<br/>содержит схему"| PG_DECODE[pgoutput decoder]
-        PG_DECODE --> PG_KAFKA[Kafka Topic]
-        Note1["Самодостаточные события<br/>Нет внешних зависимостей"]
-    end
-
-    subgraph MYSQL["MySQL CDC"]
-        BINLOG[Binlog Events] -->|"TABLE_MAP_EVENT<br/>(table_id only)"| MYSQL_DECODE[Debezium decoder]
-        MYSQL_DECODE -->|"Запросить схему<br/>для table_id"| SCHEMA_HISTORY[Schema History Topic]
-        SCHEMA_HISTORY -->|"DDL для GTID"| MYSQL_DECODE
-        MYSQL_DECODE --> MYSQL_KAFKA[Kafka Topic]
-        Note2["События зависят от<br/>schema history topic"]
-    end
-
-    style SCHEMA_HISTORY fill:#f59e0b,stroke:#d97706
-    style Note2 fill:#7f1d1d,stroke:#ef4444
-`} client:visible />
+<DetailedArchitectureComparisonDiagram client:visible />
 
 **Критическое требование для MySQL:**
 
@@ -457,34 +380,7 @@ SHOW BINARY LOGS;
 
 ### PostgreSQL Failover (With Replication Slots)
 
-<Mermaid chart={`
-sequenceDiagram
-    participant Debezium as Debezium
-    participant Primary as Primary PG
-    participant Replica as Replica PG
-    participant Slot as Replication Slot
-
-    Debezium->>Primary: Читать WAL через slot
-    Primary-->>Debezium: События с LSN
-
-    rect rgb(100, 30, 30)
-        Note over Primary: Primary упал
-        Primary--xDebezium: Connection lost
-    end
-
-    Note over Replica: Replica promoted to primary
-
-    alt Slot был настроен для репликации
-        Primary->>Replica: Slot реплицирован на replica
-        Debezium->>Replica: Переподключение к новому primary
-        Replica-->>Debezium: Продолжить с confirmed_flush_lsn
-        Note over Debezium: Нет потери данных
-    else Slot НЕ реплицировался
-        Debezium->>Replica: Попытка подключиться
-        Replica-->>Debezium: ERROR: slot not found
-        Note over Debezium: Требуется пересоздать slot<br/>Возможна потеря данных
-    end
-`} client:visible />
+<ReplicationModesDiagram client:visible />
 
 **PostgreSQL failover сложности:**
 - Replication slots по умолчанию НЕ реплицируются на standby
@@ -493,30 +389,7 @@ sequenceDiagram
 
 ### MySQL Failover (With GTID Mode)
 
-<Mermaid chart={`
-sequenceDiagram
-    participant Debezium as Debezium
-    participant Primary as MySQL Primary
-    participant Replica as MySQL Replica
-
-    Debezium->>Primary: Читать binlog (GTID mode)
-    Primary-->>Debezium: События с GTID uuid:1-150
-
-    rect rgb(100, 30, 30)
-        Note over Primary: Primary упал
-        Primary--xDebezium: Connection lost
-    end
-
-    Note over Replica: Replica promoted to primary
-
-    Debezium->>Debezium: Прочитать offset: uuid:150
-    Debezium->>Replica: Запросить события с GTID uuid:151+
-
-    Note over Replica: GTID глобально уникален<br/>Replica знает uuid:151+
-
-    Replica-->>Debezium: События начиная с uuid:151
-    Note over Debezium: ПРОЗРАЧНОЕ failover<br/>Нет потери данных
-`} client:visible />
+<CdcReadinessDiagram client:visible />
 
 **MySQL failover преимущества (GTID mode):**
 - GTID глобально уникален — одинаковый на primary и replicas

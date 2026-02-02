@@ -337,12 +337,12 @@ export function SmtExecutionModelDiagram() {
       color="blue"
       description="SMT выполняется синхронно в том же потоке"
     >
-      {/* Kafka Connect Worker container */}
-      <DiagramContainer
-        title="Kafka Connect Worker"
-        color="gray"
-        className="inline-block"
-      >
+      <div className="flex flex-col items-center gap-4">
+        {/* Kafka Connect Worker container */}
+        <DiagramContainer
+          title="Kafka Connect Worker"
+          color="gray"
+        >
         <div className="flex flex-col items-center gap-3">
           <DiagramTooltip
             content={
@@ -447,26 +447,27 @@ export function SmtExecutionModelDiagram() {
             </FlowNode>
           </DiagramTooltip>
         </div>
-      </DiagramContainer>
+        </DiagramContainer>
 
-      <div className="mt-4 flex flex-col items-center gap-2">
-        <Arrow direction="down" />
+        <div className="flex flex-col items-center gap-2">
+          <Arrow direction="down" />
 
-        <DiagramTooltip
-          content={
-            <div>
-              <strong>Kafka Broker</strong>
-              <p className="mt-1">
-                Принимает ProducerRecord и сохраняет в топик.
-                События уже обработаны всеми SMT.
-              </p>
-            </div>
-          }
-        >
-          <FlowNode variant="app" tabIndex={0}>
-            Kafka Broker
-          </FlowNode>
-        </DiagramTooltip>
+          <DiagramTooltip
+            content={
+              <div>
+                <strong>Kafka Broker</strong>
+                <p className="mt-1">
+                  Принимает ProducerRecord и сохраняет в топик.
+                  События уже обработаны всеми SMT.
+                </p>
+              </div>
+            }
+          >
+            <FlowNode variant="app" tabIndex={0}>
+              Kafka Broker
+            </FlowNode>
+          </DiagramTooltip>
+        </div>
       </div>
     </DiagramContainer>
   );

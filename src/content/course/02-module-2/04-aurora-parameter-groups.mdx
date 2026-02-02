@@ -29,7 +29,7 @@ Amazon Aurora PostgreSQL — это облачная версия PostgreSQL, о
 
 В Aurora существует два типа parameter groups. Для логической репликации **критически важно** использовать правильный тип:
 
-<AuroraParameterGroupDiagram />
+<AuroraParameterGroupDiagram client:load />
 
 > **Warning:** `rds.logical_replication` доступен **только** в DB Cluster Parameter Group. Если вы создадите DB Instance Parameter Group и попытаетесь добавить этот параметр — вы его не найдете!
 
@@ -37,7 +37,7 @@ Amazon Aurora PostgreSQL — это облачная версия PostgreSQL, о
 
 Настройка состоит из пяти этапов. Каждый этап обязателен:
 
-<AuroraSetupProcessDiagram />
+<AuroraSetupProcessDiagram client:load />
 
 ### Необходимые параметры
 

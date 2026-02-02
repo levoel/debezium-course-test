@@ -20,7 +20,7 @@ import { WalRetentionDiagram, SlotLifecycleDiagram } from '../../../components/d
 
 **Replication Slot** — это объект PostgreSQL, который отслеживает позицию потребителя в WAL. PostgreSQL гарантирует, что все WAL сегменты после `restart_lsn` слота будут сохранены.
 
-<WalRetentionDiagram />
+<WalRetentionDiagram client:load />
 
 ### Ключевые атрибуты слота
 
@@ -36,7 +36,7 @@ import { WalRetentionDiagram, SlotLifecycleDiagram } from '../../../components/d
 
 ## Жизненный цикл слота
 
-<SlotLifecycleDiagram />
+<SlotLifecycleDiagram client:load />
 
 ### Создание слота
 

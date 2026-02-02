@@ -8,7 +8,7 @@ topics: ["mysql", "binlog", "retention", "heartbeat", "monitoring"]
 prerequisites: ["module-8/02-gtid-mode-fundamentals"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { BinlogRetentionFlowDiagram, HeartbeatMonitoringDiagram, RetentionConfigDiagram } from '../../../components/diagrams/module3/BinlogRetentionDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Binlog Retention и Heartbeat: Защита от потери позиции
@@ -21,20 +21,7 @@ import Callout from '../../../components/Callout.tsx';
 
 ### Сценарий катастрофы
 
-<Mermaid>
-```mermaid
-timeline
-    title Binlog Retention Problem
-    Day 1 : Debezium читает mysql-bin.000010
-          : Offset сохранен: mysql-bin.000010:154
-    Day 3 : Debezium offline (обновление, проблема Kafka, etc.)
-    Day 8 : MySQL purge старых binlog (retention 7 дней)
-          : mysql-bin.000001 - 000012 удалены
-    Day 9 : Debezium возвращается online
-          : Пытается читать mysql-bin.000010
-          : ERROR: File not found!
-```
-</Mermaid>
+<BinlogRetentionFlowDiagram client:visible />
 
 **Ошибка**:
 ```
@@ -229,29 +216,7 @@ PURGE BINARY LOGS BEFORE DATE_SUB(NOW(), INTERVAL 3 DAY);
 
 ### Почему это происходит?
 
-<Mermaid>
-```mermaid
-sequenceDiagram
-    participant T as user_settings Table
-    participant B as Binlog
-    participant D as Debezium
-
-    Note over T: Day 1: UPDATE user_settings
-    T->>B: Event записан в mysql-bin.000005
-    B->>D: Debezium читает событие
-    D->>D: Offset сохранен: mysql-bin.000005:200
-
-    Note over T,D: Days 2-29: NO CHANGES в user_settings
-    Note over B: Debezium offset всё ещё mysql-bin.000005:200
-    Note over B: Новые события от других таблиц идут в 000006, 000007...
-    Note over B: Debezium читает новые файлы от других таблиц
-
-    Note over B: Day 30: mysql-bin.000005 expires
-    B->>B: PURGE mysql-bin.000005
-    Note over D: Debezium пытается вернуться к 000005 для user_settings
-    D--xB: ERROR: File not found!
-```
-</Mermaid>
+<RetentionConfigDiagram client:visible />
 
 Debezium отслеживает **глобальный offset** по всем таблицам, но если какая-то таблица idle долго, её offset может указывать на старые файлы.
 
@@ -269,25 +234,7 @@ Heartbeat - это механизм, который **искусственно �
 4. Offset всегда указывает на **свежий binlog файл**
 5. Старые файлы могут быть safely purged, потому что Debezium их уже не использует
 
-<Mermaid>
-```mermaid
-sequenceDiagram
-    participant D as Debezium
-    participant H as Heartbeat Table
-    participant B as Binlog
-    participant K as Kafka (offset)
-
-    loop Every 10 seconds
-        D->>H: INSERT INTO debezium_heartbeat (id, ts) VALUES (1, NOW()) ON DUPLICATE KEY UPDATE ts = NOW()
-        H->>B: Heartbeat event записан в текущий binlog
-        B->>D: Debezium читает heartbeat event
-        D->>K: Обновляет offset на текущий binlog файл
-    end
-
-    Note over B: Старые binlog файлы can be purged safely
-    Note over D: Offset всегда актуален!
-```
-</Mermaid>
+<HeartbeatMonitoringDiagram client:visible />
 
 ### Создание heartbeat таблицы
 

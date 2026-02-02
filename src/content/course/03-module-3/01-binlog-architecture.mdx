@@ -8,7 +8,7 @@ topics: ["mysql", "binlog", "replication", "cdc"]
 prerequisites: ["module-2/01-logical-decoding-deep-dive"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { BinlogVsWalDiagram, RowFormatDiagram, BinlogEventSequenceDiagram, BinlogRotationDiagram } from '../../../components/diagrams/module3/BinlogArchitectureDiagrams';
 
 # MySQL Binary Log: Архитектура и форматы
 
@@ -20,26 +20,7 @@ import { Mermaid } from '../../../components/Mermaid.tsx';
 
 PostgreSQL и MySQL решают задачу репликации по-разному. Понимание этих различий критически важно для настройки CDC.
 
-<Mermaid chart={`
-flowchart TB
-    subgraph POSTGRESQL["PostgreSQL: WAL → Logical Decoding"]
-        direction TB
-        WAL[(WAL<br/>Физический лог)] -->|"wal_level=logical"| LD[Logical Decoding]
-        LD -->|"pgoutput plugin"| CDC1[CDC Events]
-        Note1["Изначально физический формат<br/>Требует декодирования<br/>Оптимизирован для durability"]
-    end
-
-    subgraph MYSQL["MySQL: Binary Log"]
-        direction TB
-        BINLOG[(Binary Log<br/>Логический лог)] -->|"binlog_format=ROW"| CDC2[CDC Events]
-        Note2["Изначально логический формат<br/>Готов для репликации<br/>Оптимизирован для replication"]
-    end
-
-    style POSTGRESQL fill:#1e3a5f,stroke:#3b82f6
-    style MYSQL fill:#14532d,stroke:#22c55e
-    style LD fill:#f59e0b
-    style BINLOG fill:#10b981
-`} client:visible />
+<BinlogVsWalDiagram client:visible />
 
 | Характеристика | PostgreSQL WAL | MySQL Binary Log |
 |----------------|----------------|------------------|
@@ -79,22 +60,7 @@ INSERT INTO customers (id, name, email) VALUES (1, 'Alice', 'alice@example.com')
 - Больший размер binlog
 - Массовые UPDATE могут генерировать огромные события
 
-<Mermaid chart={`
-flowchart LR
-    subgraph APP["Приложение"]
-        SQL["UPDATE products<br/>SET price = price * 1.1<br/>WHERE category = 'electronics'"]
-    end
-
-    subgraph ROW["ROW формат"]
-        E1["UPDATE_ROWS_EVENT<br/>Row 1: before={id:1, price:100}<br/>after={id:1, price:110}"]
-        E2["Row 2: before={id:2, price:200}<br/>after={id:2, price:220}"]
-        E3["Row N: ..."]
-    end
-
-    APP --> ROW
-
-    style ROW fill:#10b981,stroke:#22c55e
-`} client:visible />
+<RowFormatDiagram client:visible />
 
 ### STATEMENT формат (Legacy, NOT for CDC)
 
@@ -168,39 +134,7 @@ INSERT INTO orders (id, created_at) VALUES (1, NOW());
 
 ### Основные типы событий
 
-<Mermaid chart={`
-sequenceDiagram
-    participant App as Приложение
-    participant MySQL as MySQL Server
-    participant Binlog as Binary Log
-    participant Debezium as Debezium
-
-    App->>MySQL: BEGIN TRANSACTION
-
-    MySQL->>Binlog: GTID_EVENT<br/>(transaction ID)
-    Note over Binlog: Уникальный идентификатор<br/>транзакции для GTID mode
-
-    App->>MySQL: CREATE TABLE products (...)
-    MySQL->>Binlog: QUERY_EVENT<br/>(DDL statement)
-
-    App->>MySQL: INSERT INTO customers VALUES (1, 'Alice')
-    MySQL->>Binlog: TABLE_MAP_EVENT<br/>(schema metadata)
-    MySQL->>Binlog: WRITE_ROWS_EVENT<br/>(row data)
-
-    App->>MySQL: UPDATE customers SET name='Bob' WHERE id=1
-    MySQL->>Binlog: TABLE_MAP_EVENT
-    MySQL->>Binlog: UPDATE_ROWS_EVENT<br/>(before + after)
-
-    App->>MySQL: DELETE FROM customers WHERE id=1
-    MySQL->>Binlog: TABLE_MAP_EVENT
-    MySQL->>Binlog: DELETE_ROWS_EVENT<br/>(deleted row)
-
-    App->>MySQL: COMMIT
-    MySQL->>Binlog: XID_EVENT<br/>(transaction commit)
-
-    Debezium->>Binlog: Read events
-    Binlog-->>Debezium: Stream of events
-`} client:visible />
+<BinlogEventSequenceDiagram client:visible />
 
 ### Описание ключевых событий
 
@@ -349,23 +283,7 @@ Position = (binlog_file, binlog_offset)
 - При перезапуске Debezium продолжает с сохранённой позиции
 - Реплики используют позицию для синхронизации с мастером
 
-<Mermaid chart={`
-flowchart TB
-    subgraph BINLOG["Binlog файлы"]
-        B1["mysql-bin.000001<br/>0-1073741824 bytes<br/>Status: CLOSED"]
-        B2["mysql-bin.000002<br/>0-1073741824 bytes<br/>Status: CLOSED"]
-        B3["mysql-bin.000003<br/>0-524288 bytes<br/>Status: ACTIVE"]
-    end
-
-    subgraph DEBEZIUM["Debezium Connector"]
-        POS["Current Position:<br/>mysql-bin.000003<br/>Offset: 154"]
-    end
-
-    B3 -.->|"Reading"| POS
-
-    style B3 fill:#10b981,stroke:#22c55e
-    style POS fill:#8b5cf6,stroke:#a855f7
-`} client:visible />
+<BinlogRotationDiagram client:visible />
 
 ### Автоматическая очистка старых binlog
 

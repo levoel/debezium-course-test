@@ -8,7 +8,7 @@ topics: ["aurora-mysql", "aws", "parameter-groups", "binlog", "cdc"]
 prerequisites: ["module-8/06-schema-history-recovery"]
 ---
 
-import { Mermaid } from '../../../components/Mermaid.tsx';
+import { ParameterHierarchyDiagram, AuroraSetupProcessDiagram } from '../../../components/diagrams/module3/AuroraParameterDiagrams';
 import Callout from '../../../components/Callout.tsx';
 
 # Aurora MySQL: Конфигурация Parameter Groups для CDC
@@ -183,37 +183,7 @@ aws rds create-db-parameter-group \
 - **Всё, что касается binlog, replication, GTID** → DB Cluster Parameter Group
 - **Всё, что касается performance, connections** → DB Parameter Group
 
-<Mermaid chart={`
-flowchart TB
-    subgraph CLUSTER["DB Cluster Parameter Group"]
-        direction TB
-        BINLOG["binlog_format=ROW<br/>binlog_row_image=FULL"]
-        GTID["gtid_mode=ON<br/>enforce_gtid_consistency=ON"]
-        ENHANCED["aurora_enhanced_binlog=0 or 1"]
-    end
-
-    subgraph WRITER["Writer Instance"]
-        direction TB
-        WPG["DB Parameter Group<br/>(instance-level)"]
-        WDB["mysqld process"]
-        WPG --> WDB
-    end
-
-    subgraph READER1["Reader Instance 1"]
-        direction TB
-        R1PG["DB Parameter Group<br/>(instance-level)"]
-        R1DB["mysqld process"]
-        R1PG --> R1DB
-    end
-
-    CLUSTER -->|"Inherits binlog settings"| WRITER
-    CLUSTER -->|"Inherits binlog settings"| READER1
-
-    style CLUSTER fill:#f59e0b,stroke:#fb923c
-    style BINLOG fill:#14532d,stroke:#22c55e
-    style GTID fill:#14532d,stroke:#22c55e
-    style ENHANCED fill:#14532d,stroke:#22c55e
-`} client:visible />
+<ParameterHierarchyDiagram client:visible />
 
 ## Creating Custom Parameter Group for CDC
 
@@ -375,21 +345,7 @@ aws rds describe-db-clusters \
 
 **Status `pending-reboot`** означает, что parameter group привязан, но параметры ещё не активны.
 
-<Mermaid chart={`
-flowchart LR
-    CREATE["Create Custom<br/>Parameter Group"] --> MODIFY["Modify Parameters<br/>(binlog_format, GTID)"]
-    MODIFY --> ASSOCIATE["Associate with<br/>Aurora Cluster"]
-    ASSOCIATE --> STATUS{"Parameter<br/>Group Status"}
-    STATUS -->|"pending-reboot"| REBOOT["Reboot Instances<br/>(Writer + Readers)"]
-    STATUS -->|"in-sync"| DONE["✅ Parameters Active"]
-    REBOOT --> DONE
-
-    style CREATE fill:#1e3a5f,stroke:#3b82f6
-    style MODIFY fill:#1e3a5f,stroke:#3b82f6
-    style ASSOCIATE fill:#1e3a5f,stroke:#3b82f6
-    style REBOOT fill:#f59e0b,stroke:#fb923c
-    style DONE fill:#10b981,stroke:#22c55e
-`} client:visible />
+<AuroraSetupProcessDiagram client:visible />
 
 ## Reboot Requirements: Aurora 2.10+ Critical Change
 
