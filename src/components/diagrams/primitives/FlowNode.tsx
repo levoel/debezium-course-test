@@ -15,6 +15,13 @@ const variantStyles: Record<FlowNodeVariant, string> = {
   sink: 'bg-blue-500/15 border-blue-400/30 text-blue-200',
   app: 'bg-rose-500/15 border-rose-400/30 text-rose-200',
   target: 'bg-rose-500/20 border-rose-400/40 text-rose-100',
+  // GCP-specific variants (official GCP brand colors)
+  'gcp-database': 'bg-blue-500/20 border-blue-400/40 text-blue-100',
+  'gcp-messaging': 'bg-amber-500/20 border-amber-400/40 text-amber-100',
+  'gcp-compute': 'bg-emerald-500/20 border-emerald-400/40 text-emerald-100',
+  'gcp-storage': 'bg-blue-600/20 border-blue-500/40 text-blue-100',
+  'gcp-monitoring': 'bg-rose-500/20 border-rose-400/40 text-rose-100',
+  'gcp-security': 'bg-purple-500/20 border-purple-400/40 text-purple-100',
 };
 
 const sizeStyles: Record<'sm' | 'md' | 'lg', string> = {

@@ -3,7 +3,16 @@
  * Used by FlowNode, Arrow, and future components
  */
 
-export type FlowNodeVariant = 'database' | 'connector' | 'cluster' | 'sink' | 'app' | 'target';
+export type FlowNodeVariant =
+  | 'database' | 'connector' | 'cluster' | 'sink' | 'app' | 'target'
+  // GCP-specific variants
+  | 'gcp-database'   // Cloud SQL - blue #4285f4
+  | 'gcp-messaging'  // Pub/Sub - amber #fbbc04
+  | 'gcp-compute'    // GKE/Cloud Run/Dataflow - emerald #34a853
+  | 'gcp-storage'    // BigQuery/Cloud Storage - blue #4285f4
+  | 'gcp-monitoring' // Cloud Monitoring - rose #ea4335
+  | 'gcp-security'   // IAM/Workload Identity - purple #a142f4
+;
 export type ArrowDirection = 'right' | 'down' | 'left' | 'up';
 
 export interface FlowNodeProps extends React.HTMLAttributes<HTMLDivElement> {
