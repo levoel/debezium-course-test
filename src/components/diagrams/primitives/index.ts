@@ -5,3 +5,4 @@
 
 export * from './types';
 export { FlowNode } from './FlowNode';
+export { Arrow } from './Arrow';
