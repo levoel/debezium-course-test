@@ -4,4 +4,4 @@
  */
 
 export * from './types';
-// Components will be added in Task 2 and 3
+export { FlowNode } from './FlowNode';
