@@ -1,0 +1,100 @@
+---
+title: "Итоги модуля"
+description: "Ключевые концепции модуля 6: Data Engineering"
+order: 8
+difficulty: "advanced"
+estimatedTime: 3
+topics: ["Итоги", "Python", "PyFlink", "PySpark"]
+---
+
+# Итоги модуля 6: Data Engineering
+
+<div className="glass-card p-6 rounded-xl mb-8">
+
+## Что вы изучили
+
+В этом модуле вы освоили обработку CDC событий в data engineering pipelines: Python, PyFlink и PySpark.
+
+</div>
+
+---
+
+## Ключевые концепции
+
+<div className="grid gap-4 md:grid-cols-2 mb-8">
+
+<div className="glass-card p-4 rounded-lg">
+
+### Python Consumer Patterns
+- **confluent-kafka**: Production-ready клиент
+- **Batch processing**: Микробатчи для эффективности
+- **Error handling**: Dead letter queues
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### PyFlink CDC
+- **Table API**: SQL-like обработка
+- **Debezium format**: Встроенная поддержка
+- **Streaming mode**: Real-time processing
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### PySpark Structured Streaming
+- **readStream**: Потоковое чтение из Kafka
+- **Watermarks**: Обработка опозданий
+- **Checkpointing**: Exactly-once semantics
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Feature Engineering
+- **Real-time features**: CDC → Feature Store
+- **Aggregations**: Window functions
+- **Joins**: Stream-stream и stream-static
+
+</div>
+
+</div>
+
+---
+
+## ETL vs ELT
+
+| Подход | Трансформации | Скорость | Гибкость |
+|--------|---------------|----------|----------|
+| **ETL** | До загрузки | Медленнее | Жёсткая схема |
+| **ELT** | После загрузки | Быстрее | Гибкая схема |
+| **Streaming ETL** | В потоке | Real-time | Высокая |
+
+---
+
+## Навыки
+
+После прохождения модуля вы умеете:
+
+1. **Обработать** CDC события на Python
+2. **Создать** PyFlink streaming job
+3. **Настроить** PySpark Structured Streaming
+4. **Реализовать** real-time feature engineering
+5. **Выбрать** между ETL, ELT и streaming
+
+---
+
+## Что дальше?
+
+<div className="glass-card p-6 rounded-xl border-l-4 border-blue-500">
+
+**Модуль 7: Cloud-Native GCP**
+
+Debezium в облачной инфраструктуре:
+- Debezium Server (без Kafka)
+- Google Pub/Sub интеграция
+- Cloud Run deployment
+- Workload Identity
+
+</div>

@@ -1,0 +1,101 @@
+---
+title: "Итоги модуля"
+description: "Ключевые концепции модуля 7: Cloud-Native GCP"
+order: 7
+difficulty: "advanced"
+estimatedTime: 3
+topics: ["Итоги", "GCP", "Pub/Sub", "Debezium Server"]
+---
+
+# Итоги модуля 7: Cloud-Native GCP
+
+<div className="glass-card p-6 rounded-xl mb-8">
+
+## Что вы изучили
+
+В этом модуле вы освоили cloud-native CDC: Debezium Server, Pub/Sub интеграцию и GCP deployment.
+
+</div>
+
+---
+
+## Ключевые концепции
+
+<div className="grid gap-4 md:grid-cols-2 mb-8">
+
+<div className="glass-card p-4 rounded-lg">
+
+### Debezium Server
+- **Kafka-less**: Прямая отправка в Pub/Sub
+- **application.properties**: Конфигурация
+- **Sinks**: Pub/Sub, Kinesis, HTTP
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Google Pub/Sub
+- **Topics**: Аналог Kafka topics
+- **Subscriptions**: Push и Pull модели
+- **Ordering keys**: Гарантия порядка
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Offset Storage
+- **File-based**: Локальный файл
+- **Cloud Storage**: GCS bucket
+- **Redis**: Для HA deployments
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Cloud Run
+- **Serverless containers**: Автоскейлинг
+- **Workload Identity**: Безопасная аутентификация
+- **VPC connector**: Private network access
+
+</div>
+
+</div>
+
+---
+
+## Kafka vs Debezium Server
+
+| Аспект | Kafka Connect | Debezium Server |
+|--------|---------------|-----------------|
+| Зависимости | Kafka обязателен | Kafka не нужен |
+| Масштабирование | Kafka partitions | Вертикальное |
+| Offset storage | Kafka topics | Файл/Redis/GCS |
+| Sink flexibility | Только Kafka | Pub/Sub, Kinesis, HTTP |
+
+---
+
+## Навыки
+
+После прохождения модуля вы умеете:
+
+1. **Развернуть** Debezium Server
+2. **Настроить** Pub/Sub интеграцию
+3. **Выбрать** offset storage strategy
+4. **Развернуть** на Cloud Run
+5. **Настроить** Workload Identity
+
+---
+
+## Что дальше?
+
+<div className="glass-card p-6 rounded-xl border-l-4 border-blue-500">
+
+**Модуль 8: Capstone Project**
+
+Финальный проект курса:
+- Multi-database CDC pipeline
+- PostgreSQL + MySQL интеграция
+- Production architecture
+- Self-assessment checklist
+
+</div>

@@ -1,0 +1,107 @@
+---
+title: "Итоги модуля"
+description: "Ключевые концепции модуля 5: SMT и Паттерны"
+order: 9
+difficulty: "advanced"
+estimatedTime: 3
+topics: ["Итоги", "SMT", "Outbox", "Schema Registry"]
+---
+
+# Итоги модуля 5: SMT и Паттерны
+
+<div className="glass-card p-6 rounded-xl mb-8">
+
+## Что вы изучили
+
+В этом модуле вы освоили трансформации сообщений, Outbox pattern и работу со Schema Registry.
+
+</div>
+
+---
+
+## Ключевые концепции
+
+<div className="grid gap-4 md:grid-cols-2 mb-8">
+
+<div className="glass-card p-4 rounded-lg">
+
+### Single Message Transforms
+- **ExtractNewRecordState**: Упрощение envelope
+- **Filter**: Фильтрация по условию
+- **Route**: Динамический routing
+- **Groovy SMT**: Кастомная логика
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Outbox Pattern
+- **Dual-write problem**: Несогласованность БД и Kafka
+- **Transactional outbox**: Единая транзакция
+- **At-least-once**: Гарантия доставки
+- **Idempotency**: Обработка дубликатов
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Schema Registry
+- **Avro schemas**: Компактная сериализация
+- **Compatibility**: BACKWARD, FORWARD, FULL
+- **Schema evolution**: Безопасные изменения
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Content-Based Routing
+- **Header routing**: По заголовкам
+- **Field routing**: По значению поля
+- **Regex routing**: По паттерну
+
+</div>
+
+</div>
+
+---
+
+## Outbox Table Design
+
+```sql
+CREATE TABLE outbox (
+    id UUID PRIMARY KEY,
+    aggregate_type VARCHAR(255),
+    aggregate_id VARCHAR(255),
+    type VARCHAR(255),
+    payload JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+---
+
+## Навыки
+
+После прохождения модуля вы умеете:
+
+1. **Применить** SMT для трансформации событий
+2. **Реализовать** Outbox pattern
+3. **Настроить** Schema Registry
+4. **Управлять** schema evolution
+5. **Реализовать** content-based routing
+
+---
+
+## Что дальше?
+
+<div className="glass-card p-6 rounded-xl border-l-4 border-blue-500">
+
+**Модуль 6: Data Engineering**
+
+Обработка CDC событий в data pipelines:
+- Python consumer patterns
+- PyFlink CDC processing
+- PySpark Structured Streaming
+- Feature engineering
+
+</div>

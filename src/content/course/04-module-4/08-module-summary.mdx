@@ -1,0 +1,102 @@
+---
+title: "Итоги модуля"
+description: "Ключевые концепции модуля 4: Production Operations"
+order: 8
+difficulty: "intermediate"
+estimatedTime: 3
+topics: ["Итоги", "Monitoring", "JMX", "Operations"]
+---
+
+# Итоги модуля 4: Production Operations
+
+<div className="glass-card p-6 rounded-xl mb-8">
+
+## Что вы изучили
+
+В этом модуле вы освоили production operations: мониторинг, alerting и troubleshooting Debezium в реальных условиях.
+
+</div>
+
+---
+
+## Ключевые концепции
+
+<div className="grid gap-4 md:grid-cols-2 mb-8">
+
+<div className="glass-card p-4 rounded-lg">
+
+### JMX Metrics
+- **MilliSecondsBehindSource**: Отставание от БД
+- **MilliSecondsSinceLastEvent**: Время без событий
+- **QueueRemainingCapacity**: Буфер событий
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Alert Thresholds
+- **Warning**: lag > 30 секунд
+- **Critical**: lag > 5 минут
+- **Queue**: capacity < 20%
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Prometheus/Grafana
+- **JMX Exporter**: Экспорт метрик
+- **Dashboards**: Визуализация lag и throughput
+- **Alerting rules**: Автоматические уведомления
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Disaster Recovery
+- **Snapshot re-trigger**: signal.data.collection
+- **Position reset**: Откат к известной позиции
+- **Schema recovery**: Восстановление истории
+
+</div>
+
+</div>
+
+---
+
+## Diagnostic Decision Tree
+
+```
+High lag?
+├── Queue full? → Increase max.queue.size
+├── Slow consumers? → Check downstream
+├── Source overload? → Snapshot in progress?
+└── Network issues? → Check connectivity
+```
+
+---
+
+## Навыки
+
+После прохождения модуля вы умеете:
+
+1. **Интерпретировать** JMX метрики Debezium
+2. **Настроить** Prometheus scraping
+3. **Создать** Grafana dashboards
+4. **Настроить** alerting rules
+5. **Выполнить** disaster recovery
+
+---
+
+## Что дальше?
+
+<div className="glass-card p-6 rounded-xl border-l-4 border-blue-500">
+
+**Модуль 5: SMT и Паттерны**
+
+Трансформации и продвинутые паттерны:
+- Single Message Transforms (SMT)
+- Outbox pattern для transactional messaging
+- Content-based routing
+- Schema Registry и Avro
+
+</div>

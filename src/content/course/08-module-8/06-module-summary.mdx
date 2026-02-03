@@ -1,0 +1,104 @@
+---
+title: "Итоги модуля"
+description: "Ключевые концепции модуля 8: Capstone Project"
+order: 6
+difficulty: "advanced"
+estimatedTime: 3
+topics: ["Итоги", "Capstone", "Production", "Multi-database"]
+---
+
+# Итоги модуля 8: Capstone Project
+
+<div className="glass-card p-6 rounded-xl mb-8">
+
+## Что вы изучили
+
+В финальном модуле вы объединили все знания в production-ready multi-database CDC pipeline.
+
+</div>
+
+---
+
+## Ключевые концепции
+
+<div className="grid gap-4 md:grid-cols-2 mb-8">
+
+<div className="glass-card p-4 rounded-lg">
+
+### Multi-Database Architecture
+- **PostgreSQL + MySQL**: Единый pipeline
+- **Unified vs Separate topics**: Выбор паттерна
+- **Schema management**: Разные механизмы
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Production Architecture
+- **HA Kafka Connect**: Distributed mode
+- **Monitoring stack**: Prometheus + Grafana
+- **Alerting**: PagerDuty/Slack integration
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Operational Differences
+- **PostgreSQL**: Slots, LSN, WAL bloat
+- **MySQL**: GTID, binlog retention, schema history
+- **Common**: Lag monitoring, snapshot handling
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Deliverables
+- **Architecture diagram**: Компоненты и потоки
+- **Monitoring dashboard**: Ключевые метрики
+- **Runbook**: Операционные процедуры
+
+</div>
+
+</div>
+
+---
+
+## Self-Assessment Checklist
+
+<div className="glass-card p-4 rounded-lg mb-8">
+
+- [ ] Понимаю разницу между PostgreSQL и MySQL CDC
+- [ ] Могу настроить мониторинг и alerting
+- [ ] Знаю как обрабатывать failover сценарии
+- [ ] Умею применять SMT трансформации
+- [ ] Могу реализовать Outbox pattern
+- [ ] Понимаю trade-offs unified vs separate topics
+
+</div>
+
+---
+
+## Навыки
+
+После прохождения курса вы умеете:
+
+1. **Проектировать** production CDC pipelines
+2. **Развёртывать** Debezium для PostgreSQL и MySQL
+3. **Мониторить** и troubleshoot в production
+4. **Применять** продвинутые паттерны (Outbox, SMT)
+5. **Интегрировать** с data engineering стеком
+
+---
+
+## Поздравляем!
+
+<div className="glass-card p-6 rounded-xl border-l-4 border-green-500">
+
+Вы завершили курс по Debezium! Теперь вы можете самостоятельно проектировать и реализовывать production-ready CDC-пайплайны.
+
+**Ресурсы для продолжения:**
+- [Debezium Documentation](https://debezium.io/documentation/)
+- [Debezium GitHub](https://github.com/debezium/debezium)
+- [Confluent CDC Patterns](https://developer.confluent.io/patterns/)
+
+</div>

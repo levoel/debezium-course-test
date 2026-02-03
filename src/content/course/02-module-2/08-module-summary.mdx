@@ -1,0 +1,90 @@
+---
+title: "Итоги модуля"
+description: "Ключевые концепции модуля 2: PostgreSQL и Aurora"
+order: 8
+difficulty: "intermediate"
+estimatedTime: 3
+topics: ["Итоги", "PostgreSQL", "Aurora", "WAL"]
+---
+
+# Итоги модуля 2: PostgreSQL и Aurora
+
+<div className="glass-card p-6 rounded-xl mb-8">
+
+## Что вы изучили
+
+В этом модуле вы освоили глубинные механизмы PostgreSQL CDC: logical decoding, WAL, replication slots и особенности Aurora.
+
+</div>
+
+---
+
+## Ключевые концепции
+
+<div className="grid gap-4 md:grid-cols-2 mb-8">
+
+<div className="glass-card p-4 rounded-lg">
+
+### Logical Decoding
+- **WAL → Changes**: Декодирование WAL в логические изменения
+- **pgoutput plugin**: Нативный плагин PostgreSQL 10+
+- **Publications**: Контроль какие таблицы реплицировать
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Replication Slots
+- **Гарантия доставки**: WAL не удаляется пока не прочитан
+- **pg_replication_slots**: Мониторинг состояния
+- **max_slot_wal_keep_size**: Защита от WAL bloat
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### WAL Configuration
+- **wal_level = logical**: Обязательно для CDC
+- **max_replication_slots**: Минимум 1 на коннектор
+- **max_wal_senders**: Параллельные подключения
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Aurora PostgreSQL
+- **Parameter Groups**: DB Cluster vs DB Parameter Groups
+- **rds.logical_replication = 1**: Включение CDC
+- **Failover**: Слоты не реплицируются на replica
+
+</div>
+
+</div>
+
+---
+
+## Навыки
+
+После прохождения модуля вы умеете:
+
+1. **Настроить** WAL для logical replication
+2. **Мониторить** replication slots и lag
+3. **Предотвратить** WAL bloat с max_slot_wal_keep_size
+4. **Настроить** Aurora PostgreSQL для CDC
+5. **Обработать** failover сценарии
+
+---
+
+## Что дальше?
+
+<div className="glass-card p-6 rounded-xl border-l-4 border-blue-500">
+
+**Модуль 3: MySQL/Aurora MySQL**
+
+Binlog-based CDC для MySQL:
+- Binary log architecture (ROW format)
+- GTID mode и failover resilience
+- Aurora MySQL Enhanced Binlog
+- Schema history topic
+
+</div>

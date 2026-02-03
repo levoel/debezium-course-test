@@ -1,0 +1,90 @@
+---
+title: "Итоги модуля"
+description: "Ключевые концепции модуля 1: Введение в CDC"
+order: 7
+difficulty: "beginner"
+estimatedTime: 3
+topics: ["Итоги", "CDC", "Debezium"]
+---
+
+# Итоги модуля 1: Введение в CDC
+
+<div className="glass-card p-6 rounded-xl mb-8">
+
+## Что вы изучили
+
+В этом модуле вы познакомились с основами Change Data Capture и развернули первый Debezium коннектор.
+
+</div>
+
+---
+
+## Ключевые концепции
+
+<div className="grid gap-4 md:grid-cols-2 mb-8">
+
+<div className="glass-card p-4 rounded-lg">
+
+### CDC Fundamentals
+- **Polling vs Log-based**: Log-based CDC не нагружает базу запросами
+- **Гарантии доставки**: Каждое изменение захватывается ровно один раз
+- **Минимальная задержка**: Изменения доступны за секунды
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Debezium Architecture
+- **Kafka Connect**: Платформа для коннекторов
+- **Source Connectors**: Захват изменений из баз данных
+- **Kafka Topics**: Хранение и доставка событий
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Lab Environment
+- **Docker Compose**: Готовое окружение для практики
+- **Сервисы**: PostgreSQL, Kafka KRaft, Connect, JupyterLab
+- **Порты**: 5432, 9092, 8083, 8888
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Event Structure
+- **Envelope**: schema + payload + source
+- **Операции**: `r` (snapshot), `c` (create), `u` (update), `d` (delete)
+- **Source metadata**: lsn, txId, timestamp
+
+</div>
+
+</div>
+
+---
+
+## Навыки
+
+После прохождения модуля вы умеете:
+
+1. **Развернуть** Debezium коннектор через REST API
+2. **Мониторить** статус коннектора и replication slot
+3. **Консьюмить** CDC события на Python
+4. **Парсить** Debezium envelope формат
+5. **Различать** snapshot и streaming события
+
+---
+
+## Что дальше?
+
+<div className="glass-card p-6 rounded-xl border-l-4 border-blue-500">
+
+**Модуль 2: PostgreSQL и Aurora**
+
+Глубокое погружение в PostgreSQL logical replication:
+- WAL configuration (wal_level, max_replication_slots)
+- Replication slots lifecycle и мониторинг
+- Aurora PostgreSQL специфика
+- Snapshot strategies
+
+</div>

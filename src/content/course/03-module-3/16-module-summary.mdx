@@ -1,0 +1,101 @@
+---
+title: "Итоги модуля"
+description: "Ключевые концепции модуля 3: MySQL/Aurora MySQL"
+order: 16
+difficulty: "intermediate"
+estimatedTime: 3
+topics: ["Итоги", "MySQL", "Aurora", "Binlog"]
+---
+
+# Итоги модуля 3: MySQL/Aurora MySQL
+
+<div className="glass-card p-6 rounded-xl mb-8">
+
+## Что вы изучили
+
+Самый большой модуль курса! Вы освоили MySQL binlog CDC, GTID mode, Aurora MySQL специфику и production operations.
+
+</div>
+
+---
+
+## Ключевые концепции
+
+<div className="grid gap-4 md:grid-cols-2 mb-8">
+
+<div className="glass-card p-4 rounded-lg">
+
+### Binlog Architecture
+- **ROW format**: Обязателен для CDC (не STATEMENT/MIXED)
+- **binlog_row_image = FULL**: Полные before/after
+- **Rotation**: Автоматическая ротация по размеру/времени
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### GTID Mode
+- **Global Transaction ID**: source_id:transaction_id
+- **Failover resilience**: Автоматическое позиционирование
+- **enforce-gtid-consistency**: Ограничения на DDL
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Schema History Topic
+- **Критическая важность**: Infinite retention обязателен
+- **DDL события**: Все schema changes записываются
+- **Recovery**: Восстановление при потере позиции
+
+</div>
+
+<div className="glass-card p-4 rounded-lg">
+
+### Aurora MySQL
+- **Enhanced Binlog**: Снижение storage overhead
+- **Parameter Groups**: binlog_format, binlog_row_image
+- **Limitations**: Нет GTID, специфика failover
+
+</div>
+
+</div>
+
+---
+
+## PostgreSQL vs MySQL
+
+| Аспект | PostgreSQL | MySQL |
+|--------|------------|-------|
+| Механизм | WAL + Logical Decoding | Binary Log |
+| Позиция | LSN | GTID или file:position |
+| Schema | В момент публикации | Schema history topic |
+| Failover | Slots не реплицируются | GTID автоматически |
+
+---
+
+## Навыки
+
+После прохождения модуля вы умеете:
+
+1. **Настроить** MySQL binlog для CDC
+2. **Включить** GTID mode и понять ограничения
+3. **Мониторить** binlog lag и retention
+4. **Настроить** Aurora MySQL parameter groups
+5. **Восстановить** schema history topic
+
+---
+
+## Что дальше?
+
+<div className="glass-card p-6 rounded-xl border-l-4 border-blue-500">
+
+**Модуль 4: Production Operations**
+
+Мониторинг и troubleshooting в production:
+- JMX metrics interpretation
+- Prometheus/Grafana dashboards
+- WAL bloat prevention
+- Disaster recovery procedures
+
+</div>
