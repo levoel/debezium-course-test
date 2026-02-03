@@ -86,11 +86,11 @@ const icons: Record<IconName, React.ReactNode> = {
     />
   ),
   books: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z"
-    />
+    <>
+      <rect x="4" y="5" width="6" height="14" rx="1" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="10" y="4" width="6" height="15" rx="1" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 4l3 2v13l-3 2" />
+    </>
   ),
   wrench: (
     <path
@@ -128,11 +128,11 @@ const icons: Record<IconName, React.ReactNode> = {
     />
   ),
   plug: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"
-    />
+    <>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v3M15 3v3" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h12v4a6 6 0 01-6 6 6 6 0 01-6-6V6z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16v5" />
+    </>
   ),
   camera: (
     <path
