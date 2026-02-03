@@ -46,13 +46,13 @@ export const GlossaryTerm: React.FC<GlossaryTermProps> = ({
       </p>
 
       {example && (
-        <div className="mb-4">
+        <div className="mb-4 not-prose">
           <div className="text-sm font-semibold text-gray-400 mb-2">Пример:</div>
-          <div className="bg-slate-800/50 rounded-lg p-3 border border-white/5">
-            <code className="text-sm text-gray-200 whitespace-pre-wrap">
+          <pre className="bg-slate-800/50 rounded-lg p-3 border border-white/5 overflow-x-auto m-0">
+            <code className="text-sm text-gray-200 font-mono block whitespace-pre">
               {example}
             </code>
-          </div>
+          </pre>
         </div>
       )}
 
