@@ -1,0 +1,22 @@
+{
+  "id": "debezium",
+  "title": "Debezium CDC Mastery",
+  "description": "Полное руководство по Change Data Capture с Debezium — от основ до production deployment",
+  "author": "Lev Neganov",
+  "difficulty": "intermediate",
+  "language": "ru",
+  "version": "1.0.0",
+  "modules": [
+    { "id": "00-module-0", "title": "Платформа курса" },
+    { "id": "01-module-1", "title": "Основы CDC и Debezium" },
+    { "id": "02-module-2", "title": "PostgreSQL Deep Dive" },
+    { "id": "03-module-3", "title": "MySQL Deep Dive" },
+    { "id": "04-module-4", "title": "Мониторинг и Operations" },
+    { "id": "05-module-5", "title": "Трансформации и Outbox Pattern" },
+    { "id": "06-module-6", "title": "Python интеграции" },
+    { "id": "07-module-7", "title": "Google Cloud Platform" },
+    { "id": "08-module-8", "title": "Capstone Project" }
+  ],
+  "tags": ["debezium", "cdc", "kafka", "postgresql", "mysql", "gcp"],
+  "estimatedHours": 25
+}
