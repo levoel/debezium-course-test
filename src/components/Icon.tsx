@@ -117,7 +117,7 @@ const icons: Record<IconName, React.ReactNode> = {
     <>
       <ellipse cx="12" cy="8" rx="7" ry="4" strokeLinecap="round" strokeLinejoin="round" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 8v8c0 2.21 3.134 4 7 4s7-1.79 7-4V8" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 11v6M15 11v6" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h8M8 16h8" />
     </>
   ),
   gear: (
