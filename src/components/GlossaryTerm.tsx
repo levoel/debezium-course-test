@@ -1,4 +1,5 @@
 import React from 'react';
+import { Icon } from './Icon';
 
 interface RelatedLesson {
   title: string;
@@ -68,7 +69,7 @@ export const GlossaryTerm: React.FC<GlossaryTermProps> = ({
                          border border-white/10 hover:border-white/20
                          transition-all duration-200"
               >
-                <span className="mr-1.5">📖</span>
+                <Icon name="book" size={14} className="mr-1.5" />
                 {lesson.title}
               </a>
             ))}
