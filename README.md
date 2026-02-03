@@ -30,14 +30,6 @@
     ├── components/      # Диаграммы модулей
     └── content/         # MDX уроки
 ```
-
-## Использование
-
-Этот репозиторий — контент для [learning-platform-engine](https://github.com/levoel/learning-platform-engine). Подключается как git submodule.
-
-```bash
-# В engine репо
-git submodule add https://github.com/levoel/debezium-course-test.git content/courses/debezium-course
 ```
 
 ## Лицензия
