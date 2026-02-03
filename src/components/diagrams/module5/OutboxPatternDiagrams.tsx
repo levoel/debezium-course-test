@@ -8,10 +8,10 @@
  * - MicroservicesOutboxDiagram: Multi-service architecture with CDC per service
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * DualWriteProblemDiagram - Shows the dual-write problem with failure scenarios

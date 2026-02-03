@@ -5,10 +5,10 @@
  * - OutboxEventRouterSmtDiagram: Field mapping from outbox CDC record to Kafka event
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * OutboxEventRouterSmtDiagram - Shows transformation from outbox table to domain event

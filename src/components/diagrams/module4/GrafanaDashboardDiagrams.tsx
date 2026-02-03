@@ -7,9 +7,9 @@
  * - HealthStatesComparisonDiagram: Healthy vs Attention vs Critical states
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * DashboardArchitectureDiagram - 3-row dashboard structure

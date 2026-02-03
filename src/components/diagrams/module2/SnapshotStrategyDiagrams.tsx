@@ -8,12 +8,12 @@
  * - SnapshotDecisionDiagram: Decision flowchart for choosing strategy
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
-import { SequenceDiagram } from '../primitives/SequenceDiagram';
-import type { SequenceActorDef, SequenceMessageDef } from '../primitives/types';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
+import { SequenceDiagram } from '@primitives/SequenceDiagram';
+import type { SequenceActorDef, SequenceMessageDef } from '@primitives/types';
 
 /**
  * SnapshotDataLossDiagram - Simple "without snapshot" data loss visualization

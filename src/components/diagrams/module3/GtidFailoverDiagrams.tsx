@@ -11,12 +11,12 @@
  * - FailoverTimelineDiagram: Timeline of failover events
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
-import { SequenceDiagram } from '../primitives/SequenceDiagram';
-import type { SequenceActorDef, SequenceMessageDef } from '../primitives/types';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
+import { SequenceDiagram } from '@primitives/SequenceDiagram';
+import type { SequenceActorDef, SequenceMessageDef } from '@primitives/types';
 
 /**
  * FailoverWithoutGtidSequence - Sequence diagram showing position-based failover failure

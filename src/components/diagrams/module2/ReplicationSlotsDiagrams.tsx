@@ -6,10 +6,10 @@
  * - SlotLifecycleDiagram: Replication slot state diagram as flowchart
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * WalRetentionDiagram - WAL segments and slot retention

@@ -9,10 +9,10 @@
  * - SmtDecisionFrameworkDiagram: Decision tree for SMT vs Kafka Streams
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * ConsumerComplexityDiagram - Problem: complexity on consumer side

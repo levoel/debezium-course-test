@@ -6,10 +6,10 @@
  *   (Source Aurora -> CDC Debezium -> Processing PyFlink -> Warehouse BigQuery -> Observability)
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * CapstoneArchitectureDiagram - Complete 5-layer CDC pipeline architecture

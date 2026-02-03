@@ -5,8 +5,8 @@
  * - WorkloadIdentityFlowDiagram: Sequence showing K8s SA → Workload Identity → GCP SA → API flow
  */
 
-import { SequenceDiagram } from '../primitives/SequenceDiagram';
-import { DiagramContainer } from '../primitives/DiagramContainer';
+import { SequenceDiagram } from '@primitives/SequenceDiagram';
+import { DiagramContainer } from '@primitives/DiagramContainer';
 
 /**
  * WorkloadIdentityFlowDiagram - Authentication sequence with anti-pattern warning

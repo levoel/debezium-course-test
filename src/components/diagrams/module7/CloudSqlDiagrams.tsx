@@ -5,10 +5,10 @@
  * - CloudSqlCdcArchitectureDiagram: Cloud SQL → Debezium Server → Pub/Sub pipeline
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * CloudSqlCdcArchitectureDiagram - Simple horizontal flow showing Kafka-less CDC

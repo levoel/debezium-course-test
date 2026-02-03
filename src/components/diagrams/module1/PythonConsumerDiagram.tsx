@@ -5,9 +5,9 @@
  * - PythonConsumerDiagram: Simple flowchart showing Python consumer data flow
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * PythonConsumerDiagram - Simple flowchart showing Python consumer data flow

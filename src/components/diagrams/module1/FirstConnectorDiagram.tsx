@@ -5,8 +5,8 @@
  * - FirstConnectorDiagram: Sequence diagram showing PostgreSQL connector data flow
  */
 
-import { SequenceDiagram } from '../primitives/SequenceDiagram';
-import type { SequenceActorDef, SequenceMessageDef } from '../primitives/types';
+import { SequenceDiagram } from '@primitives/SequenceDiagram';
+import type { SequenceActorDef, SequenceMessageDef } from '@primitives/types';
 
 /**
  * FirstConnectorDiagram - Sequence diagram showing connector data flow

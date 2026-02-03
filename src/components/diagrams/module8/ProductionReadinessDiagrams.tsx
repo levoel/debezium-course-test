@@ -6,9 +6,9 @@
  * - FourGoldenSignalsDiagram: Google SRE signals mapped to CDC metrics
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * ProductionGapDiagram - Shows the gap between local development and production

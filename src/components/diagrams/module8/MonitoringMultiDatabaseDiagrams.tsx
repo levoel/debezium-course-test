@@ -5,10 +5,10 @@
  * - MonitoringMultiDatabaseDiagram: Unified monitoring for PostgreSQL + MySQL connectors
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * MonitoringMultiDatabaseDiagram - Unified observability for heterogeneous sources

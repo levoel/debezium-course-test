@@ -7,12 +7,12 @@
  * - HeartbeatFlowDiagram: How heartbeat advances slot position
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
-import { SequenceDiagram } from '../primitives/SequenceDiagram';
-import type { SequenceActorDef, SequenceMessageDef } from '../primitives/types';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
+import { SequenceDiagram } from '@primitives/SequenceDiagram';
+import type { SequenceActorDef, SequenceMessageDef } from '@primitives/types';
 
 /**
  * LowTrafficWalScenarioDiagram - WAL accumulation due to inactive slot

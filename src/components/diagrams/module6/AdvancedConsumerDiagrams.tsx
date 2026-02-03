@@ -6,11 +6,11 @@
  * - RebalancingSequenceDiagram: Consumer rebalancing flow when max.poll.interval.ms exceeded
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
-import { SequenceDiagram } from '../primitives/SequenceDiagram';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
+import { SequenceDiagram } from '@primitives/SequenceDiagram';
 
 /**
  * AtLeastOnceVsExactlyOnceDiagram - Side-by-side comparison of delivery semantics

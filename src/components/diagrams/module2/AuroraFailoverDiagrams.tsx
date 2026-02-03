@@ -7,12 +7,12 @@
  * - AuroraGlobalDatabaseDiagram: Multi-region CDC strategy
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
-import { SequenceDiagram } from '../primitives/SequenceDiagram';
-import type { SequenceActorDef, SequenceMessageDef } from '../primitives/types';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
+import { SequenceDiagram } from '@primitives/SequenceDiagram';
+import type { SequenceActorDef, SequenceMessageDef } from '@primitives/types';
 
 /**
  * AuroraFailoverSequenceDiagram - Complex sequence showing slot loss during failover

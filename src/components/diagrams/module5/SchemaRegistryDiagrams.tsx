@@ -5,10 +5,10 @@
  * - SchemaRegistryIntegrationDiagram: Architecture showing producer/consumer schema flow
  */
 
-import { FlowNode } from '../primitives/FlowNode';
-import { Arrow } from '../primitives/Arrow';
-import { DiagramContainer } from '../primitives/DiagramContainer';
-import { DiagramTooltip } from '../primitives/Tooltip';
+import { FlowNode } from '@primitives/FlowNode';
+import { Arrow } from '@primitives/Arrow';
+import { DiagramContainer } from '@primitives/DiagramContainer';
+import { DiagramTooltip } from '@primitives/Tooltip';
 
 /**
  * SchemaRegistryIntegrationDiagram - Shows Schema Registry architecture with Debezium
