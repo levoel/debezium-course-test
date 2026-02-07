@@ -1,0 +1,304 @@
+{
+  "categories": [
+    {
+      "id": "postgresql",
+      "name": "PostgreSQL",
+      "terms": [
+        {
+          "term": "WAL",
+          "termEn": "Write-Ahead Log",
+          "definition": "Журнал упреждающей записи — механизм ACID-гарантий в PostgreSQL. Все изменения сначала записываются в WAL, затем применяются к данным. Debezium читает WAL через логическую репликацию для захвата изменений без нагрузки на production базу.",
+          "example": "-- Просмотр текущей позиции WAL\nSELECT pg_current_wal_lsn();\n-- Результат: 0/16B9F08\n\n-- Размер несинхронизированного WAL\nSELECT pg_wal_lsn_diff(\n  pg_current_wal_lsn(),\n  confirmed_flush_lsn\n) FROM pg_replication_slots\nWHERE slot_name = 'debezium';",
+          "relatedLessons": [
+            { "title": "CDC Fundamentals", "slug": "01-module-1/01-cdc-fundamentals" },
+            { "title": "WAL Configuration", "slug": "02-module-2/03-wal-configuration-tuning" },
+            { "title": "Replication Slots", "slug": "02-module-2/02-replication-slots-lifecycle" }
+          ]
+        },
+        {
+          "term": "LSN",
+          "termEn": "Log Sequence Number",
+          "definition": "Уникальный идентификатор позиции в WAL. Используется для отслеживания прогресса репликации и определения лага. Формат: 16/3E8A0F00 где первая часть — номер файла WAL, вторая — смещение внутри файла.",
+          "example": "-- Текущий LSN\nSELECT pg_current_wal_lsn();\n-- Результат: 0/16B9F08\n\n-- LSN в числовом формате (для расчёта лага)\nSELECT pg_wal_lsn_diff('0/16B9F08', '0/16B9E00');\n-- Результат: 264 байта",
+          "relatedLessons": [
+            { "title": "Lag Detection", "slug": "04-module-4/04-lag-detection-alerting" }
+          ]
+        },
+        {
+          "term": "Replication Slot",
+          "termEn": "Слот репликации",
+          "definition": "Механизм PostgreSQL для отслеживания прогресса логической репликации. Слот гарантирует, что WAL-сегменты не будут удалены до тех пор, пока Debezium их не прочитает. КРИТИЧНО: неиспользуемые слоты приводят к переполнению диска.",
+          "example": "-- Просмотр активных слотов\nSELECT slot_name, active, restart_lsn,\n       confirmed_flush_lsn\nFROM pg_replication_slots;\n\n-- Создание слота для Debezium\nSELECT pg_create_logical_replication_slot(\n  'debezium',\n  'pgoutput'\n);\n\n-- Удаление слота (потеря позиции!)\nSELECT pg_drop_replication_slot('debezium');",
+          "relatedLessons": [
+            { "title": "Replication Slots Lifecycle", "slug": "02-module-2/02-replication-slots-lifecycle" },
+            { "title": "WAL Bloat Prevention", "slug": "02-module-2/04-wal-bloat-prevention" }
+          ]
+        },
+        {
+          "term": "Logical Decoding",
+          "termEn": "Логическое декодирование",
+          "definition": "Механизм PostgreSQL для извлечения изменений из WAL в читаемом формате. Logical decoding преобразует низкоуровневые WAL-записи в структурированные события (INSERT, UPDATE, DELETE) с именами таблиц и значениями полей. Debezium использует logical decoding через плагин pgoutput.",
+          "example": "-- Проверка доступных плагинов\nSELECT * FROM pg_available_extensions\nWHERE name = 'pgoutput';\n\n-- Создание слота с плагином декодирования\nSELECT pg_create_logical_replication_slot(\n  'test_slot',\n  'pgoutput'\n);\n\n-- Чтение изменений (для тестирования)\nSELECT * FROM pg_logical_slot_peek_changes(\n  'test_slot',\n  NULL,\n  NULL\n);",
+          "relatedLessons": [
+            { "title": "CDC Fundamentals", "slug": "01-module-1/01-cdc-fundamentals" },
+            { "title": "WAL Configuration", "slug": "02-module-2/03-wal-configuration-tuning" }
+          ]
+        },
+        {
+          "term": "Publication",
+          "termEn": "Публикация",
+          "definition": "Объект PostgreSQL, который определяет набор таблиц для логической репликации. Publication указывает, какие таблицы и операции (INSERT/UPDATE/DELETE) должны реплицироваться. Debezium автоматически создаёт publication для указанных таблиц.",
+          "example": "-- Создание publication для всех таблиц\nCREATE PUBLICATION dbz_publication\nFOR ALL TABLES;\n\n-- Publication для конкретных таблиц\nCREATE PUBLICATION dbz_publication\nFOR TABLE customers, orders;\n\n-- Только INSERT и UPDATE (без DELETE)\nCREATE PUBLICATION dbz_publication\nFOR TABLE customers\nWITH (publish = 'insert, update');\n\n-- Просмотр publications\nSELECT * FROM pg_publication;",
+          "relatedLessons": [
+            { "title": "First Connector", "slug": "01-module-1/04-first-connector" },
+            { "title": "Connector Configuration", "slug": "02-module-2/01-connector-configuration" }
+          ]
+        },
+        {
+          "term": "pgoutput",
+          "termEn": "Плагин pgoutput",
+          "definition": "Встроенный плагин PostgreSQL для logical decoding (с версии 10+). pgoutput — нативный плагин, который не требует отдельной установки, в отличие от wal2json или decoderbufs. Debezium по умолчанию использует pgoutput для максимальной совместимости.",
+          "example": "-- PostgreSQL config для pgoutput\nwal_level = logical\nmax_replication_slots = 4\nmax_wal_senders = 4\n\n-- Connector config\n{\n  \"plugin.name\": \"pgoutput\",\n  \"publication.name\": \"dbz_publication\"\n}\n\n-- Проверка использования pgoutput\nSELECT slot_name, plugin\nFROM pg_replication_slots;\n-- Результат: debezium | pgoutput",
+          "relatedLessons": [
+            { "title": "WAL Configuration", "slug": "02-module-2/03-wal-configuration-tuning" },
+            { "title": "Connector Configuration", "slug": "02-module-2/01-connector-configuration" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mysql",
+      "name": "MySQL",
+      "terms": [
+        {
+          "term": "Binlog",
+          "termEn": "Binary Log",
+          "definition": "Бинарный лог MySQL, который записывает все изменения данных для репликации и восстановления. Debezium читает binlog для захвата CDC событий. Формат может быть STATEMENT, ROW или MIXED (только ROW поддерживается Debezium).",
+          "example": "-- Проверка включения binlog\nSHOW VARIABLES LIKE 'log_bin';\n\n-- Текущая позиция binlog\nSHOW MASTER STATUS;\n\n-- Список binlog файлов\nSHOW BINARY LOGS;\n\n-- Установка retention периода\nSET GLOBAL expire_logs_days = 7;\nSET GLOBAL binlog_expire_logs_seconds = 604800;",
+          "relatedLessons": [
+            { "title": "MySQL Binlog Fundamentals", "slug": "07-module-7/01-binlog-fundamentals" },
+            { "title": "Binlog Retention", "slug": "03-module-3/03-binlog-retention-heartbeat" }
+          ]
+        },
+        {
+          "term": "GTID",
+          "termEn": "Global Transaction Identifier",
+          "definition": "Глобальный идентификатор транзакции в MySQL. GTID упрощает репликацию и восстановление, делая позицию в binlog независимой от конкретного файла. Формат: server_uuid:transaction_id (например, 3E11FA47-71CA-11E1-9E33-C80AA9429562:23).",
+          "example": "-- Проверка включения GTID\nSHOW VARIABLES LIKE 'gtid_mode';\n\n-- Текущий executed GTID set\nSHOW MASTER STATUS;\n\n-- GTID purged (удаленные binlog)\nSHOW GLOBAL VARIABLES LIKE 'gtid_purged';",
+          "relatedLessons": [
+            { "title": "MySQL Connector Setup", "slug": "07-module-7/02-connector-setup" },
+            { "title": "Aurora MySQL Specifics", "slug": "07-module-7/04-aurora-specifics" }
+          ]
+        },
+        {
+          "term": "server_id",
+          "termEn": "Идентификатор сервера MySQL",
+          "definition": "Уникальный идентификатор MySQL сервера в топологии репликации. Каждый сервер (master, slave, Debezium) должен иметь уникальный server_id. Debezium использует server_id для идентификации себя как replica и для чтения binlog.",
+          "example": "-- Просмотр текущего server_id\nSHOW VARIABLES LIKE 'server_id';\n\n-- my.cnf конфигурация\n[mysqld]\nserver-id = 1\nlog-bin = mysql-bin\nbinlog_format = ROW\n\n-- Connector config\n{\n  \"database.server.id\": \"184054\",\n  \"database.hostname\": \"mysql\",\n  \"database.port\": \"3306\"\n}",
+          "relatedLessons": [
+            { "title": "MySQL Binlog Fundamentals", "slug": "07-module-7/01-binlog-fundamentals" },
+            { "title": "Connector Setup", "slug": "07-module-7/02-connector-setup" }
+          ]
+        },
+        {
+          "term": "binlog_format",
+          "termEn": "Формат binlog",
+          "definition": "Формат записи изменений в binlog. Может быть STATEMENT (SQL-запросы), ROW (изменённые строки) или MIXED. Debezium поддерживает ТОЛЬКО binlog_format=ROW, так как только ROW-формат содержит полные значения полей до и после изменения.",
+          "example": "-- Проверка формата binlog\nSHOW VARIABLES LIKE 'binlog_format';\n\n-- my.cnf конфигурация (обязательно для Debezium)\n[mysqld]\nbinlog_format = ROW\nbinlog_row_image = FULL\n\n-- Изменение в runtime (требует SUPER привилегии)\nSET GLOBAL binlog_format = 'ROW';",
+          "relatedLessons": [
+            { "title": "MySQL Binlog Fundamentals", "slug": "07-module-7/01-binlog-fundamentals" },
+            { "title": "Connector Setup", "slug": "07-module-7/02-connector-setup" }
+          ]
+        },
+        {
+          "term": "binlog_row_image",
+          "termEn": "Объём данных в ROW событии",
+          "definition": "Параметр MySQL, определяющий, какие колонки записываются в binlog при UPDATE. Может быть FULL (все колонки), MINIMAL (только PK и изменённые), NOBLOB (без BLOB/TEXT). Debezium требует FULL для получения complete before/after state.",
+          "example": "-- Проверка binlog_row_image\nSHOW VARIABLES LIKE 'binlog_row_image';\n\n-- my.cnf конфигурация\n[mysqld]\nbinlog_row_image = FULL\n\n-- MINIMAL (экономит место, но Debezium не увидит неизменённые поля)\nbinlog_row_image = MINIMAL\n\n-- Пример события с FULL\nUPDATE users SET email = 'new@example.com' WHERE id = 1;\n-- Binlog содержит: id, name, email (до и после)",
+          "relatedLessons": [
+            { "title": "MySQL Binlog Fundamentals", "slug": "07-module-7/01-binlog-fundamentals" },
+            { "title": "Event Structure", "slug": "05-module-5/01-event-structure" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "kafka",
+      "name": "Kafka",
+      "terms": [
+        {
+          "term": "Topic",
+          "termEn": "Топик Kafka",
+          "definition": "Категория или поток сообщений в Kafka. Debezium создаёт отдельный топик для каждой таблицы (по умолчанию формат: server_name.schema_name.table_name). Топики делятся на партиции для параллельной обработки.",
+          "example": "# Список топиков Debezium\nkafka-topics --list --bootstrap-server localhost:9092 \\\n  | grep dbserver1\n\n# Информация о топике\nkafka-topics --describe \\\n  --topic dbserver1.inventory.customers \\\n  --bootstrap-server localhost:9092\n\n# Чтение сообщений из топика\nkafka-console-consumer \\\n  --bootstrap-server localhost:9092 \\\n  --topic dbserver1.inventory.customers \\\n  --from-beginning",
+          "relatedLessons": [
+            { "title": "Kafka Fundamentals", "slug": "01-module-1/02-kafka-fundamentals" },
+            { "title": "Topic Configuration", "slug": "04-module-4/01-topic-configuration" }
+          ]
+        },
+        {
+          "term": "Offset",
+          "termEn": "Смещение Kafka",
+          "definition": "Уникальный последовательный идентификатор сообщения внутри партиции. Consumer отслеживает offset для управления позицией чтения. Debezium хранит свой offset отдельно для отслеживания прогресса репликации из базы данных.",
+          "example": "# Просмотр текущих offset consumer group\nkafka-consumer-groups --describe \\\n  --group connect-cluster \\\n  --bootstrap-server localhost:9092\n\n# Сброс offset для повторного чтения\nkafka-consumer-groups --reset-offsets \\\n  --group connect-cluster \\\n  --topic dbserver1.inventory.customers \\\n  --to-earliest --execute",
+          "relatedLessons": [
+            { "title": "Offset Management", "slug": "03-module-3/05-offset-management" },
+            { "title": "Recovery Procedures", "slug": "03-module-3/13-recovery-procedures" }
+          ]
+        },
+        {
+          "term": "Partition",
+          "termEn": "Партиция Kafka",
+          "definition": "Физическое разделение топика для параллельной обработки и масштабирования. Каждая партиция — упорядоченный лог сообщений. Debezium по умолчанию использует primary key таблицы как ключ партиционирования для сохранения порядка событий одной записи.",
+          "example": "# Создание топика с 3 партициями\nkafka-topics --create \\\n  --topic dbserver1.inventory.orders \\\n  --partitions 3 \\\n  --replication-factor 2 \\\n  --bootstrap-server localhost:9092\n\n# Просмотр партиций топика\nkafka-topics --describe \\\n  --topic dbserver1.inventory.orders \\\n  --bootstrap-server localhost:9092\n\n# Connector config - партиционирование по user_id\n{\n  \"transforms\": \"partitionByUser\",\n  \"transforms.partitionByUser.type\":\n    \"org.apache.kafka.connect.transforms.ValueToKey\",\n  \"transforms.partitionByUser.fields\": \"user_id\"\n}",
+          "relatedLessons": [
+            { "title": "Kafka Fundamentals", "slug": "01-module-1/02-kafka-fundamentals" },
+            { "title": "Topic Configuration", "slug": "04-module-4/01-topic-configuration" }
+          ]
+        },
+        {
+          "term": "Consumer Group",
+          "termEn": "Группа потребителей",
+          "definition": "Группа Kafka consumers, которые совместно читают сообщения из топика. Каждая партиция читается только одним consumer в группе, что обеспечивает параллельную обработку без дублирования. Kafka Connect создаёт consumer group для каждого коннектора.",
+          "example": "# Список consumer groups\nkafka-consumer-groups --list \\\n  --bootstrap-server localhost:9092\n\n# Детали группы (offset, lag)\nkafka-consumer-groups --describe \\\n  --group connect-debezium-postgres \\\n  --bootstrap-server localhost:9092\n\n# Результат:\n# GROUP       TOPIC         PARTITION  OFFSET  LAG\n# connect-... customers     0          1523    0\n# connect-... customers     1          1498    0\n# connect-... orders        0          5832    12",
+          "relatedLessons": [
+            { "title": "Kafka Fundamentals", "slug": "01-module-1/02-kafka-fundamentals" },
+            { "title": "Lag Detection", "slug": "04-module-4/04-lag-detection-alerting" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "debezium",
+      "name": "Debezium",
+      "terms": [
+        {
+          "term": "Snapshot",
+          "termEn": "Снимок данных",
+          "definition": "Начальная полная копия данных из таблицы перед началом потоковой репликации. Debezium делает consistent snapshot без блокировки записей (через MVCC в PostgreSQL или с использованием LOCK TABLES в MySQL).",
+          "example": "// Connector config - snapshot mode\n{\n  \"snapshot.mode\": \"initial\",\n  // Полный snapshot при первом запуске\n\n  \"snapshot.mode\": \"never\",\n  // Пропустить snapshot, только streaming\n\n  \"snapshot.mode\": \"schema_only\",\n  // Только структура таблиц, данные не копируются\n\n  \"snapshot.mode\": \"when_needed\"\n  // Snapshot если offset не найден\n}",
+          "relatedLessons": [
+            { "title": "First Connector", "slug": "01-module-1/04-first-connector" },
+            { "title": "Snapshot Strategies", "slug": "02-module-2/05-snapshot-strategies" }
+          ]
+        },
+        {
+          "term": "Streaming",
+          "termEn": "Потоковая репликация",
+          "definition": "Режим непрерывного чтения изменений из WAL (PostgreSQL) или binlog (MySQL). После завершения snapshot Debezium переключается в streaming mode и читает только новые изменения в реальном времени с минимальной задержкой.",
+          "example": "// Connector status - streaming phase\n{\n  \"name\": \"inventory-connector\",\n  \"connector\": {\n    \"state\": \"RUNNING\",\n    \"worker_id\": \"kafka-connect:8083\"\n  },\n  \"tasks\": [{\n    \"id\": 0,\n    \"state\": \"RUNNING\",\n    \"worker_id\": \"kafka-connect:8083\"\n  }],\n  \"type\": \"source\"\n}",
+          "relatedLessons": [
+            { "title": "Streaming Changes", "slug": "02-module-2/06-streaming-changes" },
+            { "title": "Lag Detection", "slug": "04-module-4/04-lag-detection-alerting" }
+          ]
+        },
+        {
+          "term": "Connector",
+          "termEn": "Коннектор Debezium",
+          "definition": "Kafka Connect source connector, который интегрируется с конкретной базой данных (PostgreSQL, MySQL, MongoDB и др.). Коннектор читает изменения через нативные механизмы репликации и публикует события в Kafka.",
+          "example": "# Создание коннектора через REST API\ncurl -X POST http://localhost:8083/connectors \\\n  -H \"Content-Type: application/json\" \\\n  -d @postgres-connector.json\n\n# Проверка статуса\ncurl http://localhost:8083/connectors/inventory-connector/status\n\n# Удаление коннектора\ncurl -X DELETE \\\n  http://localhost:8083/connectors/inventory-connector",
+          "relatedLessons": [
+            { "title": "First Connector", "slug": "01-module-1/04-first-connector" },
+            { "title": "Connector Configuration", "slug": "02-module-2/01-connector-configuration" }
+          ]
+        },
+        {
+          "term": "SMT",
+          "termEn": "Single Message Transform",
+          "definition": "Легковесные преобразования Kafka Connect, которые применяются к каждому событию перед записью в Kafka. SMT позволяют фильтровать поля, переименовывать топики, маршрутизировать события без написания отдельного приложения.",
+          "example": "// Connector config - фильтрация полей\n{\n  \"transforms\": \"unwrap,addPrefix\",\n\n  // Debezium Unwrap - извлечь только 'after'\n  \"transforms.unwrap.type\":\n    \"io.debezium.transforms.ExtractNewRecordState\",\n  \"transforms.unwrap.drop.tombstones\": false,\n\n  // Добавить префикс к топику\n  \"transforms.addPrefix.type\":\n    \"org.apache.kafka.connect.transforms.RegexRouter\",\n  \"transforms.addPrefix.regex\": \"(.*)\",\n  \"transforms.addPrefix.replacement\": \"cdc.$1\"\n}",
+          "relatedLessons": [
+            { "title": "Message Transformations", "slug": "05-module-5/04-message-transformations" },
+            { "title": "Event Routing", "slug": "06-module-6/03-event-routing" }
+          ]
+        },
+        {
+          "term": "Outbox Pattern",
+          "termEn": "Паттерн Outbox",
+          "definition": "Микросервисный паттерн для надёжной публикации событий. При изменении entity приложение также вставляет событие в outbox таблицу в той же транзакции. Debezium читает outbox таблицу и публикует события в Kafka, гарантируя атомарность обновления и публикации.",
+          "example": "-- Outbox таблица\nCREATE TABLE outbox (\n  id UUID PRIMARY KEY,\n  aggregatetype VARCHAR(255) NOT NULL,\n  aggregateid VARCHAR(255) NOT NULL,\n  type VARCHAR(255) NOT NULL,\n  payload JSONB NOT NULL\n);\n\n-- Бизнес-логика (атомарная транзакция)\nBEGIN;\n  UPDATE orders SET status = 'PAID' WHERE id = 123;\n  INSERT INTO outbox (id, aggregatetype, aggregateid, type, payload)\n  VALUES (gen_random_uuid(), 'Order', '123', 'OrderPaid',\n          '{\"orderId\": 123, \"amount\": 99.99}'::jsonb);\nCOMMIT;\n\n// Debezium Outbox SMT\n{\n  \"transforms\": \"outbox\",\n  \"transforms.outbox.type\":\n    \"io.debezium.transforms.outbox.EventRouter\"\n}",
+          "relatedLessons": [
+            { "title": "Outbox Pattern", "slug": "06-module-6/01-outbox-pattern" },
+            { "title": "Event Routing", "slug": "06-module-6/03-event-routing" }
+          ]
+        },
+        {
+          "term": "Heartbeat",
+          "termEn": "События heartbeat",
+          "definition": "Периодические события, которые Debezium отправляет в Kafka даже при отсутствии изменений в базе данных. Heartbeat предотвращают удаление binlog/WAL на неактивных таблицах и позволяют отслеживать, что коннектор жив.",
+          "example": "// Connector config - heartbeat каждые 5 минут\n{\n  \"heartbeat.interval.ms\": 300000,\n  \"heartbeat.topics.prefix\": \"__debezium-heartbeat\",\n\n  // Heartbeat событие\n  {\n    \"ts_ms\": 1686500577691,\n    \"source\": {\n      \"connector\": \"postgresql\",\n      \"name\": \"dbserver1\",\n      \"lsn\": 33023704\n    }\n  }\n}\n\n// Проверка heartbeat топика\nkafka-console-consumer \\\n  --topic __debezium-heartbeat.dbserver1 \\\n  --bootstrap-server localhost:9092",
+          "relatedLessons": [
+            { "title": "Binlog Retention & Heartbeat", "slug": "03-module-3/03-binlog-retention-heartbeat" },
+            { "title": "Lag Detection", "slug": "04-module-4/04-lag-detection-alerting" }
+          ]
+        },
+        {
+          "term": "Tombstone",
+          "termEn": "Tombstone событие",
+          "definition": "Событие Kafka с null значением, которое используется для удаления ключа при log compaction. Debezium отправляет tombstone после DELETE события, чтобы при compaction топика запись была полностью удалена.",
+          "example": "// DELETE события от Debezium\n\n// 1. DELETE событие (op='d')\n{\n  \"before\": {\"id\": 123, \"name\": \"John\"},\n  \"after\": null,\n  \"op\": \"d\"\n}\n\n// 2. Tombstone (следует сразу после)\n{\n  \"key\": {\"id\": 123},\n  \"value\": null  // <- tombstone\n}\n\n// Connector config - управление tombstones\n{\n  \"transforms\": \"unwrap\",\n  \"transforms.unwrap.type\":\n    \"io.debezium.transforms.ExtractNewRecordState\",\n  \"transforms.unwrap.drop.tombstones\": false\n}",
+          "relatedLessons": [
+            { "title": "Event Structure", "slug": "05-module-5/01-event-structure" },
+            { "title": "Topic Configuration", "slug": "04-module-4/01-topic-configuration" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "general",
+      "name": "General CDC",
+      "terms": [
+        {
+          "term": "CDC",
+          "termEn": "Change Data Capture",
+          "definition": "Паттерн захвата изменений данных в реальном времени. Вместо опроса (polling) базы данных, CDC читает журналы транзакций (WAL, binlog) для получения событий INSERT, UPDATE, DELETE с минимальной задержкой и нагрузкой.",
+          "example": "// CDC Event Structure (Debezium JSON)\n{\n  \"before\": null,  // Состояние до изменения\n  \"after\": {       // Новое состояние\n    \"id\": 1001,\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\"\n  },\n  \"source\": {\n    \"version\": \"2.1.0.Final\",\n    \"connector\": \"postgresql\",\n    \"name\": \"dbserver1\",\n    \"ts_ms\": 1486500577691,\n    \"db\": \"inventory\",\n    \"schema\": \"public\",\n    \"table\": \"customers\",\n    \"lsn\": 33023704\n  },\n  \"op\": \"c\",  // c=create, u=update, d=delete, r=read\n  \"ts_ms\": 1486500584591\n}",
+          "relatedLessons": [
+            { "title": "CDC Fundamentals", "slug": "01-module-1/01-cdc-fundamentals" },
+            { "title": "Event Structure", "slug": "05-module-5/01-event-structure" }
+          ]
+        },
+        {
+          "term": "Schema Registry",
+          "termEn": "Реестр схем",
+          "definition": "Централизованный сервис для хранения и версионирования схем Avro/Protobuf/JSON Schema. При использовании с Debezium позволяет эффективно сериализовать события и обеспечивает совместимость при эволюции схем таблиц.",
+          "example": "# Просмотр зарегистрированных схем\ncurl http://localhost:8081/subjects\n\n# Получение схемы для топика\ncurl http://localhost:8081/subjects/\\\ndbserver1.inventory.customers-value/versions/latest\n\n# Connector config с Schema Registry\n{\n  \"value.converter\": \"io.confluent.connect.avro.AvroConverter\",\n  \"value.converter.schema.registry.url\":\n    \"http://schema-registry:8081\"\n}",
+          "relatedLessons": [
+            { "title": "Schema Evolution", "slug": "05-module-5/02-schema-evolution" },
+            { "title": "Avro Serialization", "slug": "05-module-5/03-avro-serialization" }
+          ]
+        },
+        {
+          "term": "Idempotency",
+          "termEn": "Идемпотентность",
+          "definition": "Свойство операции, при котором повторное применение даёт тот же результат, что и однократное. В CDC критично для обработки дубликатов событий (при retry, rebalance). Consumer должен корректно обрабатывать повторную доставку того же события.",
+          "example": "// НЕ идемпотентная операция\nUPDATE accounts SET balance = balance + 100\nWHERE id = 123;\n// Повторное применение = двойное начисление!\n\n// Идемпотентная операция (event sourcing)\nINSERT INTO account_events (account_id, type, amount, event_id)\nVALUES (123, 'CREDIT', 100, 'evt-456')\nON CONFLICT (event_id) DO NOTHING;\n// Повторное применение = игнорируется\n\n// Debezium + Kafka idempotent producer\n{\n  \"producer.enable.idempotence\": true,\n  \"producer.max.in.flight.requests.per.connection\": 5\n}",
+          "relatedLessons": [
+            { "title": "Duplicate Handling", "slug": "03-module-3/08-duplicate-handling" },
+            { "title": "Consumer Best Practices", "slug": "08-module-8/02-consumer-best-practices" }
+          ]
+        },
+        {
+          "term": "Exactly-Once",
+          "termEn": "Ровно один раз",
+          "definition": "Гарантия доставки сообщения, при которой каждое событие обрабатывается ровно один раз без потерь и дубликатов. В Kafka достигается через idempotent producer и transactional API. Debezium + Kafka обеспечивают at-least-once, exactly-once требует idempotent consumer.",
+          "example": "// Kafka Streams - exactly-once\nProperties props = new Properties();\nprops.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,\n  StreamsConfig.EXACTLY_ONCE_V2);\n\n// Debezium config - основа для exactly-once\n{\n  // Kafka producer идемпотентность\n  \"producer.enable.idempotence\": true,\n\n  // Consumer должен сам обеспечить идемпотентность\n  // через deduplication или event_id tracking\n}\n\n// Consumer pattern - deduplication\nSET processed_events = new Set();\nfor (event in stream) {\n  if (!processed_events.has(event.id)) {\n    process(event);\n    processed_events.add(event.id);\n  }\n}",
+          "relatedLessons": [
+            { "title": "Delivery Semantics", "slug": "03-module-3/07-delivery-semantics" },
+            { "title": "Consumer Best Practices", "slug": "08-module-8/02-consumer-best-practices" }
+          ]
+        },
+        {
+          "term": "Event Sourcing",
+          "termEn": "Событийное хранение",
+          "definition": "Архитектурный паттерн, где состояние приложения хранится как последовательность событий, а не как текущий snapshot. CDC отлично сочетается с Event Sourcing — изменения базы данных становятся событиями в event log (Kafka), из которых можно восстановить любое состояние системы.",
+          "example": "// Event Store структура\nCREATE TABLE event_store (\n  event_id UUID PRIMARY KEY,\n  aggregate_id VARCHAR(255),\n  aggregate_type VARCHAR(255),\n  event_type VARCHAR(255),\n  event_data JSONB,\n  created_at TIMESTAMP DEFAULT NOW()\n);\n\n// CDC события как Event Source\n{\n  \"event_id\": \"evt-123\",\n  \"aggregate_id\": \"order-456\",\n  \"aggregate_type\": \"Order\",\n  \"event_type\": \"OrderPlaced\",\n  \"event_data\": {\n    \"orderId\": 456,\n    \"customerId\": 789,\n    \"amount\": 99.99\n  }\n}\n\n// Восстановление состояния\nSELECT * FROM event_store\nWHERE aggregate_id = 'order-456'\nORDER BY created_at;",
+          "relatedLessons": [
+            { "title": "Outbox Pattern", "slug": "06-module-6/01-outbox-pattern" },
+            { "title": "Event Structure", "slug": "05-module-5/01-event-structure" }
+          ]
+        }
+      ]
+    }
+  ]
+}

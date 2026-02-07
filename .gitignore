@@ -1,0 +1,12 @@
+# Environment files with secrets
+labs/.env
+
+# OS files
+.DS_Store
+
+# Editor files
+.vscode/
+.idea/
+
+# Jupyter checkpoints
+labs/notebooks/.ipynb_checkpoints/

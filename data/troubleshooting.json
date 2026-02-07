@@ -1,0 +1,446 @@
+{
+  "entries": [
+    {
+      "errorCode": "PSQLException",
+      "errorMessage": "FATAL: no pg_hba.conf entry for replication connection",
+      "connector": "postgresql",
+      "category": "connection",
+      "symptoms": [
+        "Debezium не может подключиться к PostgreSQL для репликации",
+        "В логах коннектора: \"FATAL: no pg_hba.conf entry for replication connection\"",
+        "Connector status: FAILED при попытке старта"
+      ],
+      "cause": "PostgreSQL не разрешает подключения для репликации от указанного хоста. Файл pg_hba.conf контролирует аутентификацию и должен явно разрешать replication connections для пользователя и хоста Debezium.",
+      "solution": [
+        "Откройте файл `pg_hba.conf` (обычно `/var/lib/postgresql/data/pg_hba.conf`)",
+        "Добавьте строку для репликации: `host replication debezium 0.0.0.0/0 md5`",
+        "Перезагрузите конфигурацию: `SELECT pg_reload_conf();` (или перезапуск PostgreSQL)",
+        "Проверьте подключение: `psql -h localhost -U debezium -d postgres -c \"IDENTIFY_SYSTEM\" replication=database`"
+      ],
+      "relatedLessons": [
+        { "title": "Lab Setup", "slug": "01-module-1/03-lab-setup" },
+        { "title": "First Connector", "slug": "01-module-1/04-first-connector" }
+      ]
+    },
+    {
+      "errorMessage": "Replication slot \"debezium\" is active for PID 1234",
+      "connector": "postgresql",
+      "category": "configuration",
+      "symptoms": [
+        "Коннектор не стартует после рестарта Kafka Connect",
+        "Ошибка при создании нового коннектора с тем же именем слота",
+        "PostgreSQL показывает slot с active = true"
+      ],
+      "cause": "Предыдущий инстанс коннектора не освободил replication slot корректно, или slot уже используется другим процессом репликации. PostgreSQL позволяет только одно активное соединение к каждому слоту.",
+      "solution": [
+        "Проверьте активные слоты: `SELECT slot_name, active, active_pid FROM pg_replication_slots;`",
+        "Если slot показывает `active = true`, найдите процесс: `SELECT pid, usename, application_name FROM pg_stat_replication;`",
+        "Терминируйте соединение: `SELECT pg_terminate_backend(<pid>);`",
+        "Или удалите слот (ПОТЕРЯЕТЕ ПОЗИЦИЮ!): `SELECT pg_drop_replication_slot('debezium');`",
+        "Пересоздайте коннектор с `snapshot.mode=initial` если удалили слот"
+      ],
+      "relatedLessons": [
+        { "title": "Replication Slots Lifecycle", "slug": "02-module-2/02-replication-slots-lifecycle" },
+        { "title": "Recovery Procedures", "slug": "03-module-3/13-recovery-procedures" }
+      ]
+    },
+    {
+      "errorMessage": "pg_wal directory is consuming excessive disk space",
+      "connector": "postgresql",
+      "category": "streaming",
+      "symptoms": [
+        "Директория pg_wal занимает десятки/сотни GB",
+        "Диск PostgreSQL заполняется",
+        "Replication slot показывает большой lag между current_lsn и restart_lsn"
+      ],
+      "cause": "Replication slot удерживает WAL-сегменты, не позволяя PostgreSQL удалять их до тех пор, пока Debezium не прочитает. Если коннектор остановлен или работает медленно, WAL накапливается.",
+      "solution": [
+        "Проверьте lag слота: `SELECT slot_name, pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS lag_bytes FROM pg_replication_slots;`",
+        "Если коннектор МЁРТВ и не планируется запускать — удалите слот: `SELECT pg_drop_replication_slot('debezium');`",
+        "Если коннектор временно остановлен — запустите его для чтения накопленного WAL",
+        "Настройте мониторинг lag и автоудаление неиспользуемых слотов: `max_slot_wal_keep_size = 10GB`"
+      ],
+      "relatedLessons": [
+        { "title": "WAL Bloat Prevention", "slug": "02-module-2/04-wal-bloat-prevention" },
+        { "title": "Replication Slots Lifecycle", "slug": "02-module-2/02-replication-slots-lifecycle" }
+      ]
+    },
+    {
+      "errorMessage": "Lock timeout: could not obtain lock on table \"customers\"",
+      "connector": "postgresql",
+      "category": "snapshot",
+      "symptoms": [
+        "Snapshot фаза зависает или падает с timeout",
+        "Ошибка \"could not obtain lock\" в логах коннектора",
+        "Snapshot не завершается на больших таблицах"
+      ],
+      "cause": "Debezium пытается сделать consistent snapshot и требует короткую блокировку таблиц. Если на таблице есть долгие транзакции или активные записи, блокировку получить невозможно.",
+      "solution": [
+        "Увеличьте `snapshot.lock.timeout.ms` в конфигурации коннектора (по умолчанию 10 секунд)",
+        "Запланируйте snapshot на период низкой нагрузки (ночь, выходные)",
+        "Используйте `snapshot.mode=never` и `snapshot.mode=schema_only` если начальные данные не критичны",
+        "Проверьте активные транзакции: `SELECT pid, usename, query, state FROM pg_stat_activity WHERE state != 'idle';`"
+      ],
+      "relatedLessons": [
+        { "title": "Snapshot Strategies", "slug": "02-module-2/05-snapshot-strategies" },
+        { "title": "First Connector", "slug": "01-module-1/04-first-connector" }
+      ]
+    },
+    {
+      "errorCode": "1236",
+      "errorMessage": "Could not find first log file name in binary log index file",
+      "connector": "mysql",
+      "category": "snapshot",
+      "symptoms": [
+        "MySQL коннектор не может начать streaming или snapshot",
+        "Ошибка ERROR 1236 при инициализации коннектора",
+        "Binlog файлы были ротированы или удалены"
+      ],
+      "cause": "Debezium пытается читать binlog с позиции, которая уже была удалена из-за ротации логов. Это происходит после длительного downtime коннектора или при агрессивных настройках expire_logs_days / binlog_expire_logs_seconds.",
+      "solution": [
+        "Проверьте доступные binlog файлы: `SHOW BINARY LOGS;`",
+        "Увеличьте retention период: `SET GLOBAL expire_logs_days = 7;` или `SET GLOBAL binlog_expire_logs_seconds = 604800;`",
+        "Удалите коннектор и пересоздайте с `snapshot.mode=initial` для полного ресканирования",
+        "Настройте Heartbeat для предотвращения удаления binlog на малоактивных таблицах"
+      ],
+      "relatedLessons": [
+        { "title": "Binlog Retention & Heartbeat", "slug": "03-module-3/03-binlog-retention-heartbeat" },
+        { "title": "Schema History Recovery", "slug": "03-module-3/06-schema-history-recovery" }
+      ]
+    },
+    {
+      "errorMessage": "The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs",
+      "connector": "mysql",
+      "category": "streaming",
+      "symptoms": [
+        "MySQL коннектор падает при попытке подключения в GTID режиме",
+        "Ошибка про purged GTIDs в логах Debezium",
+        "После восстановления сервера или длительного downtime"
+      ],
+      "cause": "MySQL удалил binlog файлы, содержащие GTID транзакции, которые Debezium ещё не прочитал. При использовании GTID режима невозможно продолжить репликацию с пропущенными GTID.",
+      "solution": [
+        "Проверьте purged GTID set: `SHOW GLOBAL VARIABLES LIKE 'gtid_purged';`",
+        "Проверьте executed GTID set: `SHOW MASTER STATUS;`",
+        "ВАРИАНТ 1: Пересоздайте коннектор с полным snapshot",
+        "ВАРИАНТ 2 (ОПАСНО): Сбросьте gtid_purged на slave (Debezium): `RESET MASTER;` и `SET GLOBAL gtid_purged='<executed_gtids>';`",
+        "Увеличьте binlog retention для предотвращения проблемы"
+      ],
+      "relatedLessons": [
+        { "title": "Aurora MySQL Specifics", "slug": "07-module-7/04-aurora-specifics" },
+        { "title": "Binlog Retention & Heartbeat", "slug": "03-module-3/03-binlog-retention-heartbeat" }
+      ]
+    },
+    {
+      "errorMessage": "database.server.name value must not include characters other than ASCII alphanumerics, '.', '_' and '-'",
+      "connector": "common",
+      "category": "configuration",
+      "symptoms": [
+        "Коннектор не создаётся, валидация конфигурации падает",
+        "Ошибка при POST /connectors с некорректным database.server.name",
+        "Спецсимволы в имени сервера"
+      ],
+      "cause": "Параметр database.server.name используется как префикс для Kafka топиков. Kafka топики не поддерживают большинство спецсимволов, только [a-zA-Z0-9._-].",
+      "solution": [
+        "Используйте только буквы, цифры, точку, дефис и подчёркивание в `database.server.name`",
+        "Пример правильного значения: `dbserver1`, `pg-prod`, `mysql.replica_01`",
+        "Пример неправильного: `db@server`, `pg prod`, `mysql:5432`",
+        "Измените конфигурацию коннектора и пересоздайте"
+      ],
+      "relatedLessons": [
+        { "title": "Connector Configuration", "slug": "02-module-2/01-connector-configuration" },
+        { "title": "First Connector", "slug": "01-module-1/04-first-connector" }
+      ]
+    },
+    {
+      "errorMessage": "Consumer lag increasing: 10000+ messages behind",
+      "connector": "common",
+      "category": "performance",
+      "symptoms": [
+        "Consumer group показывает растущий lag",
+        "Задержка между изменением в БД и доставкой в Kafka увеличивается",
+        "kafka-consumer-groups --describe показывает LAG > 0 и растёт"
+      ],
+      "cause": "Consumer приложение не успевает обрабатывать CDC события с той скоростью, с которой они поступают. Возможные причины: медленная бизнес-логика, неоптимальная сериализация, недостаточная параллелизация.",
+      "solution": [
+        "Проверьте метрики consumer: throughput, processing time per message",
+        "Увеличьте количество партиций топика для параллельной обработки",
+        "Увеличьте количество consumer инстансов (до числа партиций)",
+        "Оптимизируйте бизнес-логику: используйте batch processing, асинхронность",
+        "Рассмотрите использование Kafka Streams для более эффективной обработки"
+      ],
+      "relatedLessons": [
+        { "title": "Lag Detection & Alerting", "slug": "04-module-4/04-lag-detection-alerting" },
+        { "title": "Consumer Best Practices", "slug": "08-module-8/02-consumer-best-practices" }
+      ]
+    },
+    {
+      "errorMessage": "ERROR: logical decoding requires wal_level >= logical",
+      "connector": "postgresql",
+      "category": "configuration",
+      "symptoms": [
+        "Коннектор не может создать replication slot",
+        "Ошибка \"logical decoding requires wal_level >= logical\" в PostgreSQL логах",
+        "pg_create_logical_replication_slot() возвращает ошибку"
+      ],
+      "cause": "PostgreSQL параметр wal_level установлен в replica или minimal, что недостаточно для logical replication. Debezium требует wal_level = logical для захвата изменений через логическую репликацию.",
+      "solution": [
+        "Проверьте текущий уровень: `SHOW wal_level;`",
+        "Откройте postgresql.conf и установите: `wal_level = logical`",
+        "Перезапустите PostgreSQL сервер (требуется полный рестарт, reload недостаточен)",
+        "Проверьте изменение: `SHOW wal_level;` должно вернуть \"logical\"",
+        "После перезапуска создайте коннектор заново"
+      ],
+      "relatedLessons": [
+        { "title": "Lab Setup", "slug": "01-module-1/03-lab-setup" },
+        { "title": "PostgreSQL Tuning", "slug": "02-module-2/03-postgresql-tuning" }
+      ]
+    },
+    {
+      "errorMessage": "ERROR: publication \"dbz_publication\" does not exist",
+      "connector": "postgresql",
+      "category": "configuration",
+      "symptoms": [
+        "PostgreSQL коннектор не стартует в pgoutput plugin режиме",
+        "Ошибка \"publication does not exist\" при инициализации",
+        "Connector status: FAILED с упоминанием publication"
+      ],
+      "cause": "При использовании pgoutput plugin (Debezium 2.0+), коннектор ожидает существующую PostgreSQL publication. Если publication.autocreate.mode=disabled, publication должна быть создана вручную.",
+      "solution": [
+        "Проверьте существующие publications: `SELECT * FROM pg_publication;`",
+        "Создайте publication для всех таблиц: `CREATE PUBLICATION dbz_publication FOR ALL TABLES;`",
+        "Или для конкретных таблиц: `CREATE PUBLICATION dbz_publication FOR TABLE customers, orders;`",
+        "Или включите автосоздание в конфигурации: `publication.autocreate.mode=all_tables`",
+        "Убедитесь, что пользователь Debezium имеет права на publication"
+      ],
+      "relatedLessons": [
+        { "title": "Connector Configuration", "slug": "02-module-2/01-connector-configuration" },
+        { "title": "First Connector", "slug": "01-module-1/04-first-connector" }
+      ]
+    },
+    {
+      "errorMessage": "ERROR: must be superuser or replication role to use replication slots",
+      "connector": "postgresql",
+      "category": "connection",
+      "symptoms": [
+        "Коннектор не может создать replication slot",
+        "Ошибка \"must be superuser or replication role\"",
+        "pg_create_logical_replication_slot() падает с permission denied"
+      ],
+      "cause": "Пользователь БД, который использует Debezium, не имеет прав REPLICATION. Только пользователи с REPLICATION role или SUPERUSER могут создавать и использовать replication slots.",
+      "solution": [
+        "Проверьте права пользователя: `SELECT rolname, rolreplication FROM pg_roles WHERE rolname = 'debezium';`",
+        "Предоставьте REPLICATION права: `ALTER USER debezium WITH REPLICATION;`",
+        "Или создайте пользователя с нужными правами: `CREATE USER debezium WITH REPLICATION PASSWORD 'password';`",
+        "Дополнительно дайте права на БД: `GRANT CONNECT ON DATABASE mydb TO debezium;`",
+        "И на схему: `GRANT USAGE ON SCHEMA public TO debezium; GRANT SELECT ON ALL TABLES IN SCHEMA public TO debezium;`"
+      ],
+      "relatedLessons": [
+        { "title": "Lab Setup", "slug": "01-module-1/03-lab-setup" },
+        { "title": "First Connector", "slug": "01-module-1/04-first-connector" }
+      ]
+    },
+    {
+      "errorMessage": "The MySQL server is not configured to use a row-level binlog format",
+      "connector": "mysql",
+      "category": "configuration",
+      "symptoms": [
+        "MySQL коннектор не стартует",
+        "Ошибка про row-level binlog format при инициализации",
+        "Debezium требует ROW формат, но MySQL использует STATEMENT или MIXED"
+      ],
+      "cause": "MySQL параметр binlog_format установлен в STATEMENT или MIXED. Debezium требует binlog_format = ROW для захвата всех изменений на уровне строк, включая изменения данных до и после.",
+      "solution": [
+        "Проверьте текущий формат: `SHOW VARIABLES LIKE 'binlog_format';`",
+        "Установите динамически (до перезапуска): `SET GLOBAL binlog_format = 'ROW';`",
+        "Сделайте постоянным в my.cnf: `[mysqld]` секция, добавьте `binlog_format = ROW`",
+        "Перезапустите MySQL для применения постоянных настроек",
+        "Проверьте: `SHOW VARIABLES LIKE 'binlog_format';` должно вернуть \"ROW\""
+      ],
+      "relatedLessons": [
+        { "title": "Lab Setup", "slug": "01-module-1/03-lab-setup" },
+        { "title": "First Connector", "slug": "01-module-1/04-first-connector" }
+      ]
+    },
+    {
+      "errorMessage": "server_id is not set or set to 0",
+      "connector": "mysql",
+      "category": "configuration",
+      "symptoms": [
+        "MySQL коннектор не может начать репликацию",
+        "Ошибка \"server_id is not set\" или \"server_id cannot be 0\"",
+        "Binlog replication не работает"
+      ],
+      "cause": "MySQL параметр server_id не установлен или равен 0. Для репликации (включая CDC) каждый сервер в топологии должен иметь уникальный server_id > 0.",
+      "solution": [
+        "Проверьте текущий server_id: `SHOW VARIABLES LIKE 'server_id';`",
+        "Установите уникальный ID: `SET GLOBAL server_id = 223344;` (временно)",
+        "Сделайте постоянным в my.cnf: `[mysqld]` секция, добавьте `server_id = 223344`",
+        "Перезапустите MySQL",
+        "Убедитесь, что server_id уникален среди всех MySQL серверов и Debezium коннекторов в вашей инфраструктуре"
+      ],
+      "relatedLessons": [
+        { "title": "Lab Setup", "slug": "01-module-1/03-lab-setup" },
+        { "title": "First Connector", "slug": "01-module-1/04-first-connector" }
+      ]
+    },
+    {
+      "errorMessage": "binlog_row_image is not set to FULL",
+      "connector": "mysql",
+      "category": "configuration",
+      "symptoms": [
+        "CDC события содержат неполные данные",
+        "Для UPDATE операций отсутствуют значения \"before\"",
+        "Warning в логах Debezium про binlog_row_image"
+      ],
+      "cause": "MySQL параметр binlog_row_image установлен в MINIMAL или NOBLOB. Debezium требует FULL для получения полных данных \"before\" и \"after\" для всех операций.",
+      "solution": [
+        "Проверьте текущее значение: `SHOW VARIABLES LIKE 'binlog_row_image';`",
+        "Установите FULL: `SET GLOBAL binlog_row_image = 'FULL';`",
+        "Сделайте постоянным в my.cnf: `[mysqld]` секция, добавьте `binlog_row_image = FULL`",
+        "Перезапустите MySQL для применения",
+        "После изменения пересоздайте коннектор для корректной обработки новых событий"
+      ],
+      "relatedLessons": [
+        { "title": "Lab Setup", "slug": "01-module-1/03-lab-setup" },
+        { "title": "Connector Configuration", "slug": "02-module-2/01-connector-configuration" }
+      ]
+    },
+    {
+      "errorCode": "2013",
+      "errorMessage": "Lost connection to MySQL server during query",
+      "connector": "mysql",
+      "category": "connection",
+      "symptoms": [
+        "MySQL коннектор периодически падает с ошибкой 2013",
+        "Долгие snapshot операции прерываются",
+        "Ошибка \"Lost connection to MySQL server\" во время чтения binlog"
+      ],
+      "cause": "MySQL терминирует соединение из-за превышения таймаута или проблем сети. Причины: wait_timeout слишком мал, max_allowed_packet недостаточен, сетевые разрывы, большие транзакции.",
+      "solution": [
+        "Увеличьте wait_timeout и interactive_timeout на сервере: `SET GLOBAL wait_timeout = 28800;`",
+        "Увеличьте max_allowed_packet: `SET GLOBAL max_allowed_packet = 67108864;` (64MB)",
+        "В my.cnf добавьте: `wait_timeout = 28800`, `max_allowed_packet = 64M`",
+        "В конфигурации коннектора увеличьте connect.timeout.ms и connect.keep.alive.ms",
+        "Проверьте сетевую стабильность между Kafka Connect и MySQL"
+      ],
+      "relatedLessons": [
+        { "title": "First Connector", "slug": "01-module-1/04-first-connector" },
+        { "title": "Recovery Procedures", "slug": "03-module-3/13-recovery-procedures" }
+      ]
+    },
+    {
+      "errorCode": "409",
+      "errorMessage": "Connector with same name already exists",
+      "connector": "common",
+      "category": "configuration",
+      "symptoms": [
+        "POST /connectors возвращает 409 Conflict",
+        "Ошибка \"Connector xyz already exists\"",
+        "Невозможно создать коннектор с существующим именем"
+      ],
+      "cause": "Имя коннектора уже используется в Kafka Connect кластере. Каждый коннектор должен иметь уникальное имя в пределах кластера.",
+      "solution": [
+        "Проверьте существующие коннекторы: `curl http://localhost:8083/connectors`",
+        "Удалите старый коннектор: `curl -X DELETE http://localhost:8083/connectors/xyz`",
+        "Или используйте другое имя для нового коннектора",
+        "Или обновите существующий: `curl -X PUT http://localhost:8083/connectors/xyz/config -H \"Content-Type: application/json\" -d @config.json`",
+        "Убедитесь, что имя уникально перед созданием"
+      ],
+      "relatedLessons": [
+        { "title": "First Connector", "slug": "01-module-1/04-first-connector" },
+        { "title": "Connector Configuration", "slug": "02-module-2/01-connector-configuration" }
+      ]
+    },
+    {
+      "errorMessage": "Unable to read schema history topic",
+      "connector": "mysql",
+      "category": "configuration",
+      "symptoms": [
+        "MySQL коннектор не стартует после перезапуска",
+        "Ошибка про недоступный schema.history.internal.kafka.topic",
+        "Коннектор не может восстановить историю DDL изменений"
+      ],
+      "cause": "Kafka топик для хранения истории схем БД (DDL changes) был удалён или недоступен. MySQL коннектор требует этот топик для отслеживания структуры таблиц во времени.",
+      "solution": [
+        "Проверьте существование топика: `kafka-topics --bootstrap-server localhost:9092 --list | grep schema-history`",
+        "Если топик удалён, варианты восстановления:",
+        "  ВАРИАНТ 1 (если есть бэкап): Восстановите топик из бэкапа",
+        "  ВАРИАНТ 2: Пересоздайте коннектор с snapshot.mode=initial (потеряете offset)",
+        "  ВАРИАНТ 3 (ОПАСНО): schema.history.internal.skip.unparseable.ddl=true",
+        "Настройте retention для schema history топика: min.compaction.lag.ms, delete.retention.ms"
+      ],
+      "relatedLessons": [
+        { "title": "Schema History Recovery", "slug": "03-module-3/06-schema-history-recovery" },
+        { "title": "First Connector", "slug": "01-module-1/04-first-connector" }
+      ]
+    },
+    {
+      "errorMessage": "Failed to write offset to topic: Topic not present in metadata",
+      "connector": "common",
+      "category": "configuration",
+      "symptoms": [
+        "Коннектор не может сохранить offset",
+        "Ошибка про недоступный offset.storage.topic",
+        "Connector повторно читает те же события после рестарта"
+      ],
+      "cause": "Kafka топик для хранения offset (connect-offsets) недоступен, удалён, или у Kafka Connect нет прав на запись. Без offset коннектор не может отслеживать свою позицию в логах репликации.",
+      "solution": [
+        "Проверьте топик offset: `kafka-topics --bootstrap-server localhost:9092 --describe --topic connect-offsets`",
+        "Убедитесь, что топик существует и имеет достаточное число партиций и реплик",
+        "Проверьте права Kafka Connect на запись в топик (ACL если используется)",
+        "Проверьте настройки Kafka Connect worker: offset.storage.topic, offset.storage.replication.factor",
+        "Если топик удалён — создайте заново: `kafka-topics --create --topic connect-offsets --replication-factor 3 --partitions 25 --config cleanup.policy=compact`"
+      ],
+      "relatedLessons": [
+        { "title": "Lab Setup", "slug": "01-module-1/03-lab-setup" },
+        { "title": "Connector Configuration", "slug": "02-module-2/01-connector-configuration" }
+      ]
+    },
+    {
+      "errorMessage": "java.lang.OutOfMemoryError: Java heap space",
+      "connector": "common",
+      "category": "performance",
+      "symptoms": [
+        "Kafka Connect worker падает с OutOfMemoryError",
+        "Коннектор зависает во время snapshot больших таблиц",
+        "Увеличение памяти в метриках JVM до предела heap"
+      ],
+      "cause": "Недостаточно памяти JVM heap для обработки больших событий или snapshot операций. Причины: очень большие таблицы в snapshot, огромные транзакции, много коннекторов на одном worker, малый heap size.",
+      "solution": [
+        "Увеличьте heap size в KAFKA_HEAP_OPTS: `export KAFKA_HEAP_OPTS=\"-Xms4G -Xmx4G\"`",
+        "Для snapshot: используйте incremental snapshot вместо initial (Debezium 1.6+)",
+        "Уменьшите max.batch.size и max.queue.size в конфигурации коннектора",
+        "Разделите коннекторы по разным worker процессам",
+        "Мониторьте JVM метрики: heap usage, GC frequency, GC pause time",
+        "Используйте G1GC для лучшего управления памятью: `-XX:+UseG1GC`"
+      ],
+      "relatedLessons": [
+        { "title": "Connect Tuning", "slug": "06-module-6/01-connect-tuning" },
+        { "title": "Snapshot Strategies", "slug": "02-module-2/05-snapshot-strategies" }
+      ]
+    },
+    {
+      "errorMessage": "ERROR: could not access file \"pgoutput\": No such file or directory",
+      "connector": "postgresql",
+      "category": "configuration",
+      "symptoms": [
+        "PostgreSQL коннектор не стартует с plugin.name=pgoutput",
+        "Ошибка \"could not access file pgoutput\"",
+        "pg_create_logical_replication_slot падает при указании pgoutput"
+      ],
+      "cause": "PostgreSQL не имеет установленного pgoutput плагина или используется старая версия PostgreSQL (< 10). pgoutput — это встроенный плагин логической репликации, доступный с PostgreSQL 10+.",
+      "solution": [
+        "Проверьте версию PostgreSQL: `SELECT version();` — должна быть 10 или выше",
+        "Проверьте доступные плагины: `SELECT * FROM pg_available_extensions WHERE name = 'pgoutput';`",
+        "Если PostgreSQL < 10: обновите до версии 10+ или используйте decoderbufs plugin",
+        "Если PostgreSQL >= 10 но pgoutput отсутствует: переустановите PostgreSQL или плагин",
+        "Альтернативно используйте plugin.name=decoderbufs (требует отдельной установки)",
+        "Для RDS/Aurora: убедитесь, что rds.logical_replication = 1 в parameter group"
+      ],
+      "relatedLessons": [
+        { "title": "Lab Setup", "slug": "01-module-1/03-lab-setup" },
+        { "title": "Connector Configuration", "slug": "02-module-2/01-connector-configuration" }
+      ]
+    }
+  ]
+}
