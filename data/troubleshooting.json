@@ -1,4 +1,28 @@
 {
+  "title": "Troubleshooting CDC",
+  "description": "База знаний типичных ошибок Debezium с диагностикой, причинами и пошаговыми решениями. Используйте фильтры для поиска по коннектору и категории проблемы, или Cmd+K для поиска по тексту ошибки.",
+  "filters": {
+    "primary": {
+      "label": "Фильтр по коннектору",
+      "field": "connector",
+      "options": [
+        { "id": "postgresql", "label": "PostgreSQL", "icon": "postgresql", "color": "blue" },
+        { "id": "mysql", "label": "MySQL", "icon": "mysql", "color": "orange" },
+        { "id": "common", "label": "Общие", "icon": "gear", "color": "gray" }
+      ]
+    },
+    "secondary": {
+      "label": "Фильтр по категории",
+      "field": "category",
+      "options": [
+        { "id": "connection", "label": "Подключение", "icon": "plug", "color": "purple" },
+        { "id": "snapshot", "label": "Snapshot", "icon": "camera", "color": "cyan" },
+        { "id": "streaming", "label": "Streaming", "icon": "wave", "color": "teal" },
+        { "id": "configuration", "label": "Конфигурация", "icon": "gear", "color": "amber" },
+        { "id": "performance", "label": "Производительность", "icon": "lightning", "color": "rose" }
+      ]
+    }
+  },
   "entries": [
     {
       "errorCode": "PSQLException",
