@@ -117,7 +117,7 @@ try (DebeziumEngine<ChangeEvent<String, String>> engine =
 
 Поскольку Kafka Connect — рекомендуемый режим, разберем его детальнее.
 
-<KafkaConnectClusterDiagram client:load />
+<KafkaConnectClusterDiagram client:visible />
 
 ### Компоненты Kafka Connect
 
@@ -159,7 +159,7 @@ curl -X DELETE http://localhost:8083/connectors/postgres-connector
 
 Полный путь события от изменения в БД до потребителя:
 
-<CdcEventFlowDiagram client:load />
+<CdcEventFlowDiagram client:visible />
 
 ### Ключевые моменты
 

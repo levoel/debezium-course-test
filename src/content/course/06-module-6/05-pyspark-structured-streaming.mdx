@@ -52,7 +52,7 @@ import {
 
 ### Концептуальная модель
 
-<StructuredStreamingConceptDiagram client:load />
+<StructuredStreamingConceptDiagram client:visible />
 
 **Ключевые концепции:**
 
@@ -207,7 +207,7 @@ current_df.printSchema()
 
 ### Проблема: Late Data
 
-<PysparkWatermarkDiagram client:load />
+<PysparkWatermarkDiagram client:visible />
 
 **Без watermark:** Spark не знает, когда можно finalize результат окна. Late events drop silently.
 
@@ -267,7 +267,7 @@ result_df = watermarked_df \
 
 ### Checkpoint Architecture
 
-<MicroBatchVsContinuousDiagram client:load />
+<MicroBatchVsContinuousDiagram client:visible />
 
 **Что сохраняется в checkpoint:**
 

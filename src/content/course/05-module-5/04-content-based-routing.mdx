@@ -53,7 +53,7 @@ import {
 У вас sharded таблицы (`customers_shard_0`, `customers_shard_1`, ..., `customers_shard_9`). Downstream нужен **единый топик** `customers` для удобства обработки.
 
 <div className="not-prose">
-  <ContentBasedRouterDiagram client:load />
+  <ContentBasedRouterDiagram client:visible />
 </div>
 
 ## ByLogicalTableRouter: Regex-based Routing
@@ -190,7 +190,7 @@ USER kafka
 **Как работает:**
 
 <div className="not-prose">
-  <RegionBasedRoutingDiagram client:load />
+  <RegionBasedRoutingDiagram client:visible />
 </div>
 
 **Результат:**

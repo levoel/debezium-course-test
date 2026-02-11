@@ -35,7 +35,7 @@ PostgreSQL поддерживает два типа репликации. Пон
 
 ### Компоненты Logical Decoding
 
-<LogicalDecodingComponentsDiagram client:load />
+<LogicalDecodingComponentsDiagram client:visible />
 
 **WAL (Write-Ahead Log)** — журнал транзакций, куда PostgreSQL записывает каждое изменение ДО применения к таблицам. Гарантирует durability.
 
@@ -106,7 +106,7 @@ PostgreSQL поддерживает два типа репликации. Пон
 
 **Publication** — это набор таблиц, изменения которых будут доступны для логической репликации. Debezium использует publications для фильтрации таблиц.
 
-<PublicationsDiagram client:load />
+<PublicationsDiagram client:visible />
 
 ### Создание Publication
 
@@ -234,7 +234,7 @@ WHERE relname = 'customers';
 
 Соединим все компоненты в единый поток.
 
-<LogicalDecodingSequenceDiagram client:load />
+<LogicalDecodingSequenceDiagram client:visible />
 
 ### Ключевые точки
 

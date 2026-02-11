@@ -65,7 +65,7 @@ Outbox Pattern использует фундаментальную идею: **�
 **Ключевая концепция:** Вместо UPDATE + SEND делаем UPDATE + INSERT в одной транзакции. CDC-система (Debezium) автоматически публикует события из outbox-таблицы.
 
 <div className="not-prose">
-  <OutboxSolutionDiagram client:load />
+  <OutboxSolutionDiagram client:visible />
 </div>
 
 **Поток данных:**
@@ -216,7 +216,7 @@ Outbox Pattern — не magic. Важно понимать, что он дает
 **At-least-once** означает: событие доставится хотя бы один раз, возможно больше.
 
 <div className="not-prose">
-  <OutboxTransactionFlowDiagram client:load />
+  <OutboxTransactionFlowDiagram client:visible />
 </div>
 
 **Следствие:** Consumers должны обрабатывать duplicate events idempotently.
@@ -298,7 +298,7 @@ WHERE created_at < NOW() - INTERVAL '1 hour';
 ## Архитектурная диаграмма: Microservices с Outbox
 
 <div className="not-prose">
-  <MicroservicesOutboxDiagram client:load />
+  <MicroservicesOutboxDiagram client:visible />
 </div>
 
 **Flow:**

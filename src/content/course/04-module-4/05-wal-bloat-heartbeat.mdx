@@ -44,7 +44,7 @@ WAL bloat - это одна из **самых частых production-пробл
 
 Правильная защита требует нескольких уровней. Один слой может отказать - многослойность обеспечивает resilience.
 
-<MultiLayerDefenseDiagram client:load />
+<MultiLayerDefenseDiagram client:visible />
 
 ## Layer 1: max_slot_wal_keep_size
 
@@ -107,7 +107,7 @@ Value: 10737418240 (в байтах = 10GB)
 
 Heartbeat заставляет slot продвигаться даже когда мониторируемые таблицы не меняются.
 
-<HeartbeatFlowDiagram client:load />
+<HeartbeatFlowDiagram client:visible />
 
 ### pg_logical_emit_message() vs Heartbeat Table
 

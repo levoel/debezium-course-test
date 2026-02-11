@@ -75,7 +75,7 @@ stream.group_by('customer_id').sum('total')  # ???
 
 В distributed systems события **не приходят в порядке event time**:
 
-<OutOfOrderEventsSequenceDiagram client:load />
+<OutOfOrderEventsSequenceDiagram client:visible />
 
 **Почему это происходит:**
 
@@ -98,7 +98,7 @@ stream.group_by('customer_id').sum('total')  # ???
 
 **Watermark** — это маркер, который говорит Flink: "Все события с event_time < W уже прибыли (скорее всего)".
 
-<WatermarkProgressDiagram client:load />
+<WatermarkProgressDiagram client:visible />
 
 **Как работает:**
 
@@ -171,7 +171,7 @@ stream.window(...).sideOutputLateData(late_tag)
 
 ### Концепция
 
-<TumblingWindowsDiagram client:load />
+<TumblingWindowsDiagram client:visible />
 
 **Характеристики:**
 
@@ -282,7 +282,7 @@ result.execute().print()
 
 ### Концепция
 
-<SlidingWindowsDiagram client:load />
+<SlidingWindowsDiagram client:visible />
 
 **Характеристики:**
 
@@ -337,7 +337,7 @@ result = table_env.sql_query("""
 
 ### Концепция
 
-<SessionWindowsDiagram client:load />
+<SessionWindowsDiagram client:visible />
 
 **Характеристики:**
 
@@ -420,7 +420,7 @@ JOIN products p ON o.product_id = p.product_id
 
 ### Решение: FOR SYSTEM_TIME AS OF
 
-<TemporalJoinSequenceDiagram client:load />
+<TemporalJoinSequenceDiagram client:visible />
 
 **Temporal join** использует **event time** из orders для поиска **правильной версии** product.
 
@@ -513,7 +513,7 @@ Stateful operations создают **managed state** в памяти:
 
 **Проблема:** State растёт unbounded → OutOfMemoryError → job failure.
 
-<StateGrowthDiagram client:load />
+<StateGrowthDiagram client:visible />
 
 ### Решение 1: State TTL (Time-To-Live)
 

@@ -95,7 +95,7 @@ Debezium организует метрики по **контекстам** (cont
 MilliSecondsBehindSource = current_time - event_timestamp_in_db
 ```
 
-<LagCalculationDiagram client:load />
+<LagCalculationDiagram client:visible />
 
 **Интерпретация:**
 - **0-500ms** — нормально (processing overhead)
@@ -116,7 +116,7 @@ debezium_metrics_MilliSecondsBehindSource{connector="inventory-connector"}
 
 **Зачем нужна:** MilliSecondsBehindSource обновляется только при получении событий. Если событий нет — метрика "замирает".
 
-<StalenessScenariosDiagram client:load />
+<StalenessScenariosDiagram client:visible />
 
 **Интерпретация:**
 - **До 30s** — нормально
@@ -156,7 +156,7 @@ Queue utilization % = 100 * (1 - QueueRemainingCapacity / QueueTotalCapacity)
 
 Когда возникает проблема — используйте этот decision tree.
 
-<DiagnosticDecisionTreeDiagram client:load />
+<DiagnosticDecisionTreeDiagram client:visible />
 
 ### Сценарий 1: "Коннектор отстает" (Lag growing)
 

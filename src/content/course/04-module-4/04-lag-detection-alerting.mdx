@@ -40,7 +40,7 @@ Dashboard показывает "что происходит", но требуе�
 
 Не все проблемы одинаково критичны. Правильная иерархия предотвращает "alert fatigue":
 
-<AlertSeverityHierarchyDiagram client:load />
+<AlertSeverityHierarchyDiagram client:visible />
 
 ### Рекомендуемые пороги для CDC
 
@@ -57,7 +57,7 @@ Dashboard показывает "что происходит", но требуе�
 
 CDC pipeline **нормально** имеет кратковременные spike-и lag:
 
-<BatchInsertSpikeDiagram client:load />
+<BatchInsertSpikeDiagram client:visible />
 
 Если алертить на каждый spike более 1s:
 
@@ -222,7 +222,7 @@ Notification policies маршрутизируют алерты к правил�
   - Group interval: `5m`
   - Repeat interval: `4h`
 
-<NotificationRoutingDiagram client:load />
+<NotificationRoutingDiagram client:visible />
 
 ## Понимание MilliSecondsBehindSource
 

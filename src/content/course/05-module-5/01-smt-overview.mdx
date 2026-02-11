@@ -43,7 +43,7 @@ import {
 ### Решение: Трансформации на уровне Kafka Connect
 
 <div className="not-prose">
-  <SmtSolutionDiagram client:load />
+  <SmtSolutionDiagram client:visible />
 </div>
 
 **С SMT:** Трансформация выполняется **до публикации** в Kafka:
@@ -60,7 +60,7 @@ import {
 ### Execution Model
 
 <div className="not-prose">
-  <SmtExecutionModelDiagram client:load />
+  <SmtExecutionModelDiagram client:visible />
 </div>
 
 **Ключевые свойства:**
@@ -207,7 +207,7 @@ Debezium 2.5.4 предоставляет набор production-ready SMT для
 **Критически важно:** Порядок SMT имеет значение. Каждый SMT получает output предыдущего.
 
 <div className="not-prose">
-  <SmtChainOrderDiagram client:load />
+  <SmtChainOrderDiagram client:visible />
 </div>
 
 **Стандартный порядок:**
@@ -353,7 +353,7 @@ SMT — это не универсальный инструмент. Есть з
 ### Decision Framework
 
 <div className="not-prose">
-  <SmtDecisionFrameworkDiagram client:load />
+  <SmtDecisionFrameworkDiagram client:visible />
 </div>
 
 ## Полный каталог Debezium SMT

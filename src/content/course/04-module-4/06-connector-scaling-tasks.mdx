@@ -56,7 +56,7 @@ curl http://localhost:8083/connectors/inventory-connector/status | jq '.tasks | 
 
 ### WAL — последовательный журнал
 
-<WalSequentialDiagram client:load />
+<WalSequentialDiagram client:visible />
 
 WAL — это **последовательный** журнал транзакций. Logical decoding читает его **строго по порядку** от позиции `restart_lsn`. Невозможно распараллелить чтение, потому что:
 
@@ -76,7 +76,7 @@ WAL — это **последовательный** журнал транзак�
 
 ### Архитектурная причина
 
-<SingleTaskArchitectureDiagram client:load />
+<SingleTaskArchitectureDiagram client:visible />
 
 ## Реальные стратегии масштабирования
 
@@ -86,7 +86,7 @@ WAL — это **последовательный** журнал транзак�
 
 **Когда использовать:** Разные наборы таблиц имеют независимых потребителей.
 
-<MultipleConnectorsDiagram client:load />
+<MultipleConnectorsDiagram client:visible />
 
 **Конфигурация:**
 
@@ -132,7 +132,7 @@ WAL — это **последовательный** журнал транзак�
 
 **Когда использовать:** Один коннектор, но нужна параллельная обработка.
 
-<DownstreamParallelizationDiagram client:load />
+<DownstreamParallelizationDiagram client:visible />
 
 **Как работает:**
 1. Debezium пишет события в Kafka topic
@@ -234,7 +234,7 @@ kafka-topics --create \
 
 ## Decision Framework: Выбор стратегии
 
-<ScalingDecisionFrameworkDiagram client:load />
+<ScalingDecisionFrameworkDiagram client:visible />
 
 ## Anti-Patterns
 

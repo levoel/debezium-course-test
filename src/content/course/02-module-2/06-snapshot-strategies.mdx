@@ -60,7 +60,7 @@ Debezium предлагает несколько режимов снэпшота
 
 Во время снэпшота коннектор **не обрабатывает** новые изменения из WAL. Все CDC-события накапливаются в replication slot, увеличивая WAL retention.
 
-<TraditionalSnapshotDiagram client:load />
+<TraditionalSnapshotDiagram client:visible />
 
 ### 2. Нет возобновляемости
 
@@ -81,7 +81,7 @@ Debezium предлагает несколько режимов снэпшота
 | Блокировки таблиц | Возможны | Минимальные |
 | Управление | Автоматически при старте | По запросу через signaling table |
 
-<IncrementalSnapshotDiagram client:load />
+<IncrementalSnapshotDiagram client:visible />
 
 ### Как работает incremental snapshot
 
@@ -133,7 +133,7 @@ Streaming события отличаются отсутствием `snapshot: 
 
 ## Выбор стратегии: Decision Framework
 
-<SnapshotDecisionDiagram client:load />
+<SnapshotDecisionDiagram client:visible />
 
 ### Рекомендации по сценариям
 

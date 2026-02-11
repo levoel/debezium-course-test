@@ -42,7 +42,7 @@ import { TraditionalKafkaArchitectureDiagram, KafkalessArchitectureDiagram, Debe
 
 ### Kafka-less архитектура (Debezium Server)
 
-<KafkalessArchitectureDiagram client:load />
+<KafkalessArchitectureDiagram client:visible />
 
 **Компоненты:**
 - PostgreSQL как источник данных
@@ -82,7 +82,7 @@ Debezium Server — это **standalone приложение на базе Quark
 1. **Source connector** — Debezium PostgreSQL connector для чтения WAL
 2. **Sink adapter** — адаптер для публикации в различные системы
 
-<DebeziumServerInternalDiagram client:load />
+<DebeziumServerInternalDiagram client:visible />
 
 **Поддерживаемые sink адаптеры:**
 - **Google Pub/Sub** (для GCP)
