@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "01-module-1/02-debezium-architecture",
+  "moduleId": "01-module-1",
+  "_meta": {
+    "idPrefix": "m01-02",
+    "description": "Use IDs: m01-02-q1, m01-02-q2, ... for MC/TF; m01-02-code-1 for code challenges"
+  },
+  "questions": []
+}

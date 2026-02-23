@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "02-module-2/02-replication-slots-lifecycle",
+  "moduleId": "02-module-2",
+  "_meta": {
+    "idPrefix": "m02-02",
+    "description": "Use IDs: m02-02-q1, m02-02-q2, ... for MC/TF; m02-02-code-1 for code challenges"
+  },
+  "questions": []
+}

@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "08-module-8/_exam",
+  "moduleId": "08-module-8",
+  "_meta": {
+    "idPrefix": "exam-m08",
+    "description": "Use IDs: exam-m08-q1, exam-m08-q2, ... (8-10 analytical questions)"
+  },
+  "questions": []
+}

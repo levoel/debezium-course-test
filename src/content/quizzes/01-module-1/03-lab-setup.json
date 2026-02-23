@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "01-module-1/03-lab-setup",
+  "moduleId": "01-module-1",
+  "_meta": {
+    "idPrefix": "m01-03",
+    "description": "Use IDs: m01-03-q1, m01-03-q2, ... for MC/TF; m01-03-code-1 for code challenges"
+  },
+  "questions": []
+}

@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "05-module-5/03-pii-masking",
+  "moduleId": "05-module-5",
+  "_meta": {
+    "idPrefix": "m05-03",
+    "description": "Use IDs: m05-03-q1, m05-03-q2, ... for MC/TF; m05-03-code-1 for code challenges"
+  },
+  "questions": []
+}

@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "05-module-5/07-schema-registry-avro",
+  "moduleId": "05-module-5",
+  "_meta": {
+    "idPrefix": "m05-07",
+    "description": "Use IDs: m05-07-q1, m05-07-q2, ... for MC/TF; m05-07-code-1 for code challenges"
+  },
+  "questions": []
+}

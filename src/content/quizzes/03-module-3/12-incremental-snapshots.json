@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "03-module-3/12-incremental-snapshots",
+  "moduleId": "03-module-3",
+  "_meta": {
+    "idPrefix": "m03-12",
+    "description": "Use IDs: m03-12-q1, m03-12-q2, ... for MC/TF; m03-12-code-1 for code challenges"
+  },
+  "questions": []
+}

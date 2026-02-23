@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "04-module-4/_exam",
+  "moduleId": "04-module-4",
+  "_meta": {
+    "idPrefix": "exam-m04",
+    "description": "Use IDs: exam-m04-q1, exam-m04-q2, ... (8-10 analytical questions)"
+  },
+  "questions": []
+}

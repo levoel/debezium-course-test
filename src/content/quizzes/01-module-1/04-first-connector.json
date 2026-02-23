@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "01-module-1/04-first-connector",
+  "moduleId": "01-module-1",
+  "_meta": {
+    "idPrefix": "m01-04",
+    "description": "Use IDs: m01-04-q1, m01-04-q2, ... for MC/TF; m01-04-code-1 for code challenges"
+  },
+  "questions": []
+}

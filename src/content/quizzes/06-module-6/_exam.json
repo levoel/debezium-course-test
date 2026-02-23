@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "06-module-6/_exam",
+  "moduleId": "06-module-6",
+  "_meta": {
+    "idPrefix": "exam-m06",
+    "description": "Use IDs: exam-m06-q1, exam-m06-q2, ... (8-10 analytical questions)"
+  },
+  "questions": []
+}

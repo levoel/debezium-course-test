@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "01-module-1/01-cdc-fundamentals",
+  "moduleId": "01-module-1",
+  "_meta": {
+    "idPrefix": "m01-01",
+    "description": "Use IDs: m01-01-q1, m01-01-q2, ... for MC/TF; m01-01-code-1 for code challenges"
+  },
+  "questions": []
+}

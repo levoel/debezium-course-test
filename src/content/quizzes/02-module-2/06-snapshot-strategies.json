@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "02-module-2/06-snapshot-strategies",
+  "moduleId": "02-module-2",
+  "_meta": {
+    "idPrefix": "m02-06",
+    "description": "Use IDs: m02-06-q1, m02-06-q2, ... for MC/TF; m02-06-code-1 for code challenges"
+  },
+  "questions": []
+}
