@@ -5,5 +5,64 @@
     "idPrefix": "m03-09",
     "description": "Use IDs: m03-09-q1, m03-09-q2, ... for MC/TF; m03-09-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-09-q1",
+      "type": "multiple-choice",
+      "question": "Почему Aurora MySQL запрещает выполнение FLUSH TABLES WITH READ LOCK, которое Debezium использует для создания консистентного snapshot в community MySQL?",
+      "options": [
+        { "id": "a", "text": "Aurora не поддерживает блокировки таблиц в принципе — все операции используют MVCC без каких-либо locks" },
+        { "id": "b", "text": "Aurora как managed service запрещает глобальные блокировки из соображений безопасности многопользовательской среды — FLUSH TABLES WITH READ LOCK требует привилегию SUPER/RELOAD, которая не предоставляется пользователям" },
+        { "id": "c", "text": "FLUSH TABLES WITH READ LOCK несовместим с Enhanced Binlog, поэтому Aurora блокирует эту команду" },
+        { "id": "d", "text": "Aurora использует distributed storage, и глобальная блокировка не может быть реализована на нескольких storage nodes" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Aurora MySQL — managed service, где AWS управляет инфраструктурой для множества клиентов. FLUSH TABLES WITH READ LOCK блокирует ВСЮ базу данных для записи, что недопустимо в managed среде — это может вызвать каскадные задержки для всех приложений, использующих кластер. Aurora не предоставляет привилегию SUPER пользователям, поэтому команда возвращает Access Denied. Debezium автоматически обнаруживает эту ошибку и переключается на fallback-стратегию: table-level locks (LOCK TABLES <table> READ) для каждой таблицы по отдельности. Это нормальное поведение для Aurora — в логах коннектора вы увидите: 'Flush tables with read lock failed, falling back to table-level locks'. Вариант A неверен — Aurora поддерживает table-level locks.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-09-q2",
+      "type": "multiple-choice",
+      "question": "Для базы данных Aurora MySQL с таблицей размером 500GB+ необходимо выполнить initial snapshot Debezium без блокировок и без возможности заморозить DDL-изменения. Какая стратегия минимизирует impact на production?",
+      "options": [
+        { "id": "a", "text": "snapshot.locking.mode=none — полностью убирает блокировки, достаточно для любого размера таблицы" },
+        { "id": "b", "text": "snapshot.locking.mode=extended — создаёт глобальную блокировку на весь snapshot для максимальной консистентности" },
+        { "id": "c", "text": "Backup-based подход: зафиксировать binlog позицию через SHOW MASTER STATUS, создать Aurora DB Cluster Snapshot, restore в temporary cluster для bulk load через JDBC, затем Debezium с snapshot.mode=never от сохранённой позиции" },
+        { "id": "d", "text": "snapshot.locking.mode=minimal с snapshot.query.timeout.ms=86400000 (24 часа) для предотвращения timeout" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Для таблиц 500GB+ ни один из стандартных snapshot.locking.mode не подходит оптимально: (1) minimal создаёт table locks, что при 500GB+ может вызвать значительные write latency spikes; (2) none убирает блокировки, но требует schema freeze — невозможно в данном сценарии; (3) extended не работает на Aurora (Access Denied). Backup-based подход решает все проблемы: Aurora snapshot создаётся на storage level без нагрузки на production, temporary cluster используется только для bulk load, а Debezium подключается к production writer с snapshot.mode=never от сохранённой binlog позиции. Trade-offs: сложность setup (snapshot + restore + JDBC + Debezium), стоимость temporary кластера, необходимость управления schema history topic (сначала schema_only snapshot). Но для 500GB+ это единственный практичный подход с zero production impact.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-09-q3",
+      "type": "multiple-choice",
+      "question": "Сравните snapshot.locking.mode=minimal и snapshot.locking.mode=none для Aurora MySQL. В каком сценарии выбор none безопасен, а в каком создаёт критический риск?",
+      "options": [
+        { "id": "a", "text": "none безопасен при гарантированной заморозке DDL-изменений на время snapshot; создаёт риск data inconsistency если ALTER TABLE выполняется во время snapshot без блокировок, потому что коннектор читает schema без lock и binlog события могут содержать новую структуру" },
+        { "id": "b", "text": "none всегда безопаснее minimal, потому что отсутствие блокировок означает отсутствие конфликтов с production writes" },
+        { "id": "c", "text": "none безопасен для таблиц менее 10 GB, а minimal — для таблиц более 10 GB" },
+        { "id": "d", "text": "none и minimal идентичны на Aurora, потому что Aurora автоматически fallback на table-level locks в обоих случаях" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "snapshot.locking.mode=minimal использует table-level locks (LOCK TABLES READ) для чтения schema каждой таблицы, затем снимает lock и читает данные через REPEATABLE READ без блокировок. Это гарантирует корректность schema даже при concurrent DDL. snapshot.locking.mode=none не создаёт никаких блокировок вообще — schema читается без lock. Если DDL (ALTER TABLE) выполняется МЕЖДУ чтением schema и чтением данных, коннектор получит несоответствие: schema без новой колонки, но binlog события с новой колонкой. Это приведёт к data inconsistency или ошибкам парсинга. Поэтому none безопасен ТОЛЬКО при гарантированной заморозке DDL (координация с командой разработки: никаких schema changes во время snapshot). Если заморозка DDL невозможна — используйте minimal (принимайте кратковременные блокировки) или backup-based подход.",
+      "hint": "Подумайте о временном окне между чтением schema и чтением данных. В режиме minimal это окно защищено table lock. В режиме none это окно не защищено. Что произойдёт, если DDL-операция попадёт именно в это незащищённое окно?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m03-09-q4",
+      "type": "multiple-choice",
+      "question": "Команда запускает initial snapshot Debezium на production Aurora кластере в бизнес-часы с snapshot.locking.mode=minimal. Через 10 минут приложения начинают получать timeout ошибки при записи. SHOW PROCESSLIST показывает: User=debezium, State='Waiting for table lock', Time=600. Что произошло и как предотвратить?",
+      "options": [
+        { "id": "a", "text": "Debezium создал глобальную блокировку через FLUSH TABLES — необходимо обновить Debezium до версии с поддержкой Aurora" },
+        { "id": "b", "text": "Table lock на чтение schema для большой таблицы со сложной структурой (сотни колонок, десятки индексов) держится долго, блокируя concurrent writes на эту таблицу. Решения: запланировать snapshot на maintenance window, перейти на snapshot.locking.mode=none с schema freeze, или использовать backup-based подход" },
+        { "id": "c", "text": "Aurora reader instance перехватил lock — нужно подключить Debezium к writer endpoint" },
+        { "id": "d", "text": "Kafka Connect worker исчерпал память и создал deadlock с Aurora — необходимо увеличить JVM heap size" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "В режиме snapshot.locking.mode=minimal Debezium выполняет LOCK TABLES <table> READ для каждой таблицы при чтении schema. Для таблиц с простой структурой (10-20 колонок) lock держится секунды. Но для таблиц со сложной структурой (сотни колонок, десятки индексов, foreign keys) чтение schema через INFORMATION_SCHEMA может занять минуты, в течение которых table lock блокирует все записи в эту таблицу. Time=600 в SHOW PROCESSLIST показывает, что lock держится уже 10 минут. Решения по приоритету: (1) Запланировать snapshot на off-peak hours (maintenance window); (2) Если zero lock tolerance — переключиться на snapshot.locking.mode=none с координированным schema freeze; (3) Для очень больших/сложных таблиц — backup-based подход с Aurora snapshot для полного исключения production impact. Мониторинг lock duration через SHOW PROCESSLIST и CloudWatch (WriteLatency, DMLLatency) обязателен при snapshot.",
+      "hint": "Обратите внимание на значение Time=600 в SHOW PROCESSLIST — это длительность table lock в секундах. Связяжите это с размером и сложностью schema таблицы. Какие альтернативные стратегии позволяют полностью избежать блокировок на production?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

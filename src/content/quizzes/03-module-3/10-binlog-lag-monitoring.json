@@ -5,5 +5,63 @@
     "idPrefix": "m03-10",
     "description": "Use IDs: m03-10-q1, m03-10-q2, ... for MC/TF; m03-10-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-10-q1",
+      "type": "multiple-choice",
+      "question": "В чём принципиальная разница между метриками MilliSecondsBehindSource и MilliSecondsSinceLastEvent в контексте мониторинга MySQL CDC?",
+      "options": [
+        { "id": "a", "text": "MilliSecondsBehindSource измеряет задержку между временем события в binlog и текущим временем коннектора (насколько коннектор отстаёт от базы данных), а MilliSecondsSinceLastEvent — время с момента последнего прочитанного события (детектирует стагнацию чтения binlog)" },
+        { "id": "b", "text": "MilliSecondsBehindSource — метрика MySQL, а MilliSecondsSinceLastEvent — метрика Kafka Connect, и они измеряют одно и то же" },
+        { "id": "c", "text": "MilliSecondsBehindSource учитывает только DML-операции, а MilliSecondsSinceLastEvent включает DDL и heartbeat события" },
+        { "id": "d", "text": "MilliSecondsSinceLastEvent всегда больше MilliSecondsBehindSource на величину network latency" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Эти две метрики отвечают на разные вопросы. MilliSecondsBehindSource рассчитывается Debezium как разница между timestamp binlog события (source.ts_ms) и текущим системным временем — она показывает, насколько CDC поток отстаёт от реальных изменений в базе данных. Например, значение 5000 означает, что коннектор обрабатывает события 5-секундной давности. MilliSecondsSinceLastEvent показывает, сколько миллисекунд прошло с момента последнего прочитанного события — она детектирует стагнацию. Если heartbeat настроен на 10 секунд, а MilliSecondsSinceLastEvent = 120000 (2 минуты), значит heartbeat события тоже не приходят — коннектор застрял. Обе метрики нужны: первая для оценки свежести данных, вторая для обнаружения проблем с чтением binlog.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-10-q2",
+      "type": "multiple-choice",
+      "question": "JMX метрика MilliSecondsBehindSource показывает 50ms (отлично), но CloudWatch метрика AuroraBinlogReplicaLag в secondary регионе показывает 600 секунд. Какой вывод должна сделать команда?",
+      "options": [
+        { "id": "a", "text": "Одна из метрик ошибочна — невозможно иметь низкий lag коннектора при высоком infrastructure lag" },
+        { "id": "b", "text": "Коннектор работает корректно и читает binlog быстро в primary регионе, но cross-region репликация Aurora отстаёт на 10 минут — при failover на secondary регион последние 10 минут binlog событий будут потеряны, и Debezium потребует resnapshot" },
+        { "id": "c", "text": "AuroraBinlogReplicaLag не относится к Debezium — это метрика внутренней репликации Aurora, которая не влияет на CDC" },
+        { "id": "d", "text": "Необходимо срочно переключить Debezium на reader instance для снижения нагрузки на writer" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Это наглядный пример, почему трёхуровневый мониторинг критичен. Tier 1 (JMX MilliSecondsBehindSource=50ms) показывает, что коннектор в primary регионе отлично справляется с чтением binlog. Tier 2 (CloudWatch AuroraBinlogReplicaLag=600s) показывает infrastructure-level проблему — cross-region репликация Aurora отстаёт на 10 минут. Если произойдёт failover на secondary регион, Debezium reconnect к новому master обнаружит, что последние 10 минут binlog событий ещё не реплицированы. Это может привести к потере данных в CDC потоке или необходимости resnapshot. Команда должна: (1) не выполнять failover до снижения replica lag; (2) расследовать причину high lag (network latency, insufficient instance size); (3) настроить alert на AuroraBinlogReplicaLag > 300s. Вариант D опасен — Debezium НЕ должен подключаться к reader, потому что binlog доступен только на writer.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-10-q3",
+      "type": "multiple-choice",
+      "question": "Рассмотрите Prometheus alerting rule:\n\n```yaml\n- alert: DebeziumCriticalBinlogLag\n  expr: debezium_metrics_MilliSecondsBehindSource / 1000 > 300\n  for: 5m\n  labels:\n    severity: critical\n  annotations:\n    summary: \"CDC lag exceeds 5 minutes\"\n```\n\nЧто означает параметр `for: 5m` и почему он важен для production мониторинга?",
+      "options": [
+        { "id": "a", "text": "Alert проверяется каждые 5 минут — чем меньше значение, тем чаще проверки" },
+        { "id": "b", "text": "Alert будет fired только если условие (lag > 300 секунд) остаётся истинным непрерывно в течение 5 минут — это предотвращает false positive алерты от временных всплесков lag при burst записи в базу данных" },
+        { "id": "c", "text": "Метрика усредняется за 5 минут перед сравнением с threshold" },
+        { "id": "d", "text": "Alert автоматически resolve через 5 минут после firing, даже если условие всё ещё истинно" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Параметр for: 5m в Prometheus alert rules задаёт duration — период, в течение которого условие должно оставаться истинным непрерывно перед firing алерта. Alert проходит три состояния: inactive (условие ложно) -> pending (условие истинно, но for-период не истёк) -> firing (условие истинно непрерывно >= 5 минут). Это критически важно для production: без for-периода каждый temporary spike lag (например, при burst записи 10,000 транзакций или при краткосрочном замедлении Kafka) вызывал бы алерт и будил дежурного инженера. С for: 5m алерт срабатывает только при устойчивом высоком lag, указывающем на реальную проблему (а не transient spike). Рекомендуемые значения: warning алерты — for: 5m, critical алерты — for: 5m с более высоким threshold.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-10-q4",
+      "type": "multiple-choice",
+      "question": "Спроектируйте трёхуровневую alerting стратегию для production MySQL CDC на Aurora. Какая комбинация метрик и thresholds обеспечит comprehensive мониторинг без чрезмерных false positives?",
+      "options": [
+        { "id": "a", "text": "Единственный alert: MilliSecondsBehindSource > 60s, severity=critical — простота важнее детальности" },
+        { "id": "b", "text": "Info: MilliSecondsBehindSource > 30s (for: 5m); Warning: MilliSecondsBehindSource > 60s (for: 5m) + QueueRemainingCapacity < 20% (for: 5m); Critical: MilliSecondsBehindSource > 300s (for: 5m) + Connected == 0 (for: 2m) + AuroraBinlogReplicaLag > 300s (for: 5m)" },
+        { "id": "c", "text": "Мониторинг только CloudWatch метрик Aurora (AuroraBinlogReplicaLag, DatabaseConnections) — JMX метрики Debezium избыточны при наличии infrastructure мониторинга" },
+        { "id": "d", "text": "Alert на каждую JMX метрику отдельно с threshold 0 и for: 1s — максимальная чувствительность к любым отклонениям" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Трёхуровневая alerting стратегия охватывает все аспекты CDC health: (1) Info уровень (MilliSecondsBehindSource > 30s) — раннее предупреждение о нарастающем lag, не будит дежурных, но видно на dashboard; (2) Warning уровень объединяет lag > 60s с queue backpressure (QueueRemainingCapacity < 20%) — указывает на Kafka write bottleneck, требует внимания инженера; (3) Critical уровень включает три независимых сценария: устойчивый lag > 300s (приближение к потере binlog позиции), потеря соединения с базой > 2 минут (Connected == 0, grace period для Aurora failover), и high Aurora replica lag (infrastructure не готов к failover). Параметр for: 5m на большинстве алертов предотвращает false positives от temporary spikes. Connected == 0 использует for: 2m, потому что Aurora failover занимает 30-90 секунд — 2-минутный порог исключает false positives при planned failovers. Вариант A слишком упрощён — один алерт не покрывает infrastructure health. Вариант D создаст alert fatigue — чрезмерные уведомления приведут к игнорированию настоящих проблем.",
+      "hint": "Подумайте о трёх разных перспективах: свежесть данных (lag), здоровье коннектора (connection, queue), и готовность инфраструктуры к failover (Aurora replica lag). Каждый уровень severity должен соответствовать конкретному action: info — наблюдение, warning — расследование, critical — немедленное действие.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
