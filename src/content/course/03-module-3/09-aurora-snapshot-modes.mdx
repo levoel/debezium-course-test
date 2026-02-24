@@ -91,6 +91,11 @@ INFO: Flush tables with read lock failed, falling back to table-level locks
 
 </Callout>
 
+<KnowledgeCheck
+  question="Почему Debezium автоматически переключается на table-level locks при подключении к Aurora MySQL?"
+  answer="Потому что Aurora MySQL, как managed service от AWS, запрещает выполнение FLUSH TABLES WITH READ LOCK (глобальную блокировку). Debezium пытается выполнить эту команду, получает Access Denied, и автоматически переходит на стратегию LOCK TABLES per-table, блокируя каждую таблицу отдельно только на время чтения её schema."
+/>
+
 ## Как Debezium адаптируется к Aurora: Snapshot Workflow
 
 {/* Detailed snapshot workflow covered by InitialSnapshotDiagram above */}
@@ -234,6 +239,11 @@ for this operation
 **Решение:** Используйте `minimal` или `none` mode.
 
 </Callout>
+
+<KnowledgeCheck
+  question="Какой главный риск использования snapshot.locking.mode=none на Aurora MySQL?"
+  answer="Главный риск — если кто-то выполнит ALTER TABLE (DDL операцию) во время snapshot, Debezium прочитает schema без новых колонок, а binlog stream будет содержать события с новыми колонками. Это приведёт к data inconsistency между snapshot и streaming данными. Поэтому mode none требует обязательного schema freeze — координации с командой для запрета любых DDL изменений на время snapshot."
+/>
 
 ## Decision Matrix: Выбор snapshot.locking.mode для Aurora
 

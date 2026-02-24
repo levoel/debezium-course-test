@@ -126,6 +126,11 @@ Issue:
 - Каждый chunk обрабатывается **независимо**, между chunks Debezium обрабатывает binlog events
 - **Resumable**: Если snapshot прерывается, Debezium знает, какие chunks уже прочитаны
 
+<KnowledgeCheck
+  question="В чём ключевое архитектурное отличие incremental snapshot от initial snapshot в Debezium?"
+  answer="Initial snapshot блокирует binlog streaming до завершения, требует перезапуска connector и захватывает все таблицы целиком. Incremental snapshot читает данные порциями (chunks по 2048 строк), между chunks обрабатывает binlog events параллельно, не требует перезапуска connector, позволяет выбрать конкретные таблицы и поддерживает возобновление после сбоя."
+/>
+
 ## Signal Table: Механизм управления Debezium
 
 Incremental snapshot триггируется через **signal table** — специальную служебную таблицу, которую Debezium мониторит для получения команд.
@@ -240,6 +245,11 @@ VALUES (UUID(), 'execute-snapshot', '...');
 - Timestamp-based: `CONCAT('sig-', UNIX_TIMESTAMP())` (может иметь collisions)
 
 </Callout>
+
+<KnowledgeCheck
+  question="Почему signal table обязательно должна иметь PRIMARY KEY и что произойдёт без него?"
+  answer="Без PRIMARY KEY signal table приводит к silent failure: Debezium захватывает INSERT event из binlog, но не может корректно разобрать его структуру, потому что ожидает PK для binlog event structure. В результате incremental snapshot никогда не запускается, при этом никаких сообщений об ошибке в логах не появляется — полностью тихий отказ."
+/>
 
 ## Connector Configuration для Signal Table
 

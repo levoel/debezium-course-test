@@ -165,6 +165,11 @@ pt-online-schema-change \
 | **Pausable** | ✅ Да | ⚠️ Требует удаления триггеров |
 | **Рекомендация для CDC** | Если нет FK и Debezium читает реплику | Если есть FK или нужна меньшая нагрузка |
 
+<KnowledgeCheck
+  question="В чём принципиальная разница между механизмами синхронизации изменений в gh-ost и pt-online-schema-change?"
+  answer="gh-ost использует triggerless подход — он читает binlog параллельно с Debezium для синхронизации изменений в ghost table, что удваивает нагрузку на binlog I/O. pt-online-schema-change создаёт триггеры (INSERT/UPDATE/DELETE) на оригинальной таблице, которые автоматически копируют изменения в новую таблицу, добавляя overhead на каждую запись, но не создавая дополнительной нагрузки на binlog."
+/>
+
 <Callout type="warning">
 **gh-ost удваивает binlog read нагрузку**
 
@@ -306,6 +311,11 @@ gh-ost --table=orders --alter="ADD COLUMN status VARCHAR(20)" --execute
 
 **Альтернатива (антипаттерн):** Фильтрация в consumers — тратит ресурсы Kafka и сети.
 </Callout>
+
+<KnowledgeCheck
+  question="Почему рекомендуется использовать широкий capture pattern с Filter SMT вместо явного перечисления таблиц при интеграции с gh-ost/pt-osc?"
+  answer="При явном перечислении таблиц (table.include.list) helper tables (типа _orders_gho, _orders_new) не будут в списке. Когда DDL-инструмент создаст их, Debezium увидит события в binlog для таблиц, которых нет в schema history, и connector упадёт с ошибкой. Широкий pattern (mydb.*) захватывает все таблицы включая helper, а Filter SMT отбрасывает их события до отправки в Kafka."
+/>
 
 ## Pattern 2: Dynamic Include List (альтернативный подход)
 

@@ -169,6 +169,11 @@ SHOW GLOBAL VARIABLES LIKE 'gtid_purged';
 - Purged: до 200
 - **Gap**: GTID 151-200 потеряны
 
+<KnowledgeCheck
+  question="Как диагностировать binlog position loss и определить размер потерянных данных?"
+  answer="Нужно сравнить required binlog file из connector offset topic (connect-offsets) с oldest available file на MySQL (SHOW BINARY LOGS). Если required file старше oldest available — position lost. Для оценки data gap при включённом GTID сравните gtid_purged на MySQL с GTID в offset: разница между ними показывает количество потерянных транзакций."
+/>
+
 ### Recovery Procedure
 
 <Callout type="warning">
@@ -487,6 +492,11 @@ kafka-console-consumer \
 
 **Всегда проверяйте DDL history перед recovery mode!**
 </Callout>
+
+<KnowledgeCheck
+  question="Почему snapshot.mode=recovery опасен, если между last offset и текущим моментом произошли DDL изменения?"
+  answer="Recovery mode читает текущую схему базы данных и предполагает, что она совпадает со схемой на момент last offset. Если между ними был ALTER TABLE (например, DROP COLUMN email), connector будет применять текущую схему к старым событиям, которые ещё содержат удалённую колонку. Это приводит к silent data corruption — downstream consumers получают некорректные данные без каких-либо ошибок."
+/>
 
 #### Prerequisite: DDL Verification
 
