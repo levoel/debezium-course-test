@@ -5,5 +5,63 @@
     "idPrefix": "m04-02",
     "description": "Use IDs: m04-02-q1, m04-02-q2, ... for MC/TF; m04-02-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m04-02-q1",
+      "type": "multiple-choice",
+      "question": "Почему Prometheus использует pull-модель (сам запрашивает метрики с targets), а не push-модель (targets отправляют метрики в Prometheus)?",
+      "options": [
+        { "id": "a", "text": "Pull-модель позволяет Prometheus контролировать частоту сбора, обнаруживать недоступность targets по отсутствию ответа и упрощает конфигурацию -- targets не нужно знать адрес Prometheus" },
+        { "id": "b", "text": "Push-модель технически невозможна для JMX метрик" },
+        { "id": "c", "text": "Pull-модель быстрее передает данные по сети, чем push" },
+        { "id": "d", "text": "Pull-модель поддерживается только в Kubernetes, а push -- только в Docker" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Pull-модель дает Prometheus несколько преимуществ: (1) контроль scrape interval -- Prometheus сам решает, когда собирать метрики; (2) обнаружение недоступности -- если target не отвечает на scrape, Prometheus знает, что сервис упал (при push-модели молчание может означать как 'нет данных', так и 'сервис мертв'); (3) простота конфигурации -- targets просто экспортируют HTTP endpoint, не зная о Prometheus. Push-модель (вариант B) технически возможна через Pushgateway, но не рекомендуется для долгоживущих сервисов вроде Kafka Connect.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m04-02-q2",
+      "type": "multiple-choice",
+      "question": "Дана конфигурация JMX Exporter:\n\n```yaml\nrules:\n  - pattern: \"debezium.([^:]+)<type=connector-metrics, context=([^,]+), server=([^>]+)><>([^:]+)\"\n    name: \"debezium_metrics_$4\"\n    labels:\n      plugin: \"$1\"\n      context: \"$2\"\n      server: \"$3\"\n```\n\nЧто произойдет с JMX MBean `debezium.postgres:type=connector-metrics,context=streaming,server=inventory` при экспорте через это правило?",
+      "options": [
+        { "id": "a", "text": "MBean будет отброшен, так как pattern не совпадает с ObjectName" },
+        { "id": "b", "text": "Каждый атрибут MBean станет Prometheus метрикой вида debezium_metrics_{AttributeName} с labels plugin='postgres', context='streaming', server='inventory'" },
+        { "id": "c", "text": "Будет создана одна метрика debezium_metrics_streaming с единственным label server='inventory'" },
+        { "id": "d", "text": "Все атрибуты объединятся в одну метрику debezium_metrics_postgres" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Правило JMX Exporter использует regex capture groups для маппинга JMX ObjectName в Prometheus метрики. Pattern разбирает ObjectName: $1 = 'postgres' (plugin), $2 = 'streaming' (context), $3 = 'inventory' (server), $4 = имя каждого атрибута MBean. Результат: для каждого атрибута (MilliSecondsBehindSource, QueueRemainingCapacity и т.д.) создается отдельная Prometheus метрика debezium_metrics_{AttrName} с тремя labels. Это стандартная конфигурация, позволяющая фильтровать метрики по коннектору и контексту.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m04-02-q3",
+      "type": "multiple-choice",
+      "question": "Команда настраивает мониторинг CDC pipeline с SLO на lag в 30 секунд. Какой scrape_interval наиболее подходит для Prometheus и почему?",
+      "options": [
+        { "id": "a", "text": "1 секунда -- для максимальной детализации при SLO в 30 секунд" },
+        { "id": "b", "text": "15 секунд -- достаточная гранулярность для обнаружения проблемы задолго до нарушения SLO при минимальном overhead на Kafka Connect" },
+        { "id": "c", "text": "60 секунд -- стандартный интервал Prometheus, подходит для любых SLO" },
+        { "id": "d", "text": "300 секунд -- минимальная нагрузка на систему, lag обнаружится при следующем scrape" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Scrape interval 15 секунд -- оптимальный баланс для CDC мониторинга. При SLO 30s у нас будет минимум 2 точки данных до нарушения SLO, что достаточно для alerting с 'for' clause. Интервал 1s (вариант A) создает избыточную нагрузку на JMX Exporter и Connect, а также увеличивает cardinality хранилища, практически не улучшая время реакции (alerting все равно использует duration). Интервал 60s (вариант C) опасен для SLO 30s -- можно пропустить всплеск, а 300s (вариант D) полностью неприемлем.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m04-02-q4",
+      "type": "multiple-choice",
+      "question": "Команда обнаружила пробелы (gaps) в данных Prometheus для метрик Debezium: графики показывают пустые промежутки длительностью 2-5 минут. Коннектор при этом работал нормально (логи без ошибок). Какая наиболее вероятная причина?",
+      "options": [
+        { "id": "a", "text": "Debezium перестает экспортировать JMX метрики при отсутствии транзакций в базе данных" },
+        { "id": "b", "text": "Prometheus имеет лимит на количество time series и отбрасывает часть данных" },
+        { "id": "c", "text": "JMX Exporter endpoint временно недоступен -- перезапуск Kafka Connect worker или network timeout между Prometheus и Connect приводит к пропущенным scrape" },
+        { "id": "d", "text": "Prometheus retention policy удаляет данные старше определенного возраста" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Пробелы в данных Prometheus при работающем коннекторе чаще всего вызваны недоступностью scrape endpoint. Типичные причины: (1) перезапуск Kafka Connect worker (rolling restart, OOM kill) -- порт 9404 временно недоступен; (2) network timeout между Prometheus и Connect (firewall rules, DNS resolution); (3) JMX Exporter overload при большом количестве MBeans. Prometheus логирует failed scrapes в Status > Targets. Debezium продолжает экспортировать JMX метрики даже при отсутствии транзакций (вариант A неверен) -- значения просто не меняются.",
+      "hint": "Подумайте о pull-модели Prometheus: если target недоступен в момент scrape, данные за этот интервал теряются. Где в архитектуре (Connect worker -> JMX Exporter -> Prometheus) может происходить временный разрыв?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

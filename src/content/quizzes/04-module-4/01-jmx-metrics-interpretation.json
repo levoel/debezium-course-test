@@ -5,5 +5,63 @@
     "idPrefix": "m04-01",
     "description": "Use IDs: m04-01-q1, m04-01-q2, ... for MC/TF; m04-01-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m04-01-q1",
+      "type": "multiple-choice",
+      "question": "В чем ключевое различие между метриками MilliSecondsBehindSource и MilliSecondsSinceLastEvent, и когда каждая из них наиболее информативна?",
+      "options": [
+        { "id": "a", "text": "MilliSecondsBehindSource показывает отставание от источника и обновляется при каждом событии; MilliSecondsSinceLastEvent показывает время с последнего события и растет при отсутствии активности -- вместе они дают полную картину здоровья коннектора" },
+        { "id": "b", "text": "Обе метрики измеряют одно и то же отставание, но в разных единицах измерения" },
+        { "id": "c", "text": "MilliSecondsBehindSource работает только во время snapshot, а MilliSecondsSinceLastEvent -- только в streaming режиме" },
+        { "id": "d", "text": "MilliSecondsSinceLastEvent всегда точнее, поэтому MilliSecondsBehindSource считается устаревшей метрикой" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "MilliSecondsBehindSource измеряет разницу между временем создания события в БД и временем его обработки Debezium -- это primary lag metric. Но она обновляется только при получении событий. Если в БД нет транзакций, метрика 'замирает' и не отражает реальное положение. MilliSecondsSinceLastEvent показывает, как давно было получено последнее событие, и растет при отсутствии активности -- это staleness detector. Вместе они покрывают оба сценария: отставание при наличии событий и обнаружение 'тишины' при их отсутствии.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m04-01-q2",
+      "type": "multiple-choice",
+      "question": "Мониторинг показывает: QueueRemainingCapacity = 0, MilliSecondsBehindSource растет на 500ms каждые 15 секунд, TotalNumberOfEventsSeen продолжает увеличиваться. Где находится узкое место в pipeline?",
+      "options": [
+        { "id": "a", "text": "В чтении WAL -- коннектор не успевает парсить журнал транзакций" },
+        { "id": "b", "text": "В записи в Kafka -- внутренняя очередь заполнена, коннектор не может отправить события в Kafka, что блокирует чтение WAL" },
+        { "id": "c", "text": "В самой базе данных -- слишком много транзакций генерируется" },
+        { "id": "d", "text": "В сетевом соединении между коннектором и базой данных" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "QueueRemainingCapacity = 0 означает, что внутренняя очередь между WAL reader и Kafka writer полностью заполнена. Это классический признак backpressure со стороны Kafka: Debezium читает WAL и помещает события в очередь, но Kafka не забирает их достаточно быстро. Поскольку очередь полна, WAL reader блокируется, и lag растет. Проблема с WAL-чтением (вариант A) проявилась бы при нормальном Queue utilization, но низком throughput. Нужно проверить Kafka broker latency, ISR и network между Connect и Kafka.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m04-01-q3",
+      "type": "multiple-choice",
+      "question": "Для проверки здоровья Debezium коннектора через JMX необходимо определить, работает ли он нормально. Дан MBean path:\n\n```\ndebezium.postgres:type=connector-metrics,context=streaming,server=inventory\n```\n\nКакой атрибут этого MBean однозначно показывает, что коннектор подключен к базе данных и готов к обработке событий?",
+      "options": [
+        { "id": "a", "text": "TotalNumberOfEventsSeen -- если счетчик увеличивается, коннектор работает" },
+        { "id": "b", "text": "Connected -- boolean-атрибут, показывающий статус соединения с базой данных" },
+        { "id": "c", "text": "MilliSecondsBehindSource -- если значение меньше 5000, коннектор здоров" },
+        { "id": "d", "text": "SnapshotCompleted -- если true, коннектор завершил инициализацию" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Атрибут Connected (boolean) в контексте streaming напрямую показывает, установлено ли соединение с базой данных. Это базовый health check: Connected = 1 означает активное соединение, Connected = 0 -- потеря связи. TotalNumberOfEventsSeen (вариант A) может не увеличиваться при отсутствии транзакций в БД, хотя коннектор полностью работоспособен. MilliSecondsBehindSource (вариант C) зависит от нагрузки и не является бинарным индикатором здоровья. SnapshotCompleted (вариант D) относится к snapshot-контексту, а не к streaming.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m04-01-q4",
+      "type": "multiple-choice",
+      "question": "Коннектор показывает Connected = true и MilliSecondsBehindSource = 200ms (нормальный уровень), но потребители downstream-сервиса жалуются на устаревшие данные. Метрика MilliSecondsSinceLastEvent = 180000 (3 минуты). Какой наиболее вероятный диагноз?",
+      "options": [
+        { "id": "a", "text": "Коннектор работает нормально, но Kafka broker потерял сообщения из-за нехватки места" },
+        { "id": "b", "text": "MilliSecondsBehindSource показывает устаревшее значение от последнего полученного события 3 минуты назад, а реальная проблема -- отсутствие heartbeat для таблиц без активности, из-за чего потребители не получают новых данных" },
+        { "id": "c", "text": "Проблема в consumer group -- потребители читают из неправильного топика" },
+        { "id": "d", "text": "Replication slot был инвалидирован, но коннектор еще не обнаружил это" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Это классический сценарий 'замороженной метрики': MilliSecondsBehindSource обновляется только при получении событий. Последнее событие пришло 3 минуты назад (MilliSecondsSinceLastEvent = 180000), и в тот момент lag составлял 200ms. С тех пор метрика не менялась, создавая иллюзию здорового pipeline. Если в мониторируемых таблицах нет транзакций, коннектор не продвигает slot и не генерирует событий. Решение -- настроить heartbeat.interval.ms для генерации synthetic events, которые обновляют метрики и продвигают replication slot.",
+      "hint": "Обратите внимание на разницу между временем последнего события (3 минуты) и значением lag (200ms). Подумайте: когда именно было измерено это значение lag и обновляется ли оно без новых событий?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
