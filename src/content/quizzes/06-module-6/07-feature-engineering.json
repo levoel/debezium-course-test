@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "06-module-6/07-feature-engineering",
+  "moduleId": "06-module-6",
+  "_meta": {
+    "idPrefix": "m06-07",
+    "description": "Use IDs: m06-07-q1, m06-07-q2, ... for MC/TF; m06-07-code-1 for code challenges"
+  },
+  "questions": []
+}

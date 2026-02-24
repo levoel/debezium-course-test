@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "03-module-3/14-multi-connector-deployments",
+  "moduleId": "03-module-3",
+  "_meta": {
+    "idPrefix": "m03-14",
+    "description": "Use IDs: m03-14-q1, m03-14-q2, ... for MC/TF; m03-14-code-1 for code challenges"
+  },
+  "questions": []
+}

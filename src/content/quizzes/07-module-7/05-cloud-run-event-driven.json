@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "07-module-7/05-cloud-run-event-driven",
+  "moduleId": "07-module-7",
+  "_meta": {
+    "idPrefix": "m07-05",
+    "description": "Use IDs: m07-05-q1, m07-05-q2, ... for MC/TF; m07-05-code-1 for code challenges"
+  },
+  "questions": []
+}

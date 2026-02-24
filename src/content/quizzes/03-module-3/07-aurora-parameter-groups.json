@@ -1,0 +1,9 @@
+{
+  "lessonSlug": "03-module-3/07-aurora-parameter-groups",
+  "moduleId": "03-module-3",
+  "_meta": {
+    "idPrefix": "m03-07",
+    "description": "Use IDs: m03-07-q1, m03-07-q2, ... for MC/TF; m03-07-code-1 for code challenges"
+  },
+  "questions": []
+}
