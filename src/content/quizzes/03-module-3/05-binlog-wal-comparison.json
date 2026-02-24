@@ -5,5 +5,64 @@
     "idPrefix": "m03-05",
     "description": "Use IDs: m03-05-q1, m03-05-q2, ... for MC/TF; m03-05-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-05-q1",
+      "type": "multiple-choice",
+      "question": "В чём ключевое архитектурное различие между PostgreSQL WAL и MySQL binlog как источниками данных для CDC?",
+      "options": [
+        { "id": "a", "text": "PostgreSQL WAL -- физический лог (записывает блоки страниц для crash recovery), требующий преобразования через logical decoding (pgoutput) для получения логических событий. MySQL binlog -- изначально логический лог (записывает row changes для репликации), готовый для CDC при binlog_format=ROW без дополнительного декодирования" },
+        { "id": "b", "text": "WAL поддерживает только INSERT операции, а binlog поддерживает INSERT, UPDATE и DELETE" },
+        { "id": "c", "text": "WAL хранит данные в JSON формате, а binlog -- в бинарном формате" },
+        { "id": "d", "text": "WAL работает только с одной таблицей, а binlog может отслеживать несколько таблиц одновременно" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Изначальное назначение определяет архитектуру: PostgreSQL WAL создавался для durability (crash recovery) и записывает физические блоки страниц. Для CDC требуется дополнительный слой -- logical decoding через плагин pgoutput, который преобразует физические записи WAL в логические события (INSERT/UPDATE/DELETE). MySQL binlog создавался для replication (распространение данных) и записывает логические изменения строк в ROW формате. Debezium читает binlog напрямую, без промежуточного декодирования. Это делает MySQL проще для начала работы с CDC, но PostgreSQL даёт более гибкий контроль через Publications и REPLICA IDENTITY.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-05-q2",
+      "type": "multiple-choice",
+      "question": "При failover MySQL primary сервера Debezium с включённым GTID mode автоматически продолжает чтение с нового primary. Как аналогичный сценарий failover выглядит для PostgreSQL CDC?",
+      "options": [
+        { "id": "a", "text": "PostgreSQL failover также полностью автоматический -- слот репликации мигрирует на standby вместе с данными" },
+        { "id": "b", "text": "В MySQL с GTID Debezium просто подключается к новому primary и запрашивает транзакции после последнего обработанного GTID. В PostgreSQL replication slots по умолчанию НЕ реплицируются на standby -- при failover слот нужно пересоздать, что может привести к потере LSN tracking и необходимости resnapshot" },
+        { "id": "c", "text": "PostgreSQL не поддерживает failover при использовании CDC -- Debezium может работать только с одним сервером" },
+        { "id": "d", "text": "Оба подхода одинаково надёжны -- разница только в именовании параметров конфигурации" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "GTID глобально уникален и одинаков на всех серверах MySQL кластера. При failover Debezium переключается на новый primary и говорит: 'Дай транзакции после GTID ...562:100' -- сервер находит нужную позицию в своём binlog. Это клиентская модель (client-side tracking): Debezium хранит позицию у себя, и любой MySQL сервер может продолжить с этого GTID. В PostgreSQL позиция хранится на сервере (server-side tracking) через replication slots. Слот привязан к конкретному серверу, и по умолчанию не мигрирует на standby при failover. Требуется специальная настройка (hot_standby_feedback, primary_slot_name) для миграции слотов, иначе -- потеря позиции.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-05-q3",
+      "type": "multiple-choice",
+      "question": "MySQL Debezium connector требует schema.history.internal.kafka.topic для хранения DDL истории, а PostgreSQL connector -- нет. Почему эта разница существует?",
+      "options": [
+        { "id": "a", "text": "PostgreSQL logical decoding (pgoutput) встраивает полную schema в каждое WAL сообщение -- Debezium получает структуру полей вместе с данными. MySQL binlog использует TABLE_MAP_EVENT с runtime table_id, который сбрасывается при рестарте MySQL. Debezium записывает DDL историю в отдельный Kafka topic, чтобы восстановить mapping table_id -> schema при перезапуске" },
+        { "id": "b", "text": "PostgreSQL хранит schema history в системной таблице pg_catalog, а MySQL не имеет эквивалента" },
+        { "id": "c", "text": "Это legacy-ограничение Debezium -- в будущих версиях MySQL connector также не будет требовать schema history topic" },
+        { "id": "d", "text": "PostgreSQL connector хранит schema history внутри replication slot, а MySQL не имеет слотов" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Фундаментальная разница в том, как каждая СУБД передаёт schema информацию. PostgreSQL logical decoding plugin (pgoutput) включает полную структуру полей (имена, типы) в каждое событие -- Debezium получает самодостаточное сообщение, не требующее внешнего хранилища схем. MySQL binlog использует TABLE_MAP_EVENT, который содержит table_id -- runtime идентификатор, привязанный к конкретной сессии MySQL сервера. При рестарте MySQL table_id сбрасываются. Debezium записывает все DDL statements (CREATE TABLE, ALTER TABLE) в Kafka topic с infinite retention, чтобы при перезапуске воспроизвести DDL историю и восстановить корректный mapping для декодирования старых binlog событий.",
+      "hint": "Подумайте о том, что происходит при перезапуске Debezium connector. Какую информацию ему нужно восстановить? В PostgreSQL каждое сообщение содержит полную schema (имена полей, типы). В MySQL binlog содержит только table_id -- числовой идентификатор. Где Debezium берёт mapping 'table_id -> имена колонок'?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m03-05-q4",
+      "type": "multiple-choice",
+      "question": "Какой сценарий роста диска более опасен для production: abandoned replication slot в PostgreSQL или отстающий Debezium connector в MySQL? Почему?",
+      "options": [
+        { "id": "a", "text": "Оба одинаково опасны -- диск заполняется в обоих случаях" },
+        { "id": "b", "text": "MySQL опаснее: binlog retention бесконечен по умолчанию и заполнит диск без вмешательства" },
+        { "id": "c", "text": "PostgreSQL опаснее: abandoned replication slot заставляет PostgreSQL хранить ВСЕ WAL-сегменты, начиная с позиции слота, без верхнего лимита -- диск может заполниться за часы при высокой нагрузке. В MySQL binlog чистится автоматически по binlog_expire_logs_seconds независимо от потребителей -- диск защищён, но отстающий connector потеряет позицию и потребует resnapshot" },
+        { "id": "d", "text": "MySQL опаснее: без heartbeat конфигурации binlog retention отключается полностью" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "PostgreSQL replication slot -- это серверная гарантия: 'Я буду хранить WAL до тех пор, пока клиент не подтвердит получение'. Если slot abandoned (клиент отключился и не вернулся), PostgreSQL продолжает накапливать WAL без верхнего лимита -- это может заполнить весь диск за часы при высокой write нагрузке. Параметр max_slot_wal_keep_size (PostgreSQL 13+) может ограничить этот рост, но по умолчанию он отключён. MySQL использует клиентскую модель: binlog чистится по расписанию (binlog_expire_logs_seconds), независимо от того, прочитал ли Debezium эти файлы. Диск защищён, но ценой: отстающий connector теряет данные и требует дорогой resnapshot. Итого: PostgreSQL -- риск для диска; MySQL -- риск для данных.",
+      "hint": "Сравните, кто контролирует удаление логов в каждой СУБД. В PostgreSQL replication slot запрещает серверу удалять WAL -- это серверная гарантия. В MySQL binlog_expire_logs_seconds действует независимо от потребителей -- это серверное расписание. Какой подход защищает данные? Какой защищает диск?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

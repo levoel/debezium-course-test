@@ -5,5 +5,64 @@
     "idPrefix": "m03-04",
     "description": "Use IDs: m03-04-q1, m03-04-q2, ... for MC/TF; m03-04-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-04-q1",
+      "type": "multiple-choice",
+      "question": "Инженер подготовил конфигурацию MySQL Debezium connector для production:\n\n{\n  \"connector.class\": \"io.debezium.connector.mysql.MySqlConnector\",\n  \"database.hostname\": \"mysql-primary.prod\",\n  \"database.port\": \"3306\",\n  \"database.user\": \"debezium\",\n  \"database.password\": \"dbz_prod_secret\",\n  \"database.server.name\": \"orders-db\",\n  \"table.include.list\": \"shop.orders,shop.customers\",\n  \"snapshot.mode\": \"initial\"\n}\n\nКаких двух критических свойств не хватает для production deployment?",
+      "options": [
+        { "id": "a", "text": "Не хватает database.server.id (уникальный ID в MySQL cluster topology) и schema.history.internal.kafka.topic (хранение DDL истории для восстановления схем при перезапуске). Без server.id -- конфликт с MySQL репликацией. Без schema history topic -- connector не сможет перезапуститься" },
+        { "id": "b", "text": "Не хватает database.dbname (имя базы данных) и plugin.name (плагин декодирования)" },
+        { "id": "c", "text": "Не хватает slot.name (слот репликации) и publication.name (фильтрация таблиц)" },
+        { "id": "d", "text": "Не хватает heartbeat.interval.ms (heartbeat) и max.batch.size (размер пакета)" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Для MySQL connector обязательны два MySQL-специфичных свойства: (1) database.server.id -- уникальный идентификатор в MySQL cluster topology, без которого Debezium не может подключиться к binlog replication stream (ошибка: 'Slave has the same server UUID'). (2) schema.history.internal.kafka.topic (+ bootstrap.servers) -- Kafka topic для записи DDL истории, без которого connector не сможет восстановить schema mapping при перезапуске. Вариант C ошибочен -- slot.name и publication.name это PostgreSQL-специфичные свойства, которых нет в MySQL connector. Вариант D -- heartbeat рекомендуется, но не блокирует запуск.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-04-q2",
+      "type": "multiple-choice",
+      "question": "Что хранит schema.history.internal.kafka.topic и почему для него требуется бесконечный retention (retention.ms=-1)?",
+      "options": [
+        { "id": "a", "text": "Хранит CDC-события (INSERT/UPDATE/DELETE) для всех таблиц. Infinite retention нужен для replay событий при сбое" },
+        { "id": "b", "text": "Хранит все DDL statements (CREATE TABLE, ALTER TABLE, DROP COLUMN) с binlog позициями. Infinite retention обязателен, потому что при перезапуске Debezium воспроизводит DDL историю для восстановления mapping между table_id и schema. Если topic purged -- connector не сможет стартовать и потребуется полный resnapshot" },
+        { "id": "c", "text": "Хранит offset (позицию чтения) Debezium в binlog. Infinite retention нужен, чтобы offset не терялся при перезапуске Kafka" },
+        { "id": "d", "text": "Хранит heartbeat-события для мониторинга здоровья connector. Infinite retention нужен для долгосрочного анализа производительности" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Schema history topic записывает каждое DDL-изменение (CREATE TABLE, ALTER TABLE ADD COLUMN, DROP TABLE) вместе с binlog позицией (GTID или file:offset), при которой это изменение произошло. При перезапуске Debezium воспроизводит (replay) все DDL из этого topic для воссоздания mapping: какая схема таблицы была актуальна на каждой binlog позиции. Это необходимо для корректного декодирования старых binlog событий при recovery. Если topic purged (например, из-за Kafka default retention 7 дней) -- Debezium не может восстановить schema, ошибка: 'The db history topic or its content is fully or partially missing'. Topic обязательно single partition (для сохранения порядка DDL).",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-04-q3",
+      "type": "multiple-choice",
+      "question": "Почему database.server.id в конфигурации Debezium MySQL connector должен быть глобально уникальным среди всех участников MySQL кластера (primary, replica, другие коннекторы)?",
+      "options": [
+        { "id": "a", "text": "Это косметическое требование для удобства мониторинга -- дублирующийся server.id приведёт только к предупреждению в логах" },
+        { "id": "b", "text": "Debezium подключается к MySQL как участник binlog replication topology (эмулируя replica). MySQL требует уникальный server_id от каждого участника -- при дублировании возникает конфликт, и MySQL разрывает соединение с ошибкой 'Slave has the same server UUID'. Если server.id совпадает с другим коннектором, оба будут конкурировать за одну позицию в binlog stream" },
+        { "id": "c", "text": "Server.id используется как Kafka partition key, и дублирование приведёт к записи событий в одну партицию" },
+        { "id": "d", "text": "Server.id определяет имя Kafka topic -- дублирование создаст конфликт имён topic" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Debezium MySQL connector подключается к binlog replication stream как MySQL replica (slave). MySQL binlog replication protocol требует, чтобы каждый участник (primary, все replica, все внешние потребители binlog) имел уникальный server_id. Если два участника имеют одинаковый server_id, MySQL воспринимает это как конфликт и разрывает соединение с одним из них. В случае двух Debezium коннекторов с одинаковым server.id, оба будут конкурировать за подключение: один из них будет периодически терять соединение. Рекомендация: выделить диапазон server.id для Debezium (например, 184000-184999), отдельно от MySQL серверов.",
+      "hint": "Подумайте о протоколе MySQL binlog replication: Debezium не использует специальный API -- он буквально представляется MySQL как ещё один replica сервер. Какие требования MySQL предъявляет к replica серверам в кластере? Что произойдёт, если два 'replica' заявят одинаковый server_id?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m03-04-q4",
+      "type": "multiple-choice",
+      "question": "В конфигурации MySQL connector указано:\n\n\"database.server.name\": \"orders-db\"\n\"table.include.list\": \"shop.orders,shop.customers\"\n\nКакие Kafka topics будут созданы для CDC-событий?",
+      "options": [
+        { "id": "a", "text": "Один topic: orders-db с партицией для каждой таблицы" },
+        { "id": "b", "text": "Два topic: orders-db.shop.orders и orders-db.shop.customers. Паттерн: {database.server.name}.{database}.{table}" },
+        { "id": "c", "text": "Два topic: shop.orders и shop.customers (без prefix)" },
+        { "id": "d", "text": "Три topic: orders-db.shop.orders, orders-db.shop.customers и orders-db.schema-changes" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Debezium создаёт отдельный Kafka topic для каждой отслеживаемой таблицы. Имя topic формируется по паттерну: {database.server.name}.{database_name}.{table_name}. В данном случае: orders-db.shop.orders для таблицы shop.orders и orders-db.shop.customers для таблицы shop.customers. Свойство database.server.name служит prefix для всех topic -- это позволяет идентифицировать источник событий при наличии нескольких MySQL серверов. Важно: после deployment нельзя менять database.server.name -- это создаст новые topic с другим prefix, а старые topic с накопленными offset будут заброшены.",
+      "hint": "Проследите путь от конфигурации к именам topic. database.server.name -- это логический идентификатор MySQL сервера, а table.include.list задаёт отслеживаемые таблицы в формате database.table. Как Debezium комбинирует эти значения для формирования уникального имени topic?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
