@@ -5,5 +5,63 @@
     "idPrefix": "m01-06",
     "description": "Use IDs: m01-06-q1, m01-06-q2, ... for MC/TF; m01-06-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m01-06-q1",
+      "type": "multiple-choice",
+      "question": "Что определяет поле op в payload Debezium CDC события?",
+      "options": [
+        { "id": "a", "text": "Имя оператора, выполнившего SQL-запрос" },
+        { "id": "b", "text": "Тип операции над строкой: r (snapshot), c (INSERT), u (UPDATE), d (DELETE)" },
+        { "id": "c", "text": "Приоритет обработки события в очереди Kafka" },
+        { "id": "d", "text": "Версию протокола сериализации события" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Поле op (operation) -- ключевой индикатор типа изменения в базе данных. Четыре значения: r (read) обозначает событие начального снэпшота, c (create) -- INSERT новой строки, u (update) -- UPDATE существующей строки, d (delete) -- DELETE строки. Это поле определяет, какие данные доступны в before и after: например, для d поле after равно null, а для c поле before равно null.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m01-06-q2",
+      "type": "multiple-choice",
+      "question": "Consumer получает событие с полями op: \"r\" и source.snapshot: \"true\". Что это за событие?",
+      "options": [
+        { "id": "a", "text": "Live-изменение: кто-то выполнил SELECT-запрос к таблице" },
+        { "id": "b", "text": "Событие начального снэпшота: Debezium прочитал существующую запись из таблицы при первом запуске коннектора" },
+        { "id": "c", "text": "Ошибка: op: \"r\" означает rollback транзакции" },
+        { "id": "d", "text": "Heartbeat-сообщение для проверки активности коннектора" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Комбинация op: \"r\" (read) и source.snapshot: \"true\" однозначно идентифицирует событие начального снэпшота. При первом запуске коннектор читает все существующие записи из таблицы и отправляет каждую как событие с op: \"r\". В отличие от streaming-событий (op: c/u/d), snapshot-события не содержат txId и lsn в метаданных source, поскольку они не привязаны к конкретной транзакции в WAL.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m01-06-q3",
+      "type": "multiple-choice",
+      "question": "Код consumer обращается к event['payload']['after']['id'] без проверки на null. При каком типе операции этот код вызовет ошибку?",
+      "options": [
+        { "id": "a", "text": "При CREATE (op: \"c\") -- поле after не заполняется для новых записей" },
+        { "id": "b", "text": "При UPDATE (op: \"u\") -- after содержит только измененные поля" },
+        { "id": "c", "text": "При DELETE (op: \"d\") -- поле after равно null, так как строка удалена" },
+        { "id": "d", "text": "При SNAPSHOT (op: \"r\") -- snapshot не включает поле after" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "При DELETE (op: \"d\") поле after равно null, потому что строка больше не существует. Попытка обратиться к after['id'] вызовет TypeError: 'NoneType' object is not subscriptable. Правильный подход -- проверять тип операции перед доступом к данным: для DELETE используется поле before (состояние строки до удаления), для CREATE и SNAPSHOT -- after. При UPDATE доступны оба поля: before содержит старые данные, after -- новые.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m01-06-q4",
+      "type": "multiple-choice",
+      "question": "Система получает UPDATE-события из Debezium, но поле before во всех событиях содержит null, хотя after заполнен корректно. Какая настройка PostgreSQL вызывает это поведение и каков компромисс при её изменении?",
+      "options": [
+        { "id": "a", "text": "wal_level=replica вместо logical -- нужно переключить на logical для получения before-данных" },
+        { "id": "b", "text": "REPLICA IDENTITY DEFAULT -- PostgreSQL записывает в WAL только первичный ключ для before, а не все поля. Переключение на REPLICA IDENTITY FULL записывает все колонки в before, но увеличивает объем WAL" },
+        { "id": "c", "text": "max_wal_senders=0 -- WAL не отправляется коннектору, нужно увеличить значение" },
+        { "id": "d", "text": "enable_before_image=false в конфигурации коннектора -- нужно включить параметр" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "По умолчанию PostgreSQL использует REPLICA IDENTITY DEFAULT, при которой в WAL для UPDATE/DELETE записывается только первичный ключ строки, а не все поля. Debezium получает ключ, но не может заполнить полный before-объект. Команда ALTER TABLE customers REPLICA IDENTITY FULL указывает PostgreSQL записывать все колонки в WAL для операций UPDATE и DELETE. Компромисс: FULL увеличивает объем WAL-записей (write amplification) на каждый UPDATE, что может быть заметно для таблиц с высокой частотой обновлений и большим числом колонок.",
+      "hint": "Обратите внимание на то, какую информацию PostgreSQL записывает в WAL при UPDATE по умолчанию. Какая настройка на уровне таблицы контролирует, сколько данных о старом состоянии строки попадает в журнал?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
