@@ -63,6 +63,40 @@
       "explanation": "At-least-once delivery означает: событие доставится минимум один раз, возможно больше. Debezium может повторно обработать WAL-сегмент после restart или failover, доставив дубликат. Consumer реализует deduplication: сохраняет event ID (UUID из поля id outbox-таблицы) в таблицу processed_events и проверяет перед обработкой. Если event ID уже обработан -- пропускает. Вариант C неверен: Kafka idempotent producer предотвращает дубликаты только на уровне producer -> broker, не на уровне CDC -> consumer.",
       "hint": "Рассмотрите, что происходит при restart Debezium: оффсет может указывать на уже обработанные WAL-записи. Какие данные из outbox-события позволяют consumer определить, было ли оно уже обработано?",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m05-05-code-1",
+      "type": "code-challenge",
+      "question": "Спроектируйте outbox-событие для заданного бизнес-сценария. Функция получает описание сценария (тип сущности, ID, тип события, данные) и должна вернуть корректную структуру outbox-записи.\n\nOutbox-таблица имеет стандартную структуру:\n- aggregatetype: тип domain entity (определяет Kafka topic)\n- aggregateid: ID entity (используется как Kafka key)\n- type: тип события\n- payload: данные события в JSON",
+      "language": "javascript",
+      "starterCode": "function solve(scenarioJson) {\n  const scenario = JSON.parse(scenarioJson);\n  // scenario.entity -- тип сущности (например 'Order')\n  // scenario.entityId -- ID сущности (например 'order-123')\n  // scenario.eventType -- тип события (например 'OrderCreated')\n  // scenario.data -- данные события (объект с полями)\n  //\n  // Спроектируйте outbox-запись с полями:\n  // aggregatetype, aggregateid, type, payload\n  const outboxRecord = {\n    aggregatetype: '',\n    aggregateid: '',\n    type: '',\n    payload: {}\n  };\n  return outboxRecord;\n}",
+      "solutionCode": "function solve(scenarioJson) {\n  const scenario = JSON.parse(scenarioJson);\n\n  return {\n    aggregatetype: scenario.entity,\n    aggregateid: scenario.entityId,\n    type: scenario.eventType,\n    payload: scenario.data\n  };\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Сценарий: заказ создан в e-commerce системе",
+          "input": "'{\"entity\":\"Order\",\"entityId\":\"order-456\",\"eventType\":\"OrderCreated\",\"data\":{\"orderId\":\"order-456\",\"customerId\":\"cust-789\",\"amount\":299.99,\"currency\":\"USD\"}}'",
+          "expectedOutput": "{\"aggregatetype\":\"Order\",\"aggregateid\":\"order-456\",\"type\":\"OrderCreated\",\"payload\":{\"orderId\":\"order-456\",\"customerId\":\"cust-789\",\"amount\":299.99,\"currency\":\"USD\"}}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Сценарий: платеж завершен",
+          "input": "'{\"entity\":\"Payment\",\"entityId\":\"pay-001\",\"eventType\":\"PaymentCompleted\",\"data\":{\"paymentId\":\"pay-001\",\"orderId\":\"order-456\",\"amount\":299.99,\"method\":\"credit_card\"}}'",
+          "expectedOutput": "{\"aggregatetype\":\"Payment\",\"aggregateid\":\"pay-001\",\"type\":\"PaymentCompleted\",\"payload\":{\"paymentId\":\"pay-001\",\"orderId\":\"order-456\",\"amount\":299.99,\"method\":\"credit_card\"}}",
+          "hidden": false
+        },
+        {
+          "id": "tc3",
+          "description": "Скрытый тест: регистрация пользователя с минимальными данными",
+          "input": "'{\"entity\":\"Customer\",\"entityId\":\"cust-100\",\"eventType\":\"CustomerRegistered\",\"data\":{\"customerId\":\"cust-100\",\"email\":\"user@example.com\"}}'",
+          "expectedOutput": "{\"aggregatetype\":\"Customer\",\"aggregateid\":\"cust-100\",\"type\":\"CustomerRegistered\",\"payload\":{\"customerId\":\"cust-100\",\"email\":\"user@example.com\"}}",
+          "hidden": true
+        }
+      ],
+      "explanation": "Outbox-запись связывает бизнес-событие с механизмом доставки через CDC. Поле aggregatetype определяет целевой Kafka topic (через route.topic.replacement в Event Router SMT): 'Order' -> outbox.event.Order. Поле aggregateid используется как Kafka key для партиционирования -- все события одного заказа попадут в одну партицию, обеспечивая ordering. Поле type передается в Kafka header для routing на стороне consumer. Payload содержит domain event data -- именно его получит downstream-сервис.",
+      "hint": "Outbox-таблица -- это контракт между приложением и CDC pipeline. Подумайте о mapping: entity -> aggregatetype (определяет topic), entityId -> aggregateid (определяет Kafka key), eventType -> type (определяет header), data -> payload (определяет message value).",
+      "bloomLevel": "applied"
     }
   ]
 }

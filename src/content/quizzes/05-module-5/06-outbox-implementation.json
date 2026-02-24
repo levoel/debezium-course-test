@@ -34,6 +34,40 @@
       "correctAnswer": "b",
       "explanation": "Параметр route.by.field указывает Event Router, какое поле outbox-таблицы определяет целевой топик. При route.by.field=aggregatetype и route.topic.replacement=outbox.event.${routedByValue}, значение aggregatetype подставляется в шаблон: 'Order' -> outbox.event.Order, 'Customer' -> outbox.event.Customer. Это позволяет одной outbox-таблице обслуживать несколько типов domain events с маршрутизацией в отдельные топики. Kafka partition key определяется полем aggregateid (table.field.event.key), а не aggregatetype.",
       "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-06-code-1",
+      "type": "code-challenge",
+      "question": "Разберите CDC-событие из outbox-таблицы. Функция получает raw CDC event (как его видит Debezium до применения Outbox Event Router SMT) и должна извлечь domain event -- тип события, ID агрегата и payload.\n\nCDC-событие из outbox-таблицы имеет стандартную Debezium envelope структуру с полями before, after, op, source. Данные outbox-записи находятся в after.",
+      "language": "javascript",
+      "starterCode": "function solve(eventJson) {\n  const event = JSON.parse(eventJson);\n  // event -- raw CDC event из outbox-таблицы\n  // event.after содержит поля outbox-записи:\n  //   aggregatetype, aggregateid, type, payload\n  //\n  // payload может быть строкой JSON -- распарсите её\n  //\n  // Верните объект с полями:\n  //   eventType, aggregateId, payload (как объект, не строку)\n  return {\n    eventType: '',\n    aggregateId: '',\n    payload: {}\n  };\n}",
+      "solutionCode": "function solve(eventJson) {\n  const event = JSON.parse(eventJson);\n  const outbox = event.after;\n\n  // payload может быть строкой JSON или уже объектом\n  let payload = outbox.payload;\n  if (typeof payload === 'string') {\n    payload = JSON.parse(payload);\n  }\n\n  return {\n    eventType: outbox.type,\n    aggregateId: outbox.aggregateid,\n    payload: payload\n  };\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "CDC event из outbox: OrderCreated с payload-строкой",
+          "input": "'{\"before\":null,\"after\":{\"id\":\"550e8400-e29b-41d4-a716-446655440000\",\"aggregatetype\":\"Order\",\"aggregateid\":\"order-123\",\"type\":\"OrderCreated\",\"payload\":\"{\\\\\"orderId\\\\\":\\\\\"order-123\\\\\",\\\\\"amount\\\\\":299.99}\"},\"op\":\"c\",\"source\":{\"table\":\"outbox\"}}'",
+          "expectedOutput": "{\"eventType\":\"OrderCreated\",\"aggregateId\":\"order-123\",\"payload\":{\"orderId\":\"order-123\",\"amount\":299.99}}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "CDC event из outbox: CustomerRegistered",
+          "input": "'{\"before\":null,\"after\":{\"id\":\"660e9500-f39c-51e5-b827-557766550111\",\"aggregatetype\":\"Customer\",\"aggregateid\":\"cust-456\",\"type\":\"CustomerRegistered\",\"payload\":\"{\\\\\"customerId\\\\\":\\\\\"cust-456\\\\\",\\\\\"email\\\\\":\\\\\"test@example.com\\\\\"}\"},\"op\":\"c\",\"source\":{\"table\":\"outbox\"}}'",
+          "expectedOutput": "{\"eventType\":\"CustomerRegistered\",\"aggregateId\":\"cust-456\",\"payload\":{\"customerId\":\"cust-456\",\"email\":\"test@example.com\"}}",
+          "hidden": false
+        },
+        {
+          "id": "tc3",
+          "description": "Скрытый тест: PaymentProcessed с числовыми полями в payload",
+          "input": "'{\"before\":null,\"after\":{\"id\":\"770f0600-a40d-62f6-c938-668877661222\",\"aggregatetype\":\"Payment\",\"aggregateid\":\"pay-789\",\"type\":\"PaymentProcessed\",\"payload\":\"{\\\\\"paymentId\\\\\":\\\\\"pay-789\\\\\",\\\\\"amount\\\\\":150.50,\\\\\"status\\\\\":\\\\\"completed\\\\\"}\"},\"op\":\"c\",\"source\":{\"table\":\"outbox\"}}'",
+          "expectedOutput": "{\"eventType\":\"PaymentProcessed\",\"aggregateId\":\"pay-789\",\"payload\":{\"paymentId\":\"pay-789\",\"amount\":150.5,\"status\":\"completed\"}}",
+          "hidden": true
+        }
+      ],
+      "explanation": "До применения Outbox Event Router SMT Debezium видит INSERT в outbox-таблицу как обычное CDC-событие с envelope (before=null для INSERT, after содержит все поля записи). Задача Event Router -- извлечь domain event из этой структуры. Поле after.payload хранится в БД как JSONB, но в CDC-событии может прийти как строка JSON (зависит от converter). Поэтому при ручном парсинге нужно проверить тип payload и при необходимости распарсить строку через JSON.parse().",
+      "hint": "CDC-событие из outbox имеет стандартный Debezium envelope. Данные outbox-записи находятся в event.after. Обратите внимание: payload в outbox-таблице -- это JSONB, но в CDC-событии он может прийти как строка. Проверьте typeof payload перед парсингом.",
+      "bloomLevel": "applied"
     }
   ]
 }
