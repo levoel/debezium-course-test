@@ -5,5 +5,155 @@
     "idPrefix": "exam-m05",
     "description": "Use IDs: exam-m05-q1, exam-m05-q2, ... (8-10 analytical questions)"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "exam-m05-q1",
+      "type": "multiple-choice",
+      "question": "Вам нужно спроектировать GDPR-compliant multi-tenant CDC pipeline. Требования: (1) фильтровать heartbeat события, (2) маскировать PII поля (email, phone) только для таблицы customers, (3) маршрутизировать события по tenant_id в отдельные топики. Какая конфигурация SMT chain и предикатов решает все три задачи?",
+      "options": [
+        { "id": "a", "text": "transforms: filter,unwrap,mask,route. Filter отбрасывает heartbeat по Groovy value.op == 'h', unwrap разворачивает envelope, MaskField маскирует email/phone с предикатом IsCustomers, ContentBasedRouter маршрутизирует по tenant_id" },
+        { "id": "b", "text": "transforms: unwrap,mask,route. Unwrap с предикатом IsNotHeartbeat (TopicNameMatches + negate) пропускает heartbeat без обработки, MaskField с предикатом IsCustomers маскирует email/phone, ContentBasedRouter маршрутизирует 'events-' + value.tenant_id" },
+        { "id": "c", "text": "Три отдельных коннектора: один для фильтрации, один для маскирования, один для маршрутизации" },
+        { "id": "d", "text": "transforms: mask,unwrap,route. MaskField маскирует email/phone в envelope, ExtractNewRecordState разворачивает, ContentBasedRouter маршрутизирует" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 01 (SMT chain и порядок), 02 (предикаты и TopicNameMatches с negate) и 03 (MaskField с селективным применением). Вариант B правильный: предикат IsNotHeartbeat на unwrap (TopicNameMatches с pattern __debezium-heartbeat.* и negate: true) пропускает heartbeat без обработки, предикат IsCustomers на MaskField маскирует PII только для customers, ContentBasedRouter маршрутизирует по tenant_id. Вариант A ошибочен: Filter с Groovy condition удаляет heartbeat-события целиком, но они нужны для продвижения replication slot. Вариант D ошибочен: MaskField$Value до unwrap работает на верхнем уровне envelope, а не внутри объекта after.",
+      "hint": "Подумайте о трех аспектах: (1) heartbeat нужно пропустить, а не удалить (они продвигают replication slot); (2) маскирование должно быть селективным по таблице; (3) порядок unwrap -> mask -> route важен, потому что ContentBasedRouter работает с плоскими полями после unwrap.",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m05-q2",
+      "type": "multiple-choice",
+      "question": "Команда реализовала Outbox Pattern для микросервиса Orders. Теперь нужно добавить новое поле priority в payload outbox-событий. Текущие consumers десериализуют payload через Avro с Schema Registry в BACKWARD mode. Какие шаги обеспечат безопасную миграцию?",
+      "options": [
+        { "id": "a", "text": "Добавить поле priority как required в payload, обновить consumers, затем обновить producer. BACKWARD mode гарантирует совместимость" },
+        { "id": "b", "text": "Добавить поле priority как nullable с default null в Avro schema payload. Проверить совместимость через Schema Registry compatibility API. Обновить producer (INSERT в outbox с priority). Постепенно обновить consumers для чтения нового поля" },
+        { "id": "c", "text": "Переключить Schema Registry в NONE mode, добавить поле, затем вернуть BACKWARD" },
+        { "id": "d", "text": "Создать новую outbox-таблицу outbox_v2 с полем priority и новый коннектор для неё" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 05/06 (Outbox Pattern, структура outbox-таблицы) и 07/08 (Schema Registry, schema evolution, BACKWARD compatibility). Добавление nullable поля с default null — единственное безопасное изменение для BACKWARD mode: старые consumers игнорируют неизвестное поле priority, новые consumers видят priority = null для старых событий. Тестирование через compatibility API (POST /compatibility/subjects/.../versions/latest) обязательно перед deployment. Вариант A ошибочен: required поле ломает BACKWARD compatibility — старый consumer не знает, как заполнить поле. Вариант C опасен: NONE отключает все проверки, и несовместимая schema сломает consumers в runtime.",
+      "hint": "Вспомните из урока 08, какие изменения безопасны в BACKWARD mode. Из урока 05 — структура outbox payload. Как добавить поле, чтобы old consumers продолжили работать без обновления?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m05-q3",
+      "type": "multiple-choice",
+      "question": "Команда внедряет ContentBasedRouter для региональной маршрутизации заказов (EU/US/APAC) с Avro сериализацией. Schema Registry использует TopicNameStrategy (default). Каждый региональный топик (orders-eu, orders-us, orders-apac) получит отдельный subject в Schema Registry. Может ли схема в orders-eu отличаться от схемы в orders-us? Какие проблемы это создает?",
+      "options": [
+        { "id": "a", "text": "Нет, все региональные топики разделяют одну schema, потому что данные из одной таблицы. ContentBasedRouter не влияет на schema" },
+        { "id": "b", "text": "Да, при TopicNameStrategy каждый топик получает свой subject (orders-eu-value, orders-us-value), и schema evolution проверяется независимо. Проблема: если ALTER TABLE добавляет колонку, schema v2 зарегистрируется в одном subject (при первом событии в этот регион), но не в других, пока туда не придет событие. Consumers разных регионов могут временно видеть разные версии schema" },
+        { "id": "c", "text": "Нет, Schema Registry автоматически синхронизирует schemas между subjects с одинаковой структурой" },
+        { "id": "d", "text": "Да, но это решается переключением на RecordNameStrategy, которая использует одну schema для всех топиков" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 04 (ContentBasedRouter, региональная маршрутизация) и 07 (Schema Registry, subject naming strategies). При TopicNameStrategy subject привязан к имени топика: orders-eu-value и orders-us-value — два независимых subject. Schema registration происходит при первом сообщении в каждый топик. Если ALTER TABLE добавляет колонку, а первое событие после ALTER уходит в EU, то orders-eu-value получит schema v2, а orders-us-value и orders-apac-value останутся на v1, пока не получат свое первое событие с новым полем. Вариант D частично верен: RecordNameStrategy решает проблему, но вводит другие — нет per-topic compatibility control.",
+      "hint": "Рассмотрите, что происходит при TopicNameStrategy: каждый топик = свой subject. Когда ALTER TABLE добавляет колонку, в какой момент Schema Registry узнает о новой schema для каждого регионального топика? Зависит ли это от того, придет ли событие в конкретный регион?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m05-q4",
+      "type": "multiple-choice",
+      "question": "Микросервис Payment обрабатывает события из outbox.event.Order. Pipeline включает: Outbox Event Router -> Kafka -> Consumer. Команда безопасности требует маскировать PII (customer_email) в payload перед попаданием в Kafka. Где в pipeline должно происходить маскирование и почему?",
+      "options": [
+        { "id": "a", "text": "На уровне consumer: Payment сервис маскирует customer_email после получения события. Это проще в реализации" },
+        { "id": "b", "text": "В самом application code: не включать customer_email в payload outbox-таблицы. Это data minimization at source — PII не попадает ни в WAL, ни в Kafka" },
+        { "id": "c", "text": "Добавить MaskField SMT после Outbox Event Router в том же коннекторе: transforms: outbox,mask. Event Router преобразует outbox CDC в domain event, затем MaskField маскирует customer_email в payload перед публикацией в Kafka" },
+        { "id": "d", "text": "Создать отдельный Kafka Streams приложение между outbox-коннектором и consumer для маскирования PII" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 03 (PII маскирование, downstream protection vs source protection), 05/06 (Outbox Pattern, payload design). Вариант B — наиболее безопасный подход (data minimization по GDPR Article 25): если customer_email не нужен downstream-сервисам, его не следует включать в outbox payload. Это предотвращает попадание PII и в WAL, и в Kafka. Вариант C технически работает (MaskField после Event Router маскирует поля в уже развернутом payload), но PII все равно остается в WAL и outbox-таблице. Вариант A — наименее безопасный: PII проходит через весь pipeline в открытом виде.",
+      "hint": "Подумайте о принципе data minimization: где лучше предотвратить попадание PII — на источнике (application code) или downstream (SMT/consumer)? Вспомните из урока 03, что MaskField — это downstream protection, исходные данные остаются в WAL.",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m05-q5",
+      "type": "multiple-choice",
+      "question": "DBA выполнил ALTER TABLE orders ADD COLUMN priority VARCHAR(10) NOT NULL DEFAULT 'standard' на таблице с активным CDC-коннектором. Debezium использует Avro converter с Schema Registry в BACKWARD mode. Какой каскад событий произойдет?",
+      "options": [
+        { "id": "a", "text": "Debezium обнаружит новую колонку, сгенерирует Avro schema с required полем priority (string без null union), Schema Registry отклонит schema как BACKWARD-несовместимую, коннектор перейдет в FAILED state. Downstream consumers не затронуты (не получают новых событий)" },
+        { "id": "b", "text": "Schema Registry примет новую schema, потому что DEFAULT 'standard' в PostgreSQL автоматически создает Avro default" },
+        { "id": "c", "text": "Debezium проигнорирует NOT NULL constraint и создаст nullable Avro поле" },
+        { "id": "d", "text": "Коннектор продолжит работать со старой schema, новая колонка просто не будет включена в события" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот сценарий объединяет концепции из уроков 07 (Avro converter, Schema Registry) и 08 (schema evolution, BACKWARD compatibility, NOT NULL ограничение). PostgreSQL NOT NULL колонка генерирует Avro поле типа string (без union с null). BACKWARD mode требует, чтобы старый consumer мог читать новые данные. Но старый consumer не знает о поле priority и не может предоставить default при десериализации — Schema Registry отклоняет schema. Вариант B ошибочен: PostgreSQL DEFAULT и Avro default — разные механизмы. PostgreSQL DEFAULT используется при INSERT без указания колонки, а Avro default нужен при десериализации — Debezium не транслирует PostgreSQL DEFAULT в Avro default для NOT NULL колонок.",
+      "hint": "Вспомните два разных уровня: (1) PostgreSQL DEFAULT — значение при INSERT без колонки, (2) Avro default — значение при десериализации, когда поле отсутствует в записи. Debezium для NOT NULL колонки создает required Avro field. Что говорит BACKWARD mode о required полях в новой schema?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m05-q6",
+      "type": "multiple-choice",
+      "question": "Вам поручено спроектировать complete CDC pipeline для e-commerce системы. Требования: (1) Order Service публикует события через outbox с полями customer_id и amount; (2) PII поле customer_email маскируется перед попаданием в аналитический топик; (3) VIP заказы (amount > 10000) маршрутизируются в приоритетный топик; (4) все данные сериализуются в Avro. Какой порядок SMT chain в outbox-коннекторе обеспечивает корректную работу?",
+      "options": [
+        { "id": "a", "text": "transforms: outbox,route,mask. Outbox Event Router извлекает domain event, ContentBasedRouter маршрутизирует VIP заказы, MaskField маскирует customer_email. Avro converter настроен на уровне коннектора" },
+        { "id": "b", "text": "transforms: mask,outbox,route. MaskField маскирует до Outbox Event Router" },
+        { "id": "c", "text": "transforms: outbox,mask,route. Outbox Event Router извлекает domain event, MaskField маскирует customer_email, ContentBasedRouter маршрутизирует по amount. Но для Groovy-expression value.amount > 10000 нужна null-safety проверка" },
+        { "id": "d", "text": "Нельзя комбинировать Outbox Event Router с другими SMT — нужны отдельные коннекторы" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Этот сценарий объединяет концепции из всех уроков модуля: 01 (SMT chain, порядок), 03 (MaskField), 04 (ContentBasedRouter, null safety), 05/06 (Outbox Event Router), 07 (Avro serialization). Порядок outbox,mask,route корректен: (1) Event Router преобразует CDC event из outbox-таблицы в domain event с flat payload; (2) MaskField маскирует customer_email в payload; (3) ContentBasedRouter маршрутизирует по amount. Null-safety критична: если amount = null, Groovy expression value.amount > 10000 выбросит NullPointerException. Вариант A (route перед mask) также работоспособен, но вариант C точнее из-за упоминания null-safety. Вариант B ошибочен: MaskField до Event Router работает с CDC envelope, а не с domain event payload.",
+      "hint": "Рассмотрите два аспекта: (1) Outbox Event Router должен быть первым, потому что он преобразует CDC event в domain event; (2) порядок mask и route определяется требованиями — маскирование не влияет на routing field (amount), поэтому оба порядка допустимы. Но что критично для ContentBasedRouter с числовым полем?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m05-q7",
+      "type": "multiple-choice",
+      "question": "Дана конфигурация SMT chain:\n\ntransforms: filter,unwrap,route\nfilter: Filter SMT, condition value.op != 'd' (отбросить DELETE)\nunwrap: ExtractNewRecordState\nroute: ByLogicalTableRouter, regex (.*)\\.public\\.(.*), replacement $1.$2\n\nЧто получит consumer из топика для INSERT в таблицу public.orders? Имеет ли значение порядок filter и unwrap?",
+      "options": [
+        { "id": "a", "text": "Consumer получит flat JSON с данными заказа. Топик: dbserver1.orders (без public). Порядок filter,unwrap важен: Filter работает с envelope (доступен value.op), после unwrap поле op удалено из верхнего уровня" },
+        { "id": "b", "text": "Consumer получит Debezium envelope. Порядок не имеет значения — все SMT коммутативны" },
+        { "id": "c", "text": "Consumer получит flat JSON в топике dbserver1.public.orders — ByLogicalTableRouter не работает после unwrap" },
+        { "id": "d", "text": "Consumer получит flat JSON, но Filter отбросит все события, потому что после unwrap поле op не существует" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот сценарий объединяет концепции из уроков 01 (SMT chain, ExtractNewRecordState, ByLogicalTableRouter) и 02 (Filter SMT, порядок обработки). Порядок filter,unwrap,route критически важен: (1) Filter получает Debezium envelope, проверяет value.op != 'd' и пропускает INSERT; (2) ExtractNewRecordState разворачивает envelope в flat JSON; (3) ByLogicalTableRouter переименовывает топик dbserver1.public.orders -> dbserver1.orders. Если бы порядок был unwrap,filter, Filter после unwrap не смог бы обратиться к value.op напрямую (op перемещено в добавленное поле __op, если настроен add.fields, или полностью удалено). Вариант D описывает последствия неправильного порядка, но вопрос о правильном порядке.",
+      "hint": "Проследите путь сообщения через каждый SMT. Filter работает с Debezium envelope (value.op доступен). После unwrap структура меняется — какие поля доступны на верхнем уровне? Как ByLogicalTableRouter использует regex для переименования топика?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m05-q8",
+      "type": "multiple-choice",
+      "question": "Команда реализовала Outbox Pattern. После перезапуска коннектора consumers начали получать дубликаты событий OrderApproved. Некоторые заказы обработаны дважды, что привело к двойной отправке email-уведомлений. Как диагностировать проблему и реализовать fix?",
+      "options": [
+        { "id": "a", "text": "Проблема в коннекторе: Debezium потерял оффсет и повторно прочитал WAL-сегменты с уже обработанными outbox INSERT. Fix: реализовать idempotent consumer с deduplication по event ID (поле id из outbox-таблицы, передается в Kafka header). Проверять processed_events таблицу перед обработкой" },
+        { "id": "b", "text": "Проблема в application code: INSERT в outbox выполнился дважды из-за retry-логики. Fix: добавить UNIQUE constraint на payload" },
+        { "id": "c", "text": "Проблема в Kafka: consumer group потерял offset. Fix: настроить enable.auto.commit=true" },
+        { "id": "d", "text": "Проблема в Outbox Event Router SMT: он дублирует события при restart. Fix: обновить версию Debezium" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот сценарий объединяет концепции из уроков 05 (at-least-once delivery, idempotency requirement) и 06 (consumer deduplication pattern, Event Router event ID в headers). При перезапуске коннектора Debezium может повторно прочитать WAL-сегменты, если сохраненный оффсет указывает на уже обработанные записи. Это нормальное поведение at-least-once delivery. Fix: consumer реализует deduplication по event ID (UUID из outbox.id), который передается Outbox Event Router в Kafka header 'id'. При получении события consumer проверяет: SELECT EXISTS(SELECT 1 FROM processed_events WHERE event_id = ?). Если событие уже обработано — пропускает. Вариант C неверен: enable.auto.commit=true не решает проблему дубликатов на стороне producer (Debezium).",
+      "hint": "Вспомните из урока 05, что Outbox Pattern гарантирует at-least-once, а не exactly-once delivery. Какое поле из outbox-таблицы позволяет consumer отличить оригинальное событие от дубликата? Где это поле хранится в Kafka-сообщении?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m05-q9",
+      "type": "multiple-choice",
+      "question": "Команда решила мигрировать существующий CDC pipeline с JSON converter на Avro converter. В Kafka уже накоплено 7 дней данных в JSON формате (retention = 7 дней). Какие проблемы возникнут и какой план миграции минимизирует downtime?",
+      "options": [
+        { "id": "a", "text": "Проблем не будет: AvroConverter автоматически десериализует старые JSON сообщения" },
+        { "id": "b", "text": "Consumers с AvroDeserializer не смогут прочитать старые JSON сообщения (binary format mismatch). План: (1) обновить connector на Avro converter; (2) дождаться, пока все JSON сообщения истекут по retention; (3) затем обновить consumers на AvroDeserializer. В переходный период (7 дней) consumers должны поддерживать оба формата или использовать dual-consumer pattern" },
+        { "id": "c", "text": "Создать новый коннектор с другим topic.prefix, Avro converter и snapshot.mode=initial. Новые consumers подключаются к новым топикам. Старые consumers читают оставшиеся JSON данные из старых топиков. После миграции удалить старый коннектор" },
+        { "id": "d", "text": "Schema Registry автоматически конвертирует старые JSON сообщения в Avro при запросе schema" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Этот сценарий объединяет концепции из уроков 07 (Avro converter, Schema Registry integration) и 08 (миграция, совместимость форматов). Вариант C — наиболее чистый подход: новый коннектор с новым topic.prefix создает параллельный pipeline в Avro формате. snapshot.mode=initial гарантирует полный снэпшот в Avro. Consumers постепенно мигрируют на новые топики. Старый JSON pipeline работает до завершения миграции. Вариант B рискованный: 7-дневный переходный период с mixed formats сложен в управлении, и consumers должны определять формат каждого сообщения. Вариант A ошибочен: AvroConverter и JsonConverter — два разных binary формата, автоматическая конвертация невозможна.",
+      "hint": "Подумайте о том, что в одном Kafka топике нельзя смешивать JSON и Avro сообщения — consumer должен знать формат заранее. Какая стратегия позволяет параллельно работать с двумя форматами без модификации существующего pipeline?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m05-q10",
+      "type": "multiple-choice",
+      "question": "Когда трансформацию данных следует выполнять в SMT (на уровне Kafka Connect), а когда в consumer application? Какие критерии определяют выбор?",
+      "options": [
+        { "id": "a", "text": "SMT всегда лучше: централизованная обработка уменьшает дублирование кода в consumers" },
+        { "id": "b", "text": "Consumer всегда лучше: полный контроль над логикой обработки без ограничений SMT" },
+        { "id": "c", "text": "SMT подходит для простых stateless операций (фильтрация, маскирование, routing, envelope flattening), которые нужны ВСЕМ consumers. Consumer logic подходит для stateful операций (агрегации, joins, enrichment), бизнес-специфичной логики и случаев, когда разным consumers нужна разная обработка" },
+        { "id": "d", "text": "Выбор зависит от производительности: SMT быстрее для маленьких сообщений, consumer быстрее для больших" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Этот вопрос объединяет концепции из уроков 01 (SMT use cases и anti-patterns) и 02 (Filter SMT, границы применимости). SMT выполняются синхронно, stateless и применяются ко всем сообщениям (или подмножеству через предикаты). Это идеально для: фильтрации по op (Filter), разворачивания envelope (ExtractNewRecordState), маскирования PII (MaskField), маршрутизации (Router). Consumer-side обработка необходима для: агрегаций (SMT stateless, нет count/sum), joins между таблицами (SMT обрабатывает одно сообщение), вызовов external API (синхронный блокинг в SMT создает bottleneck), и бизнес-логики специфичной для конкретного consumer. Ключевой критерий: если обработка нужна всем consumers и не требует state — SMT. Если обработка специфична для одного consumer или требует state — consumer.",
+      "bloomLevel": "conceptual"
+    }
+  ]
 }
