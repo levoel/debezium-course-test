@@ -1,9 +1,0 @@
-{
-  "lessonSlug": "07-module-7/02-debezium-server-pubsub",
-  "moduleId": "07-module-7",
-  "_meta": {
-    "idPrefix": "m07-02",
-    "description": "Use IDs: m07-02-q1, m07-02-q2, ... for MC/TF; m07-02-code-1 for code challenges"
-  },
-  "questions": []
-}
