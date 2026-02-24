@@ -67,6 +67,11 @@ GRANT INSERT, UPDATE, DELETE ON public.debezium_signal TO postgres;
 | `type` | VARCHAR(50) | Тип сигнала: `execute-snapshot`, `stop-snapshot` |
 | `data` | TEXT | JSON с параметрами сигнала |
 
+<KnowledgeCheck
+  question="Почему Debezium использует для управления snapshot таблицу в базе данных, а не REST API Kafka Connect?"
+  answer="Signaling table читается через тот же CDC-пайплайн (WAL -> слот репликации -> pgoutput). INSERT в таблицу обрабатывается в точном порядке событий базы данных, обеспечивая запуск snapshot в конкретной, консистентной точке WAL-потока. REST API обрабатывался бы вне основного потока, усложняя координацию с позицией streaming."
+/>
+
 ## Шаг 2: Создание тестовой таблицы
 
 Создадим таблицу `orders_large` с 10,000 записями для демонстрации chunked снэпшота:
@@ -417,6 +422,11 @@ VALUES (
 - Пересинхронизация данных за определенный период
 - Восстановление после частичной потери данных
 - Тестирование на подмножестве данных
+
+<KnowledgeCheck
+  question="После частичной потери данных за последние 24 часа — как пересинхронизировать только затронутые данные без полного snapshot таблицы?"
+  answer="Используйте filtered incremental snapshot с additional-conditions, указав временной фильтр (например, updated_at > NOW() - INTERVAL '24 hours'). Коннектор прочитает только подходящие строки, продолжая streaming в параллельном режиме. Полный snapshot таблицы не потребуется."
+/>
 
 ## Шаг 9: Мониторинг в PostgreSQL
 

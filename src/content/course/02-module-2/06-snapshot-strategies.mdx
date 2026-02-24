@@ -70,6 +70,11 @@ Debezium предлагает несколько режимов снэпшота
 
 В зависимости от режима изоляции, снэпшот может требовать блокировок, влияющих на production workload.
 
+<KnowledgeCheck
+  question="Почему традиционный snapshot проблематичен для 100 ГБ таблицы в production?"
+  answer="Традиционный snapshot блокирует streaming CDC на всё время выполнения. Для 100 ГБ это могут быть часы, в течение которых новые изменения накапливаются в слоте репликации. Если snapshot прерывается, придётся начинать сначала. Incremental snapshot решает обе проблемы — работает параллельно со streaming и возобновляем."
+/>
+
 ## Incremental Snapshots (Debezium 1.6+)
 
 **Incremental snapshots** — современный подход, решающий все вышеперечисленные проблемы:
@@ -233,6 +238,11 @@ WHERE tablename = 'orders' AND schemaname = 'public';
 - Взрывной рост WAL retention
 
 **Когда допустимо:** Только для разработки и тестирования.
+
+<KnowledgeCheck
+  question="Почему snapshot.mode=always — анти-паттерн в production?"
+  answer="Каждый рестарт коннектора вызывает полный snapshot, повторно отправляя все данные в Kafka. Это создаёт дублирование событий, блокирует streaming на время snapshot и вызывает рост WAL retention. В production используйте initial (первый запуск) или never с incremental snapshot."
+/>
 
 ### Schema changes во время incremental snapshot
 

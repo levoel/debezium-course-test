@@ -76,6 +76,11 @@ PostgreSQL поддерживает два типа репликации. Пон
 }
 ```
 
+<KnowledgeCheck
+  question="Почему pgoutput рекомендуется для Debezium, даже если wal2json выдаёт более читаемый JSON?"
+  answer="pgoutput встроен в PostgreSQL 10+ и не требует установки дополнительного ПО. Он работает на всех managed PostgreSQL (Aurora, RDS, Cloud SQL). wal2json — сторонний плагин, который часто невозможно установить на managed-сервисах."
+/>
+
 ## Анатомия WAL для Logical Decoding
 
 Когда вы выполняете транзакцию, PostgreSQL записывает её в WAL. При `wal_level=logical` добавляется дополнительная информация для декодирования.
@@ -223,6 +228,11 @@ FROM pg_class
 WHERE relname = 'customers';
 -- relreplident: 'd' = DEFAULT, 'f' = FULL, 'i' = INDEX, 'n' = NOTHING
 ```
+
+<KnowledgeCheck
+  question="Таблица имеет REPLICA IDENTITY DEFAULT. Какие данные будут в поле before при UPDATE-событии?"
+  answer="Только колонки Primary Key. При DEFAULT PostgreSQL записывает в WAL минимум информации для идентификации строки. Для получения всех колонок в before необходимо переключить на REPLICA IDENTITY FULL, но это увеличит объём WAL на 30-50% для UPDATE-heavy таблиц."
+/>
 
 ### Предупреждение о производительности
 

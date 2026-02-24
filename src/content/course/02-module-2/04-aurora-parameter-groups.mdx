@@ -33,6 +33,11 @@ Amazon Aurora PostgreSQL — это облачная версия PostgreSQL, о
 
 > **Warning:** `rds.logical_replication` доступен **только** в DB Cluster Parameter Group. Если вы создадите DB Instance Parameter Group и попытаетесь добавить этот параметр — вы его не найдете!
 
+<KnowledgeCheck
+  question="Инженер ищет параметр rds.logical_replication в DB Instance Parameter Group, но не находит его. В чём ошибка?"
+  answer="rds.logical_replication доступен только в DB Cluster Parameter Group, а не в DB Instance Parameter Group. Это критическое различие в Aurora: параметры уровня кластера (WAL, репликация) управляются через кластерную группу параметров."
+/>
+
 ## Процесс настройки Aurora для Debezium
 
 Настройка состоит из пяти этапов. Каждый этап обязателен:
@@ -92,6 +97,11 @@ max_worker_processes = 30
 1. В списке инстансов кластера найдите **Writer**
 2. **Actions** → **Reboot**
 3. Дождитесь статуса **Available** (3-5 минут)
+
+<KnowledgeCheck
+  question="После применения parameter group к кластеру, SHOW wal_level; возвращает 'replica'. Какой шаг был пропущен?"
+  answer="Writer Instance не был перезагружен. В Aurora изменения parameter group требуют reboot для применения. Без него старые параметры остаются активными. Это самая частая ошибка при настройке CDC на Aurora."
+/>
 
 ### Шаг 5: Проверка конфигурации
 
