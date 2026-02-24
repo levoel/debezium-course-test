@@ -138,6 +138,11 @@ docker compose exec mysql mysql -u root -pmysql -e "SHOW BINARY LOGS" | awk '{su
 - Retention 30 дней может означать **сотни GB** на диске
 - Необходимо мониторить и планировать disk capacity
 
+<KnowledgeCheck
+  question="По какой формуле рассчитывается оптимальное значение binlog_expire_logs_seconds для CDC?"
+  answer="Формула: Retention = Max Expected Debezium Downtime + Safety Margin. Например, если максимальный простой Debezium составляет 2 дня, с запасом 2x retention должен быть 4 дня (345600 секунд). Это баланс между использованием диска и защитой от потери позиции."
+/>
+
 ## Deprecated: expire_logs_days
 
 В старых версиях MySQL (5.x, ранние 8.x) использовался параметр `expire_logs_days`.
@@ -318,6 +323,11 @@ ON DUPLICATE KEY UPDATE ts = NOW();
   - Разумный баланс
   - Offset остается актуальным
   - Минимальный overhead
+
+<KnowledgeCheck
+  question="Как heartbeat механизм решает проблему idle-таблиц в CDC?"
+  answer="Heartbeat периодически записывает данные в специальную таблицу, создавая события в binlog. Debezium читает эти события и обновляет свой offset, который всегда указывает на свежий binlog файл. Благодаря этому старые файлы могут быть безопасно удалены."
+/>
 
 ### Grant permissions для heartbeat
 

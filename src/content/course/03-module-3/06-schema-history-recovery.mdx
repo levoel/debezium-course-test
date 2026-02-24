@@ -294,6 +294,11 @@ kafka-configs --bootstrap-server kafka:9092 \
 Если retention уже удалил сообщения, изменение конфигурации НЕ вернёт их обратно. Потребуется resnapshot.
 </Callout>
 
+<KnowledgeCheck
+  question="Как коннектор Debezium использует schema history topic при перезапуске?"
+  answer="При перезапуске коннектор читает schema history topic от начала до конца, последовательно применяя все DDL-операции (CREATE TABLE, ALTER TABLE) до сохранённого binlog offset. Это позволяет восстановить точное состояние схемы всех таблиц на момент остановки."
+/>
+
 ## Topic Requirements (Anti-Patterns)
 
 Schema history topic имеет строгие требования к конфигурации.
@@ -870,6 +875,11 @@ curl -X POST http://localhost:8083/connectors/mysql-inventory-connector/restart
 
 Schema history topic name hardcoded в коннекторе. Если вы restore в топик с другим именем, коннектор не найдёт историю.
 </Callout>
+
+<KnowledgeCheck
+  question="Почему нельзя использовать один schema history topic для нескольких Debezium коннекторов?"
+  answer="Каждый коннектор записывает DDL-операции своих таблиц в schema history topic. Если два коннектора используют общий topic, коннектор A прочитает DDL от коннектора B при восстановлении, что приведёт к несоответствию схем (schema mismatch) и повреждению событий."
+/>
 
 ## Schema Evolution Best Practices
 

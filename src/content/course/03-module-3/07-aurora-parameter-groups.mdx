@@ -346,6 +346,11 @@ aws rds describe-db-clusters \
 
 <AuroraSetupProcessDiagram client:visible />
 
+<KnowledgeCheck
+  question="Почему binlog-параметры (binlog_format, gtid_mode) нужно настраивать в DB Cluster Parameter Group, а не в DB Parameter Group?"
+  answer="Binlog и replication параметры являются cluster-wide настройками, которые применяются ко всем инстансам (writer и readers). Установка их на уровне DB Parameter Group (instance-level) будет проигнорирована или вернёт ошибку AWS. Правило: всё, что касается binlog и GTID — только в DB Cluster Parameter Group."
+/>
+
 ## Reboot Requirements: Aurora 2.10+ Critical Change
 
 Это одна из самых коварных ошибок конфигурации Aurora MySQL для CDC.
@@ -627,6 +632,11 @@ aws rds modify-db-cluster \
 ```
 
 **Правило:** `backup_retention_period` >= `binlog retention hours / 24`
+
+<KnowledgeCheck
+  question="Почему в Aurora MySQL нельзя использовать binlog_expire_logs_seconds и как вместо этого настроить binlog retention?"
+  answer="Aurora управляет binlog файлами на своём storage layer, поэтому параметр binlog_expire_logs_seconds доступен только для чтения. Вместо него используется stored procedure: CALL mysql.rds_set_configuration('binlog retention hours', 168) для установки retention в часах (максимум 2160 часов / 90 дней для Aurora 3.x)."
+/>
 
 ## Verification Checklist
 

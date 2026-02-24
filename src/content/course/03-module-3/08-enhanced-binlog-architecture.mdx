@@ -148,6 +148,11 @@ Aurora предоставляет специфичные метрики для E
 **Контекст цифр:** Все приведённые улучшения (99%, 40%, 50% → 13%) взяты из официального AWS блога. Независимые бенчмарки не проводились. В реальных production сценариях результаты могут варьироваться в зависимости от workload характеристик.
 </Callout>
 
+<KnowledgeCheck
+  question="Как Enhanced Binlog снижает compute overhead с 50% до 13%?"
+  answer="В стандартном binlog MySQL движок последовательно записывает данные и сам сортирует события. Enhanced Binlog отправляет несортированные события параллельно с transaction log на специализированные storage nodes, которые выполняют сортировку. Движок освобождается от этой работы, что снижает нагрузку."
+/>
+
 ## Critical Limitations: Что НЕОБХОДИМО знать
 
 Enhanced Binlog имеет **три критических ограничения**, которые делают его несовместимым с некоторыми Aurora функциями. Эти ограничения **постоянны** — вы не можете отменить решение задним числом.
@@ -424,6 +429,11 @@ SHOW VARIABLES LIKE 'binlog_backup';
 <Callout type="tip">
 После включения Enhanced Binlog ваш Debezium connector продолжит работать без изменений. Connector увидит новую binlog последовательность `mysql-bin-changelog.000001` и начнёт читать с неё.
 </Callout>
+
+<KnowledgeCheck
+  question="Почему Enhanced Binlog несовместим с Aurora backtrack, и как это проверить?"
+  answer="Enhanced Binlog хранит события в специализированных storage nodes, а backtrack изменяет состояние transaction log без синхронизации с этим хранилищем. Если кластер когда-либо имел backtrack (BacktrackWindow > 0), Enhanced Binlog нельзя включить. Проверка: aws rds describe-db-clusters --query BacktrackWindow."
+/>
 
 ## Disabling Enhanced Binlog: Если нужно вернуться
 

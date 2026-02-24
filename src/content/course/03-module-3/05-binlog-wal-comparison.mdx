@@ -79,6 +79,11 @@ import { DetailedArchitectureComparisonDiagram, EventFormatComparisonDiagram, Re
 - Если connector down дольше `binlog_expire_logs_seconds` → невозможно восстановить
 - Требует мониторинг зазора между `gtid_executed` и connector offset
 
+<KnowledgeCheck
+  question="В чём ключевое различие между server-side (PostgreSQL) и client-side (MySQL) position tracking для CDC?"
+  answer="PostgreSQL хранит позицию на сервере через replication slot, гарантируя сохранение WAL до подтверждения клиента. MySQL хранит позицию на стороне клиента (Kafka Connect offsets), и сервер чистит binlog независимо. Abandoned PostgreSQL slot переполняет диск, а abandoned MySQL connector теряет возможность восстановления после purge."
+/>
+
 ## Position Format: LSN vs GTID
 
 ### PostgreSQL LSN (Log Sequence Number)
@@ -401,6 +406,11 @@ SHOW BINARY LOGS;
 - Требуется вычислить новый `(binlog_file, offset)` на replica
 - Высокий риск потери данных или дубликатов
 - Не рекомендуется для production CDC
+
+<KnowledgeCheck
+  question="Почему MySQL connector требует schema history topic, а PostgreSQL connector — нет?"
+  answer="PostgreSQL logical decoding встраивает полную информацию о схеме таблиц в каждое WAL-событие, делая их самодостаточными. MySQL binlog содержит только TABLE_MAP с table_id, поэтому Debezium должен хранить DDL-историю в отдельном Kafka topic для восстановления схем при перезапуске."
+/>
 
 ## Common Misconceptions: Распространенные заблуждения
 

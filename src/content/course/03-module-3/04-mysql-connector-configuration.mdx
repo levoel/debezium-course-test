@@ -295,6 +295,11 @@ SHOW VARIABLES LIKE 'server_id';
 - Изменение приведет к созданию новых topics, loss of offset tracking
 - Используйте meaningful names (например, `aurora-production`, `orders-db`)
 
+<KnowledgeCheck
+  question="Почему schema history topic необходимо создать с infinite retention (retention.ms=-1) ДО развёртывания MySQL коннектора?"
+  answer="Schema history topic хранит все DDL-операции с binlog позициями. Debezium использует его для воссоздания схем таблиц при перезапуске. Если topic будет очищен через стандартный Kafka retention (7 дней), коннектор не сможет восстановиться и потребуется полный resnapshot."
+/>
+
 #### 4. Table Filtering
 
 ```json
@@ -745,6 +750,11 @@ DELETE FROM customers WHERE id = 1005;
 **С FULL** (наша конфигурация): `before` содержит **все колонки**, что позволяет consumer знать полное состояние удаленной записи.
 
 </Callout>
+
+<KnowledgeCheck
+  question="Чем отличаются поля op и snapshot в CDC событиях при initial snapshot и при real-time streaming?"
+  answer={'Во время snapshot события имеют op="r" (read) и snapshot="true", а GTID равен null. При real-time streaming INSERT имеет op="c" (create), UPDATE — op="u", DELETE — op="d", snapshot="false", и каждое событие содержит GTID позицию.'}
+/>
 
 ## Troubleshooting Common Deployment Errors
 
