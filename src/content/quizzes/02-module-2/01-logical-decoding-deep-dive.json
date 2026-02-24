@@ -5,5 +5,63 @@
     "idPrefix": "m02-01",
     "description": "Use IDs: m02-01-q1, m02-01-q2, ... for MC/TF; m02-01-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m02-01-q1",
+      "type": "multiple-choice",
+      "question": "В чём принципиальное различие между физической и логической репликацией в PostgreSQL?",
+      "options": [
+        { "id": "a", "text": "Физическая репликация работает быстрее, а логическая поддерживает больше таблиц" },
+        { "id": "b", "text": "Физическая передаёт бинарные блоки WAL для всей базы, а логическая — структурированные изменения (INSERT/UPDATE/DELETE) с возможностью фильтрации по отдельным таблицам" },
+        { "id": "c", "text": "Логическая репликация требует триггеры на каждой таблице, а физическая читает WAL напрямую" },
+        { "id": "d", "text": "Физическая репликация доступна только на managed PostgreSQL, а логическая — только на self-hosted" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Физическая репликация передаёт бинарные блоки WAL целиком — потребителем может быть только другой инстанс PostgreSQL. Логическая репликация через механизм logical decoding преобразует WAL в структурированные изменения (INSERT, UPDATE, DELETE) с данными строк и позволяет фильтровать по конкретным таблицам через Publications. Именно поэтому Debezium использует логическую репликацию: он получает понятные события об изменениях, которые затем отправляет в Kafka. Вариант C ошибочен — логическое декодирование не использует триггеры, а читает WAL напрямую через output plugin (pgoutput).",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m02-01-q2",
+      "type": "multiple-choice",
+      "question": "Почему для Debezium рекомендуется использовать pgoutput, а не wal2json или decoderbufs?",
+      "options": [
+        { "id": "a", "text": "pgoutput работает в 10 раз быстрее wal2json благодаря бинарному протоколу" },
+        { "id": "b", "text": "pgoutput — единственный плагин, который поддерживает REPLICA IDENTITY FULL" },
+        { "id": "c", "text": "pgoutput встроен в PostgreSQL 10+ и не требует установки, что делает его единственным плагином, работающим на всех managed PostgreSQL (Aurora, RDS, Cloud SQL)" },
+        { "id": "d", "text": "pgoutput поддерживает фильтрацию на стороне сервера, остальные плагины передают все данные" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "pgoutput — это встроенный output plugin для логической репликации, доступный в PostgreSQL 10 и выше. Он не требует установки дополнительного ПО, поэтому работает на всех managed PostgreSQL сервисах: Amazon Aurora, RDS, Google Cloud SQL. В отличие от него, wal2json и decoderbufs — сторонние плагины, которые нужно устанавливать отдельно, а decoderbufs вообще недоступен на Aurora. Вариант A неверен — разница в производительности между pgoutput и wal2json не так велика; ключевое преимущество именно в доступности на managed-платформах.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m02-01-q3",
+      "type": "multiple-choice",
+      "question": "Инженер создал Publication с параметром `publish = 'insert'` для таблицы `orders`. Какие операции Debezium будет захватывать из этой таблицы?",
+      "options": [
+        { "id": "a", "text": "INSERT, UPDATE и DELETE — Publication фильтрует только для встроенной логической репликации, но не для Debezium" },
+        { "id": "b", "text": "Только INSERT — Publication определяет, какие операции попадают в поток логической репликации через pgoutput" },
+        { "id": "c", "text": "Все операции, но UPDATE и DELETE будут помечены флагом 'filtered'" },
+        { "id": "d", "text": "Ни одной — параметр publish применяется только к новым записям после создания Publication" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Publication в PostgreSQL контролирует, какие операции (INSERT, UPDATE, DELETE) попадают в поток логической репликации. Параметр `publish = 'insert'` означает, что pgoutput будет передавать только INSERT-операции. Поскольку Debezium получает данные через pgoutput, он увидит только INSERT-события для этой таблицы. UPDATE и DELETE будут выполняться в базе, но не появятся в потоке CDC. Это полезно, например, для таблиц аудита (audit log), куда данные только добавляются.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m02-01-q4",
+      "type": "multiple-choice",
+      "question": "Таблица `customers` имеет REPLICA IDENTITY DEFAULT. В Debezium-событии при UPDATE вы видите: `before: {id: 42}`, а поля `name`, `email`, `phone` отсутствуют в `before`. Почему это происходит и каковы последствия переключения на REPLICA IDENTITY FULL?",
+      "options": [
+        { "id": "a", "text": "Это баг Debezium — при DEFAULT все поля должны быть в before. FULL не изменит поведение" },
+        { "id": "b", "text": "DEFAULT включает в before только Primary Key, что минимизирует объём WAL. Переключение на FULL добавит все поля в before, но увеличит объём WAL на 30-50% для UPDATE-heavy таблиц из-за записи полной старой строки" },
+        { "id": "c", "text": "DEFAULT не включает before вообще — id: 42 приходит из after. FULL добавит before, но без влияния на WAL" },
+        { "id": "d", "text": "DEFAULT отправляет only новые значения для экономии трафика. FULL отправит все поля, но объём WAL не изменится, так как данные уже есть в WAL" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "REPLICA IDENTITY определяет, какие данные PostgreSQL записывает в WAL при UPDATE и DELETE. В режиме DEFAULT в WAL попадают только колонки Primary Key для идентификации изменённой строки — поэтому в `before` Debezium видит только `{id: 42}`. При переключении на FULL PostgreSQL записывает в WAL полную копию старой строки при каждом UPDATE и DELETE. Это позволяет потребителям CDC сравнивать before/after, но каждый UPDATE генерирует значительно больше WAL-данных — для таблиц с частыми обновлениями и широкими строками (много колонок, JSONB) увеличение WAL volume может достигать 30-50%.",
+      "hint": "Обратите внимание на то, что REPLICA IDENTITY влияет на уровне WAL, а не на уровне Debezium. Подумайте, что именно PostgreSQL записывает в WAL при UPDATE в каждом из режимов, и как объём записываемых данных зависит от ширины строки.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
