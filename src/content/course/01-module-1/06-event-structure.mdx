@@ -81,6 +81,11 @@ import { OperationTypesDiagram, EventStructureDiagram } from '../../../component
 
 <OperationTypesDiagram client:load />
 
+<KnowledgeCheck
+  question="При DELETE-операции какое поле содержит данные удаленной строки -- before или after? Почему?"
+  answer="Поле before содержит данные удаленной строки, а after равно null, потому что строка больше не существует после удаления. Для INSERT -- наоборот: before равно null (строки не было), after содержит новые данные. Для UPDATE доступны оба поля: before -- старое состояние, after -- новое."
+/>
+
 ## Ключевая ошибка: null в before/after
 
 Самая частая ошибка начинающих — обращение к `after` без проверки на `null`:
@@ -150,6 +155,11 @@ elif op == 'd':  # Delete
 - `"last"` — последнее событие snapshot (редко используется)
 
 **`lsn`** — позиция в WAL. Используется для точного восстановления позиции при перезапуске.
+
+<KnowledgeCheck
+  question="В чем разница между payload.ts_ms и source.ts_ms в Debezium-событии? Какое значение следует использовать для event time processing?"
+  answer="source.ts_ms -- это время, когда изменение произошло в базе данных (event time). payload.ts_ms -- это время, когда Debezium обработал событие (processing time). Для event time processing в data pipeline всегда используйте source.ts_ms, потому что оно отражает реальный момент изменения данных, а не задержку обработки."
+/>
 
 ## Полная функция парсинга CDC событий
 

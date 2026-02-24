@@ -113,6 +113,11 @@ try (DebeziumEngine<ChangeEvent<String, String>> engine =
 
 Недостатки: вы сами отвечаете за offset management, масштабирование, отказоустойчивость.
 
+<KnowledgeCheck
+  question="Компания использует Google Cloud Pub/Sub для обмена сообщениями и не планирует внедрять Apache Kafka. Какой режим развертывания Debezium подходит для отправки CDC-событий напрямую в Pub/Sub?"
+  answer="Debezium Server -- standalone приложение, которое читает WAL и отправляет события напрямую в облачные сервисы, включая Google Cloud Pub/Sub, Amazon Kinesis и Azure Event Hubs. Этот режим не требует Kafka в инфраструктуре, что делает его идеальным выбором для cloud-native архитектур без Kafka."
+/>
+
 ## Архитектура Kafka Connect
 
 Поскольку Kafka Connect — рекомендуемый режим, разберем его детальнее.
@@ -154,6 +159,11 @@ curl -X POST http://localhost:8083/connectors/postgres-connector/tasks/0/restart
 # Удалить коннектор
 curl -X DELETE http://localhost:8083/connectors/postgres-connector
 ```
+
+<KnowledgeCheck
+  question="Какую информацию хранит внутренний топик connect-offsets в Kafka Connect и почему он критически важен для работы Debezium?"
+  answer="Топик connect-offsets хранит позиции чтения WAL (оффсеты) для каждого коннектора. Без этих данных после перезапуска Debezium не знал бы, откуда продолжить чтение журнала транзакций, что привело бы к повторной обработке уже отправленных событий или пропуску новых изменений."
+/>
 
 ## Поток CDC событий
 
