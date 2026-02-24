@@ -5,5 +5,63 @@
     "idPrefix": "m01-04",
     "description": "Use IDs: m01-04-q1, m01-04-q2, ... for MC/TF; m01-04-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m01-04-q1",
+      "type": "multiple-choice",
+      "question": "Что происходит при первом запуске Debezium коннектора с настройкой snapshot.mode=initial?",
+      "options": [
+        { "id": "a", "text": "Коннектор начинает отслеживать только новые изменения, игнорируя существующие данные" },
+        { "id": "b", "text": "Коннектор выполняет начальный снэпшот -- читает все существующие записи из таблицы и отправляет их в Kafka с операцией op: \"r\"" },
+        { "id": "c", "text": "Коннектор создает копию базы данных в отдельном топике Kafka" },
+        { "id": "d", "text": "Коннектор ожидает первого INSERT в таблицу и только тогда начинает захват" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "При первом запуске Debezium выполняет начальный снэпшот (initial snapshot) -- последовательно читает все существующие записи из отслеживаемых таблиц и отправляет каждую запись как событие с полем op: \"r\" (read). Это гарантирует, что потребители получают полное состояние данных до перехода к захвату live-изменений. Вариант A описывает поведение snapshot.mode=never, которое пропускает начальную загрузку.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m01-04-q2",
+      "type": "multiple-choice",
+      "question": "Коннектор настроен с параметрами topic.prefix=myapp и table.include.list=public.orders. Какое имя получит Kafka топик для этой таблицы?",
+      "options": [
+        { "id": "a", "text": "myapp.orders" },
+        { "id": "b", "text": "public.orders" },
+        { "id": "c", "text": "myapp.public.orders" },
+        { "id": "d", "text": "debezium.myapp.public.orders" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Debezium формирует имя топика по шаблону {topic.prefix}.{schema}.{table}. При topic.prefix=myapp, схеме public и таблице orders результат -- myapp.public.orders. Вариант A пропускает компонент schema, что нарушает шаблон и может привести к коллизиям имен, если одинаковые таблицы существуют в разных схемах.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m01-04-q3",
+      "type": "multiple-choice",
+      "question": "В конфигурации коннектора указано database.hostname: localhost, а коннектор запущен внутри контейнера Docker. Что произойдет при запуске?",
+      "options": [
+        { "id": "a", "text": "Коннектор успешно подключится к PostgreSQL на хост-машине" },
+        { "id": "b", "text": "Коннектор получит ошибку Connection refused, потому что localhost внутри контейнера указывает на сам контейнер Kafka Connect, а не на контейнер PostgreSQL" },
+        { "id": "c", "text": "Docker автоматически перенаправит запрос на контейнер PostgreSQL" },
+        { "id": "d", "text": "Коннектор подключится, но данные будут поступать с задержкой из-за NAT" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Внутри Docker каждый контейнер имеет свой собственный сетевой namespace. Адрес localhost внутри контейнера Kafka Connect указывает на сам этот контейнер, а не на PostgreSQL. Для обращения к другим контейнерам в Docker Compose используется имя сервиса (например, postgres), которое разрешается через встроенный DNS Docker. Аналогично, внутренний порт PostgreSQL -- 5432, а не внешний 5433.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m01-04-q4",
+      "type": "multiple-choice",
+      "question": "После удаления коннектора через REST API (DELETE /connectors/inventory-connector) слот репликации debezium_customers остается в PostgreSQL в состоянии active=false. Почему это проблема и какое действие необходимо?",
+      "options": [
+        { "id": "a", "text": "Это не проблема -- PostgreSQL автоматически удалит неактивный слот через 24 часа" },
+        { "id": "b", "text": "Слот продолжит накапливать WAL-сегменты, потому что PostgreSQL не удаляет слоты автоматически. Необходимо вызвать pg_drop_replication_slot('debezium_customers') вручную" },
+        { "id": "c", "text": "Слот заблокирует все новые подключения к PostgreSQL до перезагрузки сервера" },
+        { "id": "d", "text": "Слот приведет к дублированию событий при создании нового коннектора с другим именем" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Слоты репликации в PostgreSQL не удаляются автоматически. Даже после удаления коннектора через REST API слот остается в PostgreSQL и продолжает удерживать WAL-сегменты от очистки. Со временем это приводит к заполнению диска, что является одной из самых распространенных проблем при эксплуатации Debezium. Решение -- явно удалить слот командой SELECT pg_drop_replication_slot('debezium_customers'). Вариант A опасен: PostgreSQL не имеет встроенного TTL для слотов репликации.",
+      "hint": "Подумайте о жизненном цикле слота репликации: кто его создает и кто обязан удалить? Что происходит с WAL-сегментами, пока слот существует, даже если никто из него не читает?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
