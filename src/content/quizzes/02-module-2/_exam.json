@@ -5,5 +5,152 @@
     "idPrefix": "exam-m02",
     "description": "Use IDs: exam-m02-q1, exam-m02-q2, ... (8-10 analytical questions)"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "exam-m02-q1",
+      "type": "multiple-choice",
+      "question": "Production-кластер Aurora PostgreSQL. Мониторинг показывает abandoned слот репликации, растущий на 2 ГБ/день. Текущий WAL retention — 14 ГБ, диск заполнен на 70%. Какая последовательность действий правильно решает проблему и предотвращает её повторение?",
+      "options": [
+        { "id": "a", "text": "Немедленно удалить слот через pg_drop_replication_slot() для освобождения диска, затем настроить алерт на inactive slots" },
+        { "id": "b", "text": "Установить max_slot_wal_keep_size = '5GB', подождать автоматической очистки WAL, затем удалить слот" },
+        { "id": "c", "text": "Проверить наличие коннектора в Kafka Connect (GET /connectors), подтвердить с командой-владельцем, что коннектор не нужен. Удалить слот через pg_drop_replication_slot(). Установить max_slot_wal_keep_size как страховку от повторения. Настроить алерт на wal_status и inactive slots с высоким lag" },
+        { "id": "d", "text": "Перезагрузить Writer Instance — reboot сбросит WAL retention и очистит abandoned slots автоматически" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Правильная процедура объединяет знания из нескольких уроков. Из урока 02 (слоты репликации): active=false НЕ означает 'безопасно удалить' — коннектор может быть временно остановлен, поэтому обязательна проверка в Kafka Connect и подтверждение от владельца. Из урока 03 (WAL конфигурация): max_slot_wal_keep_size — критический параметр для защиты от disk exhaustion, который ограничивает WAL retention на каждый слот. Из урока 04 (Aurora): параметры Aurora настраиваются через DB Cluster Parameter Group. Вариант A опасен — удаление без проверки может уничтожить позицию чтения для временно остановленного коннектора. Вариант D ошибочен — reboot не удаляет слоты и не очищает WAL.",
+      "hint": "Разделите проблему на три части: (1) безопасное решение текущей ситуации (не навреди), (2) непосредственное удаление слота, (3) предотвращение повторения. Какие проверки необходимы перед удалением слота? Какой параметр PostgreSQL ограничивает WAL retention на уровне слота?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m02-q2",
+      "type": "multiple-choice",
+      "question": "После Aurora failover Debezium-коннектор переподключается. Запрос к pg_replication_slots на новом Writer показывает: вновь созданный слот с wal_status='lost'. Какая последовательность событий привела к этому состоянию и какие шаги восстановления необходимы?",
+      "options": [
+        { "id": "a", "text": "Слот мигрировал с прошлого Writer, но WAL уже был удалён. Нужно подождать — PostgreSQL автоматически восстановит WAL из storage layer Aurora" },
+        { "id": "b", "text": "Debezium создал новый слот на новом Writer, но max_slot_wal_keep_size уже достигнут другим слотом, вызвавшим удаление WAL-сегментов. Слот потерял данные до текущей позиции. Нужно: удалить потерянный слот, удалить и пересоздать коннектор для полного resnapshot, провести post-mortem" },
+        { "id": "c", "text": "Aurora автоматически восстанавливает слоты при failover, но wal_status='lost' означает лишь временное состояние — оно исправится через несколько минут" },
+        { "id": "d", "text": "wal_status='lost' возникает только при ручном удалении WAL-файлов — failover не может привести к этому состоянию" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 02, 04 и 05. Из урока 05: при Aurora failover логические replication slots теряются, так как они не синхронизируются между Writer и Reader (до PostgreSQL 17). Из урока 02: wal_status='lost' означает, что WAL-сегменты, необходимые слоту, уже удалены — это невосстановимое состояние. Из урока 04: max_slot_wal_keep_size на новом Writer мог ограничить WAL retention. Вариант A ошибочен — слоты НЕ мигрируют при failover Aurora. Вариант C ошибочен — Aurora не восстанавливает логические слоты автоматически. Восстановление: удалить слот (pg_drop_replication_slot), удалить коннектор, пересоздать его — Debezium выполнит полный resnapshot.",
+      "hint": "Вспомните, что происходит со слотами репликации при Aurora failover (урок 05) и что означает каждое значение wal_status (урок 02). Если слот потерял WAL, можно ли восстановить пропущенные данные без resnapshot?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m02-q3",
+      "type": "multiple-choice",
+      "question": "Команда планирует CDC для Aurora PostgreSQL. База обрабатывает 500 UPDATE/сек со средним размером строки 2 КБ. Таблицы используют REPLICA IDENTITY FULL. Оцените дополнительный объём WAL и рекомендуйте оптимальную конфигурацию REPLICA IDENTITY.",
+      "options": [
+        { "id": "a", "text": "Дополнительный WAL: ~500 UPDATE/сек x 2 КБ = 1 МБ/сек = 3.6 ГБ/час. С REPLICA IDENTITY FULL каждый UPDATE записывает полную старую строку. Рекомендация: переключить большинство таблиц на DEFAULT, оставив FULL только для таблиц, где нужен полный before-image (аудит, compliance)" },
+        { "id": "b", "text": "Дополнительный WAL незначителен — REPLICA IDENTITY FULL влияет только на DELETE, а не на UPDATE" },
+        { "id": "c", "text": "Дополнительный WAL: ~500 UPDATE/сек x 2 КБ x 2 (before + after) = 2 МБ/сек. Рекомендация: оставить FULL для всех таблиц, так как разница в 2x несущественна" },
+        { "id": "d", "text": "Дополнительный WAL невозможно оценить без нагрузочного тестирования. REPLICA IDENTITY не влияет на объём WAL" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот вопрос объединяет концепции из уроков 01 и 03. Из урока 01: REPLICA IDENTITY FULL записывает полную старую строку в WAL при каждом UPDATE и DELETE. При DEFAULT записывается только Primary Key. Из урока 03: UPDATE с FULL добавляет 30-50% WAL overhead. Расчёт: 500 UPDATE/сек x 2 КБ (полная старая строка) = 1000 КБ/сек = ~1 МБ/сек = ~3.6 ГБ/час дополнительного WAL только от REPLICA IDENTITY. Это значительная нагрузка. Рекомендация: DEFAULT для большинства таблиц (before содержит только PK — десятки байт вместо 2 КБ), FULL — только для таблиц с реальной потребностью в before-image. Вариант B ошибочен — FULL влияет и на UPDATE, и на DELETE. Вариант C преуменьшает проблему — 3.6 ГБ/час дополнительного WAL существенно влияет на диск и I/O.",
+      "hint": "Вспомните из урока 01, что записывается в WAL при UPDATE с REPLICA IDENTITY FULL vs DEFAULT. Из урока 03 — формулу расчёта WAL volume. Подумайте: при 500 UPDATE/сек и 2 КБ на строку, сколько дополнительных данных генерируется за час?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m02-q4",
+      "type": "multiple-choice",
+      "question": "Необходимо добавить 100 ГБ production-таблицу к существующему Debezium-коннектору (table.include.list) в рабочее время. Streaming CDC для текущих таблиц не должен прерываться. Какую стратегию snapshot следует использовать?",
+      "options": [
+        { "id": "a", "text": "Остановить коннектор, добавить таблицу, перезапустить с snapshot.mode=initial — initial snapshot обработает только новую таблицу" },
+        { "id": "b", "text": "Добавить таблицу в table.include.list, перезапустить коннектор с snapshot.mode=never. Затем отправить сигнал execute-snapshot через signaling table с типом incremental для новой таблицы. Streaming для существующих таблиц продолжит работать параллельно" },
+        { "id": "c", "text": "Создать отдельный коннектор с snapshot.mode=initial_only для новой таблицы, затем удалить его и добавить таблицу к основному коннектору" },
+        { "id": "d", "text": "Добавить таблицу в table.include.list и установить snapshot.mode=when_needed — коннектор автоматически определит, что для новой таблицы нужен incremental snapshot" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет уроки 06 и 07. Из урока 06: традиционный snapshot (initial, always) блокирует streaming на всё время выполнения — для 100 ГБ это часы простоя CDC. Incremental snapshot работает параллельно со streaming и возобновляем при сбое. Из урока 07: signaling table позволяет запустить snapshot по требованию через INSERT. Стратегия: (1) обновить table.include.list, (2) перезапустить коннектор с never, (3) отправить execute-snapshot сигнал для новой таблицы. Вариант A ошибочен — initial snapshot блокирует streaming для ВСЕХ таблиц, а не только новой. Вариант D ошибочен — when_needed не использует incremental snapshot автоматически.",
+      "hint": "Ключевое требование — не прерывать streaming для существующих таблиц. Сравните, что происходит с CDC-потоком при традиционном snapshot (блокировка) и при incremental snapshot (параллельная работа). Как запустить incremental snapshot по требованию?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m02-q5",
+      "type": "multiple-choice",
+      "question": "Инженер установил rds.logical_replication=1 в DB Cluster Parameter Group Aurora PostgreSQL, применил группу к кластеру, но Debezium выдаёт ошибку: 'wal_level must be logical'. Пошагово определите причину и решение.",
+      "options": [
+        { "id": "a", "text": "Параметр был установлен в DB Instance Parameter Group вместо DB Cluster Parameter Group. Решение: создать DB Cluster Parameter Group и переприменить" },
+        { "id": "b", "text": "Writer Instance не был перезагружен после применения parameter group. Решение: выполнить Reboot Writer Instance в AWS Console, дождаться статуса Available, проверить SHOW wal_level; — должно вернуть 'logical'" },
+        { "id": "c", "text": "Версия Aurora PostgreSQL слишком старая для логической репликации. Решение: обновить до Aurora PostgreSQL 13+" },
+        { "id": "d", "text": "Нужно дополнительно установить wal_level=logical в postgresql.conf через SSH-доступ к инстансу" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет уроки 01, 04 и основы конфигурации PostgreSQL. Из урока 04: после изменения параметров в DB Cluster Parameter Group необходим обязательный reboot Writer Instance — без него параметры не применяются, и wal_level остаётся 'replica'. Из урока 01: wal_level=logical — обязательное требование для logical decoding, без которого Debezium не может создать слот репликации. Ключевая деталь: статус инстанса в AWS Console покажет 'pending-reboot' до выполнения перезагрузки. Вариант A описывает другую ошибку (параметр вообще не найден). Вариант D ошибочен — в Aurora нет SSH-доступа к конфигурационным файлам.",
+      "hint": "Инженер правильно выбрал тип parameter group (DB Cluster) и установил параметр. Но ошибка говорит, что wal_level всё ещё не logical. Какой обязательный шаг из 5-шагового процесса настройки Aurora (урок 04) мог быть пропущен?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m02-q6",
+      "type": "multiple-choice",
+      "question": "Сравните два подхода для таблицы с 90% UPDATE-операций и 50 колонками: (A) REPLICA IDENTITY DEFAULT с пост-обработкой на стороне consumer для выявления изменений, (B) REPLICA IDENTITY FULL с полным before/after. Какой подход предпочтительнее?",
+      "options": [
+        { "id": "a", "text": "Подход B (FULL): полные before/after упрощают consumer-логику. Дополнительный WAL от 50 колонок незначителен для современных дисков" },
+        { "id": "b", "text": "Подход A (DEFAULT): при 90% UPDATE и 50 колонках FULL генерирует 30-50% дополнительного WAL. DEFAULT записывает только PK в before, экономя WAL и I/O. Consumer может сравнивать последовательные after-значения или использовать Debezium SMT для выявления изменённых полей" },
+        { "id": "c", "text": "Оба подхода эквивалентны — PostgreSQL оптимизирует запись WAL и записывает только изменённые колонки при FULL" },
+        { "id": "d", "text": "Подход B (FULL): без полного before consumer не сможет определить, какие поля изменились, что делает DEFAULT бесполезным для CDC" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот анализ объединяет концепции из уроков 01 и 03. Из урока 01: REPLICA IDENTITY FULL записывает полную старую строку (все 50 колонок) в WAL при каждом UPDATE. DEFAULT записывает только PK. Из урока 03: для таблиц с преобладанием UPDATE дополнительный WAL от FULL составляет 30-50%. При 90% UPDATE и 50 колонках: каждый UPDATE генерирует дополнительно ~50 колонок данных в WAL. Подход A экономит WAL и I/O ценой усложнения consumer-логики. Вариант C ошибочен — PostgreSQL НЕ оптимизирует FULL, записывая ВСЕ колонки старой строки, даже если изменилась одна. Вариант D преувеличивает — consumer может работать с DEFAULT, сравнивая after-значения или используя SMT.",
+      "hint": "Рассмотрите компромисс: WAL volume на стороне PostgreSQL vs сложность логики на стороне consumer. При 90% UPDATE и 50 колонках — какой объём дополнительных данных генерирует FULL? Можно ли получить информацию об изменениях без полного before?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m02-q7",
+      "type": "multiple-choice",
+      "question": "Запрос к pg_replication_slots возвращает три слота:\n\nSlot A: active=true, lag=50MB, wal_status='reserved'\nSlot B: active=false, lag=8GB, wal_status='extended'\nSlot C: active=false, lag=500MB, wal_status='reserved'\n\nКакие слоты требуют немедленного внимания и почему?",
+      "options": [
+        { "id": "a", "text": "Только Slot B: inactive с 8 ГБ lag и extended-статусом — WAL превысил max_wal_size, слот удерживает сегменты. Требуется проверка коннектора. Slot A здоров, Slot C — нормальный кратковременный простой (lag мал, wal_status='reserved')" },
+        { "id": "b", "text": "Slots B и C: оба inactive — нужно немедленно удалить их через pg_drop_replication_slot()" },
+        { "id": "c", "text": "Все три: любой lag больше 0 указывает на проблему с производительностью CDC" },
+        { "id": "d", "text": "Ни один: active=false — нормальное состояние для коннекторов в процессе rebalance" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Анализ объединяет уроки 02 и 03. Из урока 02: wal_status='extended' означает, что WAL превысил max_wal_size, но слот удерживает сегменты — это предупреждающий сигнал. active=false с lag 8 ГБ указывает на потенциально abandoned слот. Из урока 03: мониторинг lag — ключевая метрика, но важен контекст. Slot A: active=true, lag 50 МБ, reserved — здоровый работающий слот. Slot C: active=false, но lag всего 500 МБ, reserved — вероятно, коннектор временно остановлен (rebalance, обновление). Slot B: inactive, 8 ГБ lag, extended — наиболее вероятный кандидат на abandoned slot, требует немедленной проверки. Вариант B опасен — нельзя удалять слоты без проверки статуса коннекторов.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m02-q8",
+      "type": "multiple-choice",
+      "question": "Команда планирует развернуть Debezium на Aurora Serverless. Какое ограничение версии существует и что следует рассмотреть как альтернативу?",
+      "options": [
+        { "id": "a", "text": "Aurora Serverless не поддерживает Debezium ни в одной версии. Единственная альтернатива — EC2 с self-hosted PostgreSQL" },
+        { "id": "b", "text": "Aurora Serverless v1 НЕ поддерживает логическую репликацию. Альтернативы: (1) Aurora Serverless v2, который поддерживает rds.logical_replication через DB Cluster Parameter Group, или (2) Aurora Provisioned" },
+        { "id": "c", "text": "Все версии Aurora Serverless поддерживают Debezium, но с ограничением: max_replication_slots=1" },
+        { "id": "d", "text": "Aurora Serverless поддерживает CDC только через wal2json, pgoutput недоступен" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот вопрос объединяет уроки 04 и 02. Из урока 04: Aurora Serverless v1 не поддерживает логическую репликацию из-за архитектурных ограничений. Aurora Serverless v2 и Aurora Provisioned поддерживают rds.logical_replication=1 через DB Cluster Parameter Group. Из урока 02: для работы Debezium необходим логический слот репликации, который можно создать только при wal_level=logical. На Aurora Serverless v1 этот параметр недоступен. Если проект использует Serverless v1, миграция на v2 или Provisioned — обязательный шаг перед внедрением CDC.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m02-q9",
+      "type": "multiple-choice",
+      "question": "Рассчитайте max_slot_wal_keep_size для следующих условий: WAL rate = 200 МБ/час, максимально допустимый downtime коннектора = 12 часов, 2 слота репликации, буфер безопасности 50%.",
+      "options": [
+        { "id": "a", "text": "2.4 ГБ — формула: 200 МБ x 12 часов / 1024" },
+        { "id": "b", "text": "4.8 ГБ — формула: 200 МБ x 12 часов x 2 слота / 1024" },
+        { "id": "c", "text": "7.2 ГБ — формула: 200 МБ/час x 12 часов x 2 слота x 1.5 буфер / 1024 = 7200 МБ = ~7 ГБ. Установить max_slot_wal_keep_size = '8GB'" },
+        { "id": "d", "text": "50 ГБ — стандартная рекомендация для production, не зависящая от WAL rate" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Расчёт объединяет формулу из урока 03 и понимание слотов из урока 02. Формула: (WAL rate) x (max downtime) x (количество слотов) x (1 + буфер). Подставляя: 200 МБ/час x 12 часов x 2 слота x 1.5 = 7200 МБ = ~7 ГБ. Из урока 02: max_slot_wal_keep_size ограничивает WAL retention на каждый слот — при превышении wal_status переходит в 'unreserved', затем 'lost'. Из урока 03: буфер 50% необходим для пиковых нагрузок (batch-обработка, миграции). Рекомендация: установить 8 ГБ с округлением вверх. Вариант B не учитывает буфер — рискованно для production. Вариант D не учитывает конкретные параметры системы.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m02-q10",
+      "type": "multiple-choice",
+      "question": "Объясните взаимосвязь между Publications, REPLICA IDENTITY и содержимым CDC-событий в PostgreSQL logical decoding.",
+      "options": [
+        { "id": "a", "text": "Publications определяют, какие таблицы и операции (INSERT/UPDATE/DELETE) попадают в поток логической репликации. REPLICA IDENTITY определяет, какие данные включаются в поле before для UPDATE и DELETE. Вместе они контролируют: Publication — ЧТО реплицируется (какие таблицы, какие операции), REPLICA IDENTITY — КАК детально (полнота before/after в событиях)" },
+        { "id": "b", "text": "Publications и REPLICA IDENTITY — взаимозаменяемые механизмы: оба фильтруют данные в CDC-потоке, но Publication работает на уровне таблиц, а REPLICA IDENTITY — на уровне колонок" },
+        { "id": "c", "text": "REPLICA IDENTITY определяет, какие таблицы реплицируются, а Publication — формат выходных данных (JSON, Protobuf, pgoutput)" },
+        { "id": "d", "text": "Publications и REPLICA IDENTITY влияют только на потребителей встроенной логической репликации PostgreSQL и не имеют эффекта на Debezium, который использует собственный механизм чтения WAL" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот вопрос объединяет три ключевые концепции из урока 01. Publication определяет scope репликации: какие таблицы участвуют (FOR TABLE ... или FOR ALL TABLES) и какие операции публикуются (publish = 'insert,update,delete'). REPLICA IDENTITY определяет глубину данных: при DEFAULT — only PK в before, при FULL — полная строка в before для UPDATE/DELETE. Debezium использует оба механизма: Publication через конфигурацию publication.name/publication.autocreate.mode, REPLICA IDENTITY — через формат событий (наличие before-image). Вариант B ошибочен — это не взаимозаменяемые механизмы: Publication не влияет на содержимое before/after, а REPLICA IDENTITY не фильтрует таблицы или операции. Вариант D ошибочен — Debezium получает данные через pgoutput, который полностью подчиняется Publications и REPLICA IDENTITY.",
+      "bloomLevel": "conceptual"
+    }
+  ]
 }
