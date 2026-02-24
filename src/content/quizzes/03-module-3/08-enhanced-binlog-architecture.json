@@ -5,5 +5,58 @@
     "idPrefix": "m03-08",
     "description": "Use IDs: m03-08-q1, m03-08-q2, ... for MC/TF; m03-08-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-08-q1",
+      "type": "multiple-choice",
+      "question": "Какую ключевую архитектурную проблему стандартного binlog решает Aurora Enhanced Binlog?",
+      "options": [
+        { "id": "a", "text": "Стандартный binlog использует устаревший формат событий, Enhanced Binlog переходит на новый протокол, несовместимый со старыми клиентами" },
+        { "id": "b", "text": "Стандартный binlog записывается последовательно после commit, создавая до 50% compute overhead — Enhanced Binlog использует специализированные storage nodes для параллельной записи binlog и transaction log, снижая overhead до 13%" },
+        { "id": "c", "text": "Стандартный binlog не поддерживает шифрование, Enhanced Binlog добавляет TLS на уровне хранения" },
+        { "id": "d", "text": "Стандартный binlog ограничен размером файла 128 MB, Enhanced Binlog снимает это ограничение полностью" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "В стандартной архитектуре MySQL движок последовательно записывает данные в redo log, фиксирует транзакцию, затем записывает события в binlog файлы. Для workloads с активной записью это создаёт до 50% дополнительной вычислительной нагрузки — движок тратит ресурсы на сортировку и упорядочивание binlog событий. Enhanced Binlog (Aurora 3.03.1+) решает эту проблему через разделение ответственности: MySQL движок генерирует binlog события параллельно с transaction log, отправляя их в специализированные storage nodes, которые берут на себя сортировку. Результат: compute overhead снижается до ~13%, recovery ускоряется на 99%, throughput на concurrent workloads увеличивается на 40%. При этом Debezium connector продолжает читать binlog через стандартный MySQL протокол без изменений.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-08-q2",
+      "type": "true-false",
+      "question": "Если Aurora кластер когда-либо имел включённый backtrack (даже если backtrack в данный момент отключён), активировать Enhanced Binlog на этом кластере невозможно.",
+      "correctAnswer": true,
+      "explanation": "Это перманентное ограничение Enhanced Binlog. Backtrack позволяет откатить Aurora кластер на предыдущее состояние (point-in-time rewind), но Enhanced Binlog хранит события в специализированных storage nodes, которые не синхронизируются с backtrack механизмом. После backtrack binlog события становятся несогласованными с данными. AWS блокирует включение Enhanced Binlog на кластерах, где backtrack когда-либо был активен — даже если backtrack был отключён позже. Это означает, что решение о backtrack vs Enhanced Binlog необходимо принимать при создании кластера. Проверить можно через: aws rds describe-db-clusters --query 'DBClusters[0].BacktrackWindow' — если значение > 0, Enhanced Binlog недоступен.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-08-q3",
+      "type": "multiple-choice",
+      "question": "Сравните Enhanced Binlog и стандартный binlog для сценария: high-throughput OLTP система (10,000+ транзакций/сек) в одном регионе AWS, использующая Debezium CDC. Backtrack не требуется, но нужна disaster recovery через Aurora automated backups. Какой binlog режим выбрать?",
+      "options": [
+        { "id": "a", "text": "Enhanced Binlog — 40% прирост throughput и 13% overhead критичны для high-throughput, а после restore из backup просто выполнить Debezium resnapshot" },
+        { "id": "b", "text": "Стандартный binlog — Enhanced Binlog файлы не включаются в Aurora backups, после restore binlog позиция потеряна, что делает DR непредсказуемым" },
+        { "id": "c", "text": "Enhanced Binlog — Aurora backup автоматически включает Enhanced Binlog файлы начиная с Aurora 3.05.0" },
+        { "id": "d", "text": "Стандартный binlog — Enhanced Binlog несовместим с Debezium и требует специального коннектора" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Для single-region high-throughput OLTP без backtrack Enhanced Binlog — оптимальный выбор: 40% прирост throughput, снижение compute overhead с 50% до 13%, 99% ускорение recovery. Главный trade-off — Enhanced Binlog файлы НЕ включаются в Aurora backups (вариант C неверен — это ограничение постоянно). После restore из backup binlog начинается с .000001, и Debezium потребуется resnapshot. Для high-throughput системы это приемлемый trade-off: (1) restore из backup — это уже disaster scenario с downtime; (2) можно использовать incremental snapshot (Debezium 1.6+) для минимизации downtime; (3) экономия 37% compute overhead (50% → 13%) в нормальном режиме работы перевешивает редкий сценарий resnapshot. Вариант B консервативен, но теряет значительные performance benefits. Вариант D неверен — Debezium работает с Enhanced Binlog через стандартный MySQL протокол.",
+      "hint": "Оцените частоту и стоимость каждого сценария: compute overhead платится каждую секунду работы системы, а restore из backup — это редкий disaster event. Подумайте, что перевешивает в долгосрочной перспективе для high-throughput системы.",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m03-08-q4",
+      "type": "multiple-choice",
+      "question": "Команда включила Enhanced Binlog на Aurora кластере и наблюдает 50% снижение CPU utilization. Через 3 месяца бизнес требует Aurora Global Database для cross-region disaster recovery. Какой анализ trade-offs должна провести команда?",
+      "options": [
+        { "id": "a", "text": "Global Database совместим с Enhanced Binlog — дополнительный анализ не нужен" },
+        { "id": "b", "text": "Enhanced Binlog файлы НЕ реплицируются в secondary регион Global Database, поэтому после cross-region failover binlog начнётся с .000001 и Debezium потребует resnapshot. Команда должна оценить: допустимо ли CDC downtime на время resnapshot после failover, или лучше отключить Enhanced Binlog (вернуть 50% overhead) для бесшовного failover" },
+        { "id": "c", "text": "Достаточно увеличить binlog retention в secondary регионе, и Enhanced Binlog файлы будут доступны после failover" },
+        { "id": "d", "text": "Команда должна создать второй Debezium коннектор в secondary регионе, который будет параллельно читать binlog — это решит проблему без отключения Enhanced Binlog" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Enhanced Binlog имеет критическое ограничение с Aurora Global Database: binlog файлы хранятся в специализированных storage nodes, которые НЕ реплицируются в secondary регионы. При failover на secondary регион binlog начинается с mysql-bin-changelog.000001 — Debezium offset (содержащий позицию из primary региона) становится невалидным, и коннектор требует resnapshot. Команда должна провести анализ: (1) Как часто ожидается cross-region failover? (2) Какова допустимая продолжительность CDC downtime? (3) Каков размер таблиц для resnapshot? Если resnapshot занимает часы и CDC downtime неприемлем — нужно отключить Enhanced Binlog (вернуть стандартный binlog с 50% overhead, но с бесшовным failover). Если cross-region failover — rare event и resnapshot допустим — можно сохранить Enhanced Binlog. Отключение Enhanced Binlog также потребует resnapshot, поэтому планировать нужно заранее.",
+      "hint": "Ключ к анализу — сопоставление частоты cross-region failover с ежедневными benefits Enhanced Binlog. Также учтите, что отключение Enhanced Binlog само по себе вызовет resnapshot (новая binlog последовательность), поэтому переход неизбежно требует planned downtime.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

@@ -5,5 +5,63 @@
     "idPrefix": "m03-06",
     "description": "Use IDs: m03-06-q1, m03-06-q2, ... for MC/TF; m03-06-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-06-q1",
+      "type": "multiple-choice",
+      "question": "Почему MySQL коннектору Debezium необходим schema history topic, тогда как PostgreSQL коннектор обходится без него?",
+      "options": [
+        { "id": "a", "text": "MySQL binlog содержит только TABLE_MAP с table_id и сырые байты данных без информации о схеме, поэтому коннектор хранит историю DDL-изменений в отдельном Kafka топике для восстановления структуры таблиц при перезапуске" },
+        { "id": "b", "text": "PostgreSQL не поддерживает DDL-изменения в runtime, поэтому схема всегда статична и не требует хранения" },
+        { "id": "c", "text": "Schema history topic — это оптимизация для ускорения MySQL коннектора, PostgreSQL коннектор просто работает медленнее без неё" },
+        { "id": "d", "text": "MySQL хранит схемы таблиц в отдельной системной базе данных, к которой коннектор не имеет доступа после перезапуска" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "PostgreSQL коннектор не нуждается в schema history topic, потому что события логического декодирования содержат полную информацию о структуре таблиц — каждое событие самодостаточно. MySQL binlog работает иначе: WRITE_ROWS_EVENT содержит только сырые байты данных и table_id из TABLE_MAP_EVENT, без имён и типов колонок. Чтобы интерпретировать эти байты, коннектор должен знать схему таблицы на момент каждой binlog позиции. Schema history topic хранит все DDL-операции (CREATE TABLE, ALTER TABLE) с привязкой к binlog позициям, позволяя коннектору при перезапуске воспроизвести историю DDL и восстановить точное состояние схемы. Вариант D неверен — MySQL коннектор может читать INFORMATION_SCHEMA, но ему нужна историческая схема на момент сохранённого offset, а не текущая.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-06-q2",
+      "type": "multiple-choice",
+      "question": "Рассмотрите конфигурацию schema history topic:\n\n```\nkafka-topics --create \\\n  --topic schema-changes.mysql-inventory \\\n  --partitions 1 \\\n  --replication-factor 3 \\\n  --config retention.ms=604800000 \\\n  --config retention.bytes=-1\n```\n\nКакой риск создаёт значение `retention.ms=604800000`?",
+      "options": [
+        { "id": "a", "text": "Топик станет слишком большим — 604800000 байт retention приведёт к переполнению диска" },
+        { "id": "b", "text": "Через 7 дней (604800000 мс) Kafka удалит старые DDL-записи, и при следующем перезапуске коннектор не сможет восстановить полную историю схем — потребуется resnapshot" },
+        { "id": "c", "text": "Retention в 7 дней слишком длинный — schema history topic должен хранить только последние 24 часа DDL для экономии ресурсов" },
+        { "id": "d", "text": "Значение 604800000 превышает максимально допустимый retention для Kafka топиков и вызовет ошибку при создании" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Значение retention.ms=604800000 соответствует 7 дням — это дефолтный retention Kafka. Schema history topic хранит ВСЮ историю DDL-изменений с момента первого snapshot. При перезапуске коннектор читает топик от начала, применяя DDL последовательно до сохранённого binlog offset. Если старые DDL-записи (CREATE TABLE из initial snapshot) удалены retention policy, коннектор получит ошибку: \"The db history topic or its content is fully or partially missing\" и не сможет восстановиться без полного resnapshot. Правильная конфигурация — retention.ms=-1 (бесконечный retention). Это одна из самых частых причин катастрофических сбоев MySQL CDC в production — так называемая \"7-дневная бомба замедленного действия\".",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-06-q3",
+      "type": "multiple-choice",
+      "question": "После выполнения ALTER TABLE customers ADD COLUMN phone VARCHAR(20) коннектор Debezium перезапускается и выдаёт ошибку: \"Column count doesn't match value count at row 1\". Какова наиболее вероятная причина?",
+      "options": [
+        { "id": "a", "text": "ALTER TABLE несовместим с Debezium — необходимо пересоздать таблицу вместо ALTER" },
+        { "id": "b", "text": "Schema history topic повреждён или частично утерян: коннектор восстановил устаревшую схему без новой колонки, но binlog содержит события с обновлённой структурой" },
+        { "id": "c", "text": "Коннектор подключён к reader instance Aurora вместо writer, и binlog не содержит DDL-операций" },
+        { "id": "d", "text": "Kafka Connect worker не имеет достаточно памяти для обработки изменённой схемы" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Ошибка \"Column count doesn't match\" указывает на несоответствие между схемой, которую коннектор восстановил из schema history topic, и реальными binlog событиями. При перезапуске коннектор читает schema history topic от начала и применяет DDL последовательно. Если DDL-запись об ALTER TABLE была потеряна (из-за retention policy, сетевого сбоя при записи или повреждения топика), коннектор восстановит схему без колонки phone, но binlog события после ALTER TABLE содержат данные с новой колонкой. Решение: проверить retention.ms (должен быть -1), проверить содержимое schema history topic через kafka-console-consumer, и при необходимости выполнить resnapshot. Вариант C маловероятен — ошибка column count специфична для schema mismatch, а не для отсутствия binlog.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-06-q4",
+      "type": "multiple-choice",
+      "question": "Вам необходимо разработать стратегию защиты schema history topic для production MySQL CDC. Какая комбинация мер обеспечит максимальную надёжность?",
+      "options": [
+        { "id": "a", "text": "retention.ms=-1, replication-factor=3, cleanup.policy=compact, ежедневный backup топика, мониторинг размера топика" },
+        { "id": "b", "text": "retention.ms=-1, retention.bytes=-1, replication-factor=3, partitions=1, cleanup.policy=delete, мониторинг retention config через Prometheus alert, ежедневный backup через kafka-console-consumer" },
+        { "id": "c", "text": "retention.ms=2592000000 (30 дней), replication-factor=1, partitions=3 для параллелизма, cleanup.policy=delete" },
+        { "id": "d", "text": "retention.ms=-1, replication-factor=3, partitions=1, общий топик для всех коннекторов с namespace-префиксами в ключах сообщений" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Стратегия defense-in-depth для schema history topic включает: (1) retention.ms=-1 и retention.bytes=-1 — бесконечное хранение, предотвращение потери DDL-записей; (2) replication-factor=3 — отказоустойчивость при потере брокеров; (3) partitions=1 — DDL события ОБЯЗАНЫ применяться в строгом порядке, несколько партиций нарушат порядок и приведут к corruption; (4) cleanup.policy=delete (НЕ compact) — компакция удалит промежуточные DDL, оставив только последнее состояние, что сломает последовательное восстановление схемы; (5) мониторинг retention config — alert на retention.ms != -1 обнаружит случайное изменение конфигурации; (6) ежедневный backup — восстановление за минуты вместо часов resnapshot. Вариант A ошибочен: cleanup.policy=compact уничтожит промежуточные DDL. Вариант D опасен: общий топик для нескольких коннекторов приведёт к cross-contamination DDL.",
+      "hint": "Обратите внимание на пять ключевых аспектов защиты: retention (предотвращение потери данных), replication (отказоустойчивость), partitions (порядок DDL), cleanup policy (сохранение полной истории) и backup (быстрое восстановление). Подумайте, как каждая мера адресует конкретный сценарий сбоя.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

@@ -5,5 +5,57 @@
     "idPrefix": "m03-07",
     "description": "Use IDs: m03-07-q1, m03-07-q2, ... for MC/TF; m03-07-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-07-q1",
+      "type": "multiple-choice",
+      "question": "Инженер пытается установить binlog_format=ROW через DB Parameter Group (instance-level) в Aurora MySQL. Что произойдёт?",
+      "options": [
+        { "id": "a", "text": "Параметр применится к конкретному instance, но не к остальным — что является правильным подходом для тестирования на одном instance" },
+        { "id": "b", "text": "AWS вернёт ошибку \"parameter not applicable\" или проигнорирует изменение, потому что binlog_format — это cluster-level параметр, настраиваемый только через DB Cluster Parameter Group" },
+        { "id": "c", "text": "Параметр применится успешно и автоматически propagate на все instances в кластере" },
+        { "id": "d", "text": "Параметр применится, но потребует дополнительной настройки через AWS CLI для активации" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "В Aurora MySQL существует два уровня parameter groups: DB Cluster Parameter Group (cluster-wide настройки) и DB Parameter Group (instance-level настройки). Параметры binlog (binlog_format, binlog_row_image, gtid_mode, aurora_enhanced_binlog) — это исключительно cluster-level параметры, управляемые через DB Cluster Parameter Group. Попытка установить их на instance level через DB Parameter Group будет отклонена AWS с ошибкой или просто проигнорирована. Это самая частая ошибка конфигурации Aurora MySQL для CDC. Правило: всё, что касается binlog, replication и GTID — только DB Cluster Parameter Group; performance и connection параметры (max_connections, innodb_buffer_pool_size) — DB Parameter Group.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-07-q2",
+      "type": "multiple-choice",
+      "question": "В Aurora MySQL binlog retention настраивается через stored procedure. Рассмотрите команду:\n\n```sql\nCALL mysql.rds_set_configuration('binlog retention hours', 168);\n```\n\nЧто произойдёт, если пропустить этот шаг при настройке Debezium CDC?",
+      "options": [
+        { "id": "a", "text": "Binlog файлы будут удаляться по default retention Aurora (обычно несколько часов), и Debezium потеряет binlog позицию при длительной остановке коннектора" },
+        { "id": "b", "text": "Ничего — Aurora автоматически сохраняет binlog бесконечно при наличии активного CDC коннектора" },
+        { "id": "c", "text": "Debezium не запустится и выдаст ошибку о недоступности binlog" },
+        { "id": "d", "text": "Binlog будет храниться 90 дней по default — этого достаточно для большинства сценариев" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "В отличие от community MySQL (где retention настраивается через binlog_expire_logs_seconds в my.cnf), Aurora MySQL не поддерживает этот параметр — попытка SET GLOBAL вернёт ошибку \"read only variable\". Aurora управляет binlog файлами на storage layer, и retention настраивается только через stored procedure mysql.rds_set_configuration. Без явной настройки Aurora использует default retention, который может составлять всего несколько часов. Если Debezium остановлен на день-два (deploy, maintenance), binlog файлы будут purged, и коннектор получит ошибку \"Could not find first available binlog file\". Важно также учитывать, что фактический binlog retention ограничен значением backup_retention_period — если backup retention короче binlog retention, binlog файлы будут удалены раньше.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-07-q3",
+      "type": "true-false",
+      "question": "В Aurora MySQL 2.10+ после изменения binlog_format в DB Cluster Parameter Group достаточно перезагрузить только writer instance — reader instances автоматически подхватят новое значение без отдельного reboot.",
+      "correctAnswer": false,
+      "explanation": "Это распространённое заблуждение. До Aurora MySQL 2.09 reboot writer instance действительно вызывал автоматический reboot всех reader instances. Начиная с Aurora 2.10+ (включая все Aurora 3.x), reader instances НЕ перезагружаются автоматически при reboot writer. После изменения cluster parameter group и reboot writer, readers продолжают использовать старые значения параметров до manual reboot. Это может привести к ситуации, когда writer показывает binlog_format=ROW, а reader — binlog_format=MIXED. Обязательно выполните aws rds reboot-db-instance для каждого reader instance и проверьте DBClusterParameterGroupStatus=in-sync для всех instances.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-07-q4",
+      "type": "multiple-choice",
+      "question": "Команда мигрирует Debezium CDC с self-managed MySQL на Aurora MySQL. Коннектор перестаёт работать после миграции. Какие конфигурационные различия между community MySQL и Aurora MySQL должна проверить команда?",
+      "options": [
+        { "id": "a", "text": "Только замену hostname в connector config на Aurora writer endpoint" },
+        { "id": "b", "text": "Binlog настройки через DB Cluster Parameter Group вместо my.cnf, retention через stored procedure вместо binlog_expire_logs_seconds, подключение к writer endpoint вместо reader, reboot всех instances после изменения параметров" },
+        { "id": "c", "text": "Установку специального Aurora-плагина для Debezium и изменение connector.class на io.debezium.connector.aurora.AuroraMySqlConnector" },
+        { "id": "d", "text": "Переключение на PostgreSQL-совместимый режим Aurora, так как Debezium лучше работает с PostgreSQL протоколом" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Миграция с community MySQL на Aurora MySQL требует изменения четырёх ключевых аспектов конфигурации: (1) Binlog параметры (binlog_format, gtid_mode) настраиваются через DB Cluster Parameter Group, а не my.cnf — попытка SET GLOBAL для static параметров вернёт ошибку; (2) Binlog retention настраивается через CALL mysql.rds_set_configuration('binlog retention hours', N), а не binlog_expire_logs_seconds; (3) Debezium должен подключаться к cluster writer endpoint (не reader), потому что binlog генерируется только на writer — Aurora read replicas используют физическую репликацию на storage layer, а не binlog; (4) После изменения cluster parameter group необходим reboot ВСЕХ instances (writer + readers), причём в Aurora 2.10+ readers не перезагружаются автоматически. Сам Debezium connector class остаётся прежним (MySqlConnector) — Aurora MySQL совместима по протоколу.",
+      "hint": "Сравните четыре аспекта: как настраиваются binlog параметры, как управляется retention, к какому endpoint подключается Debezium, и как применяются изменения конфигурации. В каждом из этих аспектов Aurora отличается от community MySQL.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
