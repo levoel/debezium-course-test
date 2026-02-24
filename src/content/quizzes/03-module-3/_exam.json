@@ -5,5 +5,125 @@
     "idPrefix": "exam-m03",
     "description": "Use IDs: exam-m03-q1, exam-m03-q2, ... (8-10 analytical questions)"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "exam-m03-q1",
+      "type": "multiple-choice",
+      "question": "Debezium MySQL коннектор был offline 5 дней из-за сбоя Kafka Connect кластера. При перезапуске коннектор падает с ошибкой: \"The connector is trying to read binlog starting at binlog file 'mysql-bin.000034', but this file no longer exists on the server.\" Проверка gtid_purged показывает, что транзакции до GTID :1-8500 уже purged, а offset коннектора указывает на GTID :1-8200. Какая последовательность действий корректно восстановит CDC pipeline?",
+      "options": [
+        { "id": "a", "text": "Увеличить binlog_expire_logs_seconds до 30 дней и перезапустить коннектор — он автоматически найдёт нужную позицию" },
+        { "id": "b", "text": "Удалить коннектор и его offset, пересоздать с snapshot.mode=initial для полного resnapshot, затем увеличить binlog retention и настроить heartbeat.interval.ms для предотвращения повторной потери позиции" },
+        { "id": "c", "text": "Вручную изменить gtid_purged на MySQL сервере, чтобы вернуть purged транзакции в binlog" },
+        { "id": "d", "text": "Переключить коннектор на snapshot.mode=never и начать чтение с текущей binlog позиции без resnapshot" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 02 (GTID и gtid_purged), 03 (binlog retention и heartbeat) и 13 (recovery procedures). Если offset коннектора (:1-8200) указывает на GTID, который уже в purged range (:1-8500), значит binlog файлы с нужными транзакциями удалены — восстановить их невозможно (вариант C невозможен). Увеличение retention (вариант A) не вернёт уже удалённые файлы. Переключение на snapshot.mode=never без resnapshot (вариант D) приведёт к пропуску всех изменений за 5 дней. Правильный путь: удалить offset, выполнить полный resnapshot (snapshot.mode=initial), и после восстановления настроить три меры prevention: (1) увеличить binlog_expire_logs_seconds с safety margin, (2) настроить heartbeat для обновления offset на idle таблицах, (3) мониторить MilliSecondsBehindSource и алертить при приближении lag к retention period.",
+      "hint": "Purged GTID означает, что транзакции физически удалены из binlog. Подумайте: какие транзакции потеряны (offset :8200, purged до :8500)? Можно ли их восстановить из binlog? Если нет — какой единственный способ получить полное состояние данных?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m03-q2",
+      "type": "multiple-choice",
+      "question": "Команда мигрировала MySQL CDC с self-managed инстанса на Aurora MySQL. Они создали custom DB Cluster Parameter Group с binlog_format=ROW и gtid_mode=ON, привязали его к кластеру и перезагрузили writer instance. Через неделю schema history topic на Kafka оказался пустым из-за default retention 7 дней (retention.ms не был изменён на -1). При перезапуске коннектора после планового обновления произошла ошибка: \"The db history topic or its content is fully or partially missing.\" Какие ошибки допустила команда и какова правильная процедура восстановления?",
+      "options": [
+        { "id": "a", "text": "Единственная ошибка — в retention schema history topic. Достаточно изменить retention.ms=-1 на существующем топике и перезапустить коннектор" },
+        { "id": "b", "text": "Две ошибки: (1) schema history topic создан без retention.ms=-1, что привело к purge DDL-записей через 7 дней, (2) reader instances не были перезагружены после изменения cluster parameter group (Aurora 2.10+). Восстановление: пересоздать schema history topic с retention.ms=-1, удалить коннектор и offset, пересоздать с snapshot.mode=initial, затем проверить binlog_format на всех reader instances" },
+        { "id": "c", "text": "Ошибка только в том, что binlog retention не настроен через mysql.rds_set_configuration. Schema history topic восстановится автоматически" },
+        { "id": "d", "text": "Три ошибки: неправильный parameter group level, отсутствие GTID, и неверный retention. Нужно пересоздать кластер с нуля" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 07 (Aurora parameter groups, reboot requirements) и 06 (schema history topic, retention). Первая ошибка: schema history topic ВСЕГДА должен иметь retention.ms=-1 — default Kafka retention 7 дней удалит DDL-записи, и коннектор не сможет восстановить схему при рестарте. Вторая ошибка: в Aurora MySQL 2.10+ (и всех Aurora 3.x) reboot writer instance НЕ перезагружает reader instances автоматически — каждый reader нужно перезагружать вручную. Reader instances могут показывать старые значения параметров (например, binlog_format=MIXED). Вариант A не сработает: изменение retention на существующем топике не восстановит уже purged сообщения. Вариант C неверен: schema history topic не восстанавливается автоматически, и binlog retention — отдельная проблема. Для восстановления: (1) пересоздать schema history topic с retention.ms=-1 и retention.bytes=-1, partitions=1, (2) удалить коннектор, (3) пересоздать с snapshot.mode=initial, (4) проверить binlog_format на всех reader instances и перезагрузить тех, кто показывает старые значения.",
+      "hint": "Рассмотрите два независимых компонента: Kafka-сторона (schema history topic) и Aurora-сторона (parameter group application). Для каждого подумайте: что могло пойти не так после миграции? Помните об особенности Aurora 2.10+ при reboot.",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m03-q3",
+      "type": "multiple-choice",
+      "question": "Архитектор оценивает переход с standard binlog на Aurora Enhanced Binlog для high-throughput OLTP системы. Текущая конфигурация: Aurora MySQL 3.09.0, backtrack выключен (BacktrackWindow=0), используется Aurora Global Database для cross-region disaster recovery. Команда привлекает низкий compute overhead Enhanced Binlog (13% vs 50%), но беспокоится о DR. Какова правильная оценка trade-offs?",
+      "options": [
+        { "id": "a", "text": "Enhanced Binlog можно безопасно включить: backtrack выключен, Global Database продолжит работать, DR не пострадает" },
+        { "id": "b", "text": "Enhanced Binlog нельзя включить: backtrack когда-либо был активен (BacktrackWindow=0 не означает 'никогда не использовался')" },
+        { "id": "c", "text": "Enhanced Binlog можно включить (backtrack не использовался), но binlog НЕ будет реплицироваться в secondary регион через Global Database. После cross-region failover binlog начнётся с .000001, и Debezium потребует полный resnapshot. Для DR нужно спланировать snapshot.mode=initial или incremental snapshot через signal table" },
+        { "id": "d", "text": "Enhanced Binlog автоматически реплицирует binlog в secondary регионы, но требует отключения Aurora automated backups" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Этот сценарий объединяет концепции из уроков 08 (Enhanced Binlog architecture и ограничения) и 09 (Aurora snapshot modes и recovery strategies). BacktrackWindow=0 означает, что backtrack не активен — Enhanced Binlog можно включить (проверка: aws rds describe-db-clusters → BacktrackWindow=0, а не >0). Однако критическое ограничение Enhanced Binlog — binlog файлы НЕ реплицируются через Aurora Global Database в secondary регионы. После cross-region failover secondary становится primary, но начинает с mysql-bin-changelog.000001 — старая binlog позиция Debezium невалидна. Варианты восстановления после failover: (1) snapshot.mode=initial (простой, но долгий для больших таблиц), (2) incremental snapshot через signal table (Debezium 1.6+, минимальный downtime), (3) manual offset reset (для экспертов). Вариант A не учитывает Global Database limitation. Вариант D неверен: Enhanced Binlog не реплицирует binlog в secondary регионы.",
+      "hint": "Enhanced Binlog имеет три критических ограничения. Проверьте: (1) backtrack совместимость, (2) поведение при Aurora backup/restore, (3) поведение при Global Database cross-region failover. Какое из этих ограничений актуально для данного сценария?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m03-q4",
+      "type": "multiple-choice",
+      "question": "Два Debezium коннектора (orders-cdc и analytics-cdc) подключены к одному MySQL кластеру. Инженер заметил, что события из таблицы orders дублируются: одни и те же INSERT появляются в двух разных Kafka-топиках. Конфигурации коннекторов:\n\norders-cdc: database.server.id=184001, database.server.name=orders, table.include.list=ecommerce.orders\nanalytics-cdc: database.server.id=184001, database.server.name=analytics, table.include.list=ecommerce.*\n\nКакие конфликты присутствуют и как их устранить?",
+      "options": [
+        { "id": "a", "text": "Только конфликт server.id: оба коннектора используют 184001. Дублирование вызвано тем, что MySQL отправляет binlog обоим клиентам с одинаковым server_id. Исправление: присвоить уникальные server.id (например, 184001 и 184002)" },
+        { "id": "b", "text": "Два конфликта: (1) database.server.id=184001 дублируется — MySQL разрешает только одного replication клиента с данным server_id, второй коннектор будет периодически отключаться; (2) table.include.list пересекается: ecommerce.orders входит в оба фильтра (ecommerce.orders и ecommerce.*), что создаёт дублирование в разных топиках. Исправление: присвоить уникальные server.id и разделить table.include.list без пересечений" },
+        { "id": "c", "text": "Только конфликт table.include.list: ecommerce.orders попадает в оба коннектора. Server.id не влияет на дублирование" },
+        { "id": "d", "text": "Конфликт в database.server.name: оба коннектора должны использовать одинаковое имя для одного MySQL кластера" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 04 (database.server.id как unique identifier в MySQL cluster topology) и 14 (multi-connector deployments, server ID registry и topic isolation). Первый конфликт: database.server.id=184001 используется обоими коннекторами. MySQL binlog replication protocol требует unique server_id для каждого клиента — при дублировании второй коннектор получает ошибку 'A slave with the same server_uuid/server_id' и периодически теряет соединение, что вызывает нестабильное поведение. Второй конфликт: analytics-cdc использует wildcard ecommerce.*, который включает ecommerce.orders — ту же таблицу, что и orders-cdc. Результат: INSERT в orders записывается в два Kafka-топика (orders.ecommerce.orders и analytics.ecommerce.orders). Для устранения: (1) присвоить уникальные server.id: orders-cdc=184001, analytics-cdc=184002; (2) разделить фильтры: analytics-cdc использует table.include.list=ecommerce.analytics_events,ecommerce.metrics (без ecommerce.orders), или добавить table.exclude.list=ecommerce.orders.",
+      "hint": "Проанализируйте конфигурации по двум осям: (1) MySQL cluster topology — что происходит, когда два replication клиента регистрируются с одинаковым server_id? (2) Data flow — какие таблицы попадают в wildcard ecommerce.* и есть ли пересечение с orders-cdc?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m03-q5",
+      "type": "multiple-choice",
+      "question": "DBA запускает gh-ost миграцию ALTER TABLE orders ADD COLUMN priority INT на production таблице во время активного CDC. gh-ost создаёт helper-таблицы _orders_gho (ghost table) и _orders_ghc (changelog table), копирует данные порциями и применяет binlog изменения. Debezium коннектор настроен с table.include.list=ecommerce.* без фильтрации helper-таблиц. Какие проблемы возникнут в CDC pipeline и как schema history topic обработает миграцию?",
+      "options": [
+        { "id": "a", "text": "Никаких проблем: gh-ost прозрачен для Debezium, schema history topic не затронут" },
+        { "id": "b", "text": "Debezium захватит все DML-операции на _orders_gho (миллионы INSERT при копировании данных) и DDL от gh-ost (CREATE TABLE _orders_gho, RENAME TABLE) в Kafka-топики и schema history topic. Результат: (1) огромный объём ghost-событий в CDC stream, (2) schema history topic содержит DDL для ghost table и финальный RENAME, (3) consumers получают дублированные данные из _orders_gho. Решение: добавить table.exclude.list=ecommerce._orders_gho,ecommerce._orders_ghc для фильтрации helper-таблиц" },
+        { "id": "c", "text": "Debezium захватит только финальный RENAME TABLE, остальные операции gh-ost невидимы для binlog" },
+        { "id": "d", "text": "Schema history topic будет повреждён из-за DDL от gh-ost, потребуется resnapshot" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 06 (schema history topic — запись DDL) и 15 (DDL tools integration, gh-ost workflow). gh-ost работает через binlog: создаёт ghost table (_orders_gho), копирует данные порциями (тысячи/миллионы INSERT), параллельно читает binlog и применяет DML к ghost table, затем выполняет atomic rename. Поскольку Debezium читает тот же binlog, wildcard ecommerce.* захватит все операции на _orders_gho: CREATE TABLE, миллионы INSERT (копирование данных), и финальный RENAME. Это создаёт CDC noise: consumers видят ghost-события как реальные данные, а schema history topic записывает DDL для ghost table. Schema history не повреждается (вариант D неверен) — он корректно записывает все DDL. Но pipeline загрязняется миллионами ненужных событий. Решение: фильтрация через table.exclude.list для ghost/changelog таблиц gh-ost (паттерн _.*_gho, _.*_ghc) или через SMT (Filter transform).",
+      "hint": "Вспомните, как gh-ost выполняет миграцию: какие таблицы создаются, какие DML-операции генерируются при копировании данных? Теперь подумайте: Debezium читает тот же binlog — что он увидит при wildcard фильтре ecommerce.*?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m03-q6",
+      "type": "multiple-choice",
+      "question": "После Aurora MySQL failover (автоматическое переключение writer instance) одна из таблиц (inventory.products) оказалась в несогласованном состоянии: downstream Elasticsearch содержит устаревшие данные для этой таблицы. Остальные таблицы (orders, customers) корректны. Коннектор автоматически переподключился к новому writer endpoint благодаря GTID. Как выполнить resnapshot только таблицы products без остановки стриминга остальных таблиц?",
+      "options": [
+        { "id": "a", "text": "Остановить коннектор, удалить offset, пересоздать с snapshot.mode=initial — это выполнит resnapshot всех таблиц, включая products" },
+        { "id": "b", "text": "Создать signal table (если не существует), затем вставить сигнал для incremental snapshot: INSERT INTO inventory.debezium_signal (id, type, data) VALUES ('fix-products', 'execute-snapshot', '{\"data-collections\": [\"inventory.products\"]}') — коннектор выполнит chunked resnapshot только products параллельно с продолжением стриминга binlog-событий для всех таблиц" },
+        { "id": "c", "text": "Изменить конфигурацию коннектора: table.include.list=inventory.products и snapshot.mode=initial, затем вернуть полный список таблиц" },
+        { "id": "d", "text": "Incremental snapshot невозможен для Aurora MySQL — необходим полный resnapshot через backup-based approach" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 11 (GTID failover — коннектор автоматически переподключается) и 12 (incremental snapshots через signal table). После Aurora failover GTID обеспечивает continuity для binlog streaming. Но если downstream содержит некорректные данные для одной таблицы, нужен targeted resnapshot. Incremental snapshot (Debezium 1.6+) решает эту задачу: INSERT в signal table с указанием конкретной таблицы запускает chunked чтение данных (порциями, по primary key ranges), параллельно с продолжением стриминга binlog. Вариант A (полный resnapshot) работает, но требует остановки всего pipeline и resnapshot всех таблиц — избыточно для проблемы с одной таблицей. Вариант C нарушит CDC для остальных таблиц. Вариант D неверен: incremental snapshot поддерживается для Aurora MySQL через стандартный signal table механизм.",
+      "hint": "Ключевое требование: resnapshot одной таблицы без остановки стриминга остальных. Какой механизм Debezium позволяет запустить on-demand snapshot конкретных таблиц через вставку записи в специальную таблицу?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m03-q7",
+      "type": "multiple-choice",
+      "question": "Инженер настроил Debezium MySQL коннектор на production сервере. UPDATE-события для таблицы customers приходят с пустым полем before (before=null для всех колонок, кроме primary key). При этом binlog_format показывает DEFAULT. Какова корневая причина и какие изменения необходимы?",
+      "options": [
+        { "id": "a", "text": "Коннектор неправильно настроен: нужно добавить параметр include.before.image=true в конфигурацию" },
+        { "id": "b", "text": "Проблема в binlog_format=DEFAULT — для MySQL это означает STATEMENT формат, который не содержит данных строк. Нужно установить binlog_format=ROW. Дополнительно, для полных before-данных при UPDATE необходимо binlog_row_image=FULL (по умолчанию FULL в MySQL 8.0, но может быть MINIMAL в legacy конфигурациях)" },
+        { "id": "c", "text": "Это нормальное поведение MySQL: before-данные никогда не записываются в binlog для UPDATE-событий" },
+        { "id": "d", "text": "Нужно переключиться на PostgreSQL connector — MySQL не поддерживает before-данные для UPDATE" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 01 (binlog форматы ROW/STATEMENT/MIXED) и 04 (конфигурация MySQL коннектора, binlog_row_image). В отличие от PostgreSQL, где before-данные контролируются через REPLICA IDENTITY, MySQL контролирует это через два параметра: binlog_format и binlog_row_image. Если binlog_format=DEFAULT (legacy значение, эквивалент STATEMENT), Debezium получает SQL-запросы вместо данных строк — before и after полей просто нет. Решение: установить binlog_format=ROW. Далее, binlog_row_image определяет, какие колонки включаются в before-образ: FULL (все колонки), MINIMAL (только primary key), NOBLOB (все кроме BLOB/TEXT). Для полноценного CDC с before-данными нужен binlog_row_image=FULL. В MySQL 8.0 default — FULL, но в legacy конфигурациях может быть MINIMAL. Вариант A неверен: у Debezium MySQL connector нет параметра include.before.image. Вариант C неверен: MySQL binlog ROW формат с FULL row image записывает полные before-данные.",
+      "hint": "В MySQL перед Debezium стоят два уровня фильтрации данных: (1) формат binlog — определяет, записываются ли данные строк или SQL-запросы; (2) binlog_row_image — определяет, какие колонки включаются в before-образ при UPDATE. Какой формат видит Debezium при значении DEFAULT?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m03-q8",
+      "type": "multiple-choice",
+      "question": "Какие метрики и действия корректно описывают мониторинг приближения binlog lag к retention limit в production MySQL CDC?",
+      "options": [
+        { "id": "a", "text": "Мониторить только MilliSecondsBehindSource: если значение превышает 1 секунду, немедленно выполнить resnapshot" },
+        { "id": "b", "text": "Мониторить MilliSecondsBehindSource (Debezium JMX) для lag в миллисекундах и сравнивать с binlog_expire_logs_seconds. При lag > 80% от retention создать warning alert. Немедленные действия при critical alert: (1) проверить connector status через REST API, (2) проверить Kafka Connect worker health, (3) увеличить binlog retention как temporary measure, (4) диагностировать root cause (slow consumer, network issues, Kafka backpressure)" },
+        { "id": "c", "text": "Мониторить только CloudWatch AuroraBinlogReplicaLag — этой метрики достаточно для всех MySQL CDC сценариев" },
+        { "id": "d", "text": "Binlog lag не связан с retention — эти две метрики мониторятся независимо и не требуют coordinated response" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот вопрос объединяет концепции из уроков 03 (binlog retention — формула расчёта и связь lag с retention) и 10 (binlog lag monitoring — JMX метрики, alerting стратегия). MilliSecondsBehindSource — ключевая Debezium JMX метрика, показывающая разницу между timestamp события в binlog и текущим временем. Критическая связь: если lag приближается к binlog_expire_logs_seconds, MySQL может purge binlog файлы, на которые указывает offset коннектора → position loss → resnapshot. Warning alert при lag > 80% от retention даёт время на реакцию. Вариант A слишком агрессивен: lag в 1 секунду — нормальное значение; resnapshot нужен только при position loss, не при lag. Вариант C неверен: AuroraBinlogReplicaLag — метрика Aurora cross-region replication, не Debezium lag. Для self-managed MySQL CloudWatch недоступен. Вариант D неверен: lag и retention напрямую связаны — если lag > retention, position loss неизбежен.",
+      "bloomLevel": "conceptual"
+    }
+  ]
 }
