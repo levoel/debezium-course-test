@@ -5,5 +5,57 @@
     "idPrefix": "m03-03",
     "description": "Use IDs: m03-03-q1, m03-03-q2, ... for MC/TF; m03-03-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-03-q1",
+      "type": "multiple-choice",
+      "question": "Debezium MySQL connector был остановлен для планового обновления. Время простоя составило 5 дней. На MySQL сервере настроено binlog_expire_logs_seconds=259200 (3 дня). Что произойдёт при перезапуске коннектора?",
+      "options": [
+        { "id": "a", "text": "Debezium продолжит работу с последней сохранённой позиции -- binlog retention не влияет на коннектор" },
+        { "id": "b", "text": "Debezium обнаружит, что binlog файлы с нужными транзакциями уже удалены (purged), так как 5 дней простоя > 3 дней retention. Ошибка: 'Cannot replicate because the master purged required binary logs'. Потребуется полный resnapshot базы данных" },
+        { "id": "c", "text": "MySQL автоматически восстановит удалённые binlog файлы из backup для Debezium" },
+        { "id": "d", "text": "Debezium переключится на чтение из schema history topic вместо binlog" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "MySQL автоматически удаляет (purge) binlog файлы, возраст которых превышает binlog_expire_logs_seconds. При retention 3 дня и простое 5 дней файлы с транзакциями, которые Debezium ещё не прочитал, уже удалены. При перезапуске коннектор обнаружит, что его offset (GTID или file:position) указывает на несуществующие данные. Единственное решение -- полный resnapshot (snapshot.mode=initial), который может занять часы или дни для больших баз. Формула для планирования retention: Max Expected Downtime + Safety Margin. В данном случае 3 дня retention недостаточно для 5 дней простоя.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-03-q2",
+      "type": "multiple-choice",
+      "question": "Debezium MySQL connector отслеживает таблицу user_settings, которая обновляется раз в месяц. Binlog retention = 7 дней. Коннектор работает, но через 8 дней без изменений в таблице Debezium теряет позицию. Почему это произошло и как heartbeat решает эту проблему?",
+      "options": [
+        { "id": "a", "text": "Offset Debezium указывал на binlog файл, созданный при последнем изменении user_settings (8 дней назад). Этот файл был purged через 7 дней retention. Heartbeat решает проблему: периодические записи в heartbeat-таблицу создают свежие события в binlog, и offset Debezium всегда указывает на актуальный файл" },
+        { "id": "b", "text": "Debezium отключается от MySQL при отсутствии активности. Heartbeat поддерживает TCP-соединение активным" },
+        { "id": "c", "text": "MySQL удаляет таблицы, к которым не было обращений дольше retention периода. Heartbeat предотвращает удаление таблицы" },
+        { "id": "d", "text": "Binlog не записывает события для idle таблиц. Heartbeat принудительно включает запись binlog для указанной таблицы" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Это классическая 'idle table problem'. Debezium хранит глобальный offset по всем отслеживаемым таблицам, но если единственные изменения произошли давно, offset указывает на старый binlog файл. Когда MySQL purge удаляет этот файл (через binlog_expire_logs_seconds), offset становится невалидным. Heartbeat решает проблему: параметр heartbeat.action.query выполняет INSERT/UPDATE в специальную таблицу (например, debezium_heartbeat) каждые heartbeat.interval.ms миллисекунд. Эти записи генерируют свежие binlog события, и Debezium обновляет свой offset на актуальную позицию -- даже если отслеживаемые таблицы idle.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-03-q3",
+      "type": "true-false",
+      "question": "Параметр heartbeat.action.query в конфигурации Debezium MySQL connector выполняет SQL-запрос для записи в специальную heartbeat-таблицу. Эта таблица должна быть выделенной (dedicated), а не одной из отслеживаемых бизнес-таблиц, потому что heartbeat-записи создают реальные изменения данных в binlog.",
+      "correctAnswer": true,
+      "explanation": "heartbeat.action.query выполняет реальный SQL-запрос (обычно INSERT ... ON DUPLICATE KEY UPDATE) в MySQL, что создаёт запись в binlog. Если использовать бизнес-таблицу, heartbeat-записи попадут в CDC-поток как реальные изменения данных и будут отправлены в Kafka topic бизнес-таблицы. Поэтому создаётся отдельная таблица (например, debezium_heartbeat) с одной записью, которая обновляется при каждом heartbeat. Heartbeat-события из этой таблицы попадают в отдельный Kafka topic и не загрязняют бизнес-данные.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-03-q4",
+      "type": "multiple-choice",
+      "question": "DBA выполнил команду PURGE BINARY LOGS TO 'mysql-bin.000010' для освобождения дискового пространства. Debezium коннектор в этот момент обрабатывал файл mysql-bin.000007. Почему ручной purge binlog при работающем Debezium опаснее автоматического purge через binlog_expire_logs_seconds?",
+      "options": [
+        { "id": "a", "text": "Ручной purge не опаснее автоматического -- оба удаляют файлы одинаково" },
+        { "id": "b", "text": "Автоматический purge проверяет, какие файлы использует Debezium, и пропускает их. Ручной purge удаляет все файлы до указанного без проверки" },
+        { "id": "c", "text": "Ручной purge удаляет файлы немедленно и безусловно, игнорируя текущих потребителей. Автоматический purge через binlog_expire_logs_seconds удаляет файлы по возрасту, что предсказуемо: при правильном retention (> max downtime) Debezium успевает прочитать данные. PURGE BINARY LOGS может удалить файлы, которые Debezium ещё обрабатывает" },
+        { "id": "d", "text": "PURGE BINARY LOGS удаляет также schema history topic в Kafka, а автоматический purge этого не делает" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "PURGE BINARY LOGS TO -- это немедленная операция: MySQL удаляет все binlog файлы до указанного без проверки, используют ли их Debezium или replica. В данном сценарии Debezium обрабатывает файл 000007, а DBA удалил все файлы до 000010 -- файлы 000001-000009 немедленно исчезли. Debezium потеряет позицию и потребует resnapshot. Автоматический purge через binlog_expire_logs_seconds предсказуем: если retention настроен на 7 дней и Debezium не простаивает дольше 7 дней, данные всегда доступны. Рекомендация: полагайтесь на автоматический purge; используйте PURGE BINARY LOGS только в emergency и после проверки offset всех потребителей.",
+      "hint": "Сравните два механизма удаления: автоматический purge удаляет файлы по времени создания (предсказуемо, можно рассчитать safety margin), а ручной PURGE BINARY LOGS удаляет все файлы до указанного номера немедленно. Подумайте, в каком случае у DBA есть возможность учесть текущую позицию Debezium.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

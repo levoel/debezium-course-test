@@ -5,5 +5,63 @@
     "idPrefix": "m03-02",
     "description": "Use IDs: m03-02-q1, m03-02-q2, ... for MC/TF; m03-02-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-02-q1",
+      "type": "multiple-choice",
+      "question": "Что уникально идентифицирует GTID (Global Transaction Identifier) в MySQL и из каких частей он состоит?",
+      "options": [
+        { "id": "a", "text": "GTID идентифицирует конкретную транзакцию и состоит из source_id (UUID сервера) и transaction_id (монотонно возрастающий номер). Формат: source_id:transaction_id, например 3E11FA47-71CA-11E1-9E33-C80AA9429562:23" },
+        { "id": "b", "text": "GTID идентифицирует binlog файл и состоит из имени файла и байтового смещения. Формат: filename:offset" },
+        { "id": "c", "text": "GTID идентифицирует таблицу и состоит из database_name и table_name. Формат: database.table" },
+        { "id": "d", "text": "GTID идентифицирует сессию пользователя и состоит из user_id и session_id. Формат: user@session" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "GTID (Global Transaction Identifier) уникально идентифицирует каждую транзакцию в MySQL кластере. Формат: source_id:transaction_id, где source_id -- это UUID сервера (генерируется автоматически при первом запуске MySQL, хранится в /var/lib/mysql/auto.cnf), а transaction_id -- монотонно возрастающее целое число, начинающееся с 1. Ключевое свойство GTID -- глобальная уникальность: одна и та же транзакция имеет одинаковый GTID на primary, всех replica и после failover. Вариант B описывает традиционную позицию (file:offset), которую GTID как раз заменяет.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-02-q2",
+      "type": "multiple-choice",
+      "question": "На MySQL сервере выполнена команда:\n\nSHOW GLOBAL VARIABLES LIKE 'gtid_executed';\n\nРезультат:\n3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100,\n4E22GB58-82DB-22F2-AF44-D91BA0530673:1-50\n\nСколько транзакций от каждого source было выполнено на этом сервере?",
+      "options": [
+        { "id": "a", "text": "100 транзакций от первого source (UUID ...562) и 50 транзакций от второго source (UUID ...673). Два source_id означают, что сервер обработал транзакции от двух разных MySQL серверов (например, после failover новый primary начал генерировать свои GTID)" },
+        { "id": "b", "text": "150 транзакций от одного источника, представленные в двух диапазонах из-за gap в нумерации" },
+        { "id": "c", "text": "100 транзакций всего -- второй диапазон является подмножеством первого" },
+        { "id": "d", "text": "Невозможно определить -- GTID set не содержит информации о количестве транзакций" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "GTID set отображает множество выполненных транзакций, сгруппированных по source_id (UUID сервера-источника). Диапазон 1-100 после первого UUID означает 100 последовательных транзакций от этого сервера. Диапазон 1-50 после второго UUID означает 50 транзакций от другого сервера. Наличие двух UUID в gtid_executed типично после failover: первоначальный primary сгенерировал транзакции 1-100, затем произошёл failover, и новый primary (с другим UUID) добавил свои транзакции 1-50. Debezium использует GTID set для точного определения, какие транзакции уже обработаны.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-02-q3",
+      "type": "multiple-choice",
+      "question": "При включённом enforce-gtid-consistency=ON выполнение команды CREATE TABLE new_table AS SELECT * FROM old_table; приводит к ошибке. Почему эта команда несовместима с GTID mode?",
+      "options": [
+        { "id": "a", "text": "CREATE TABLE ... SELECT объединяет две операции (DDL: CREATE TABLE и DML: INSERT) в одном запросе, но GTID требует, чтобы каждая транзакция была атомарной. Эта комбинация не может быть корректно воспроизведена на replica через один GTID" },
+        { "id": "b", "text": "SELECT запросы не записываются в binlog, поэтому данные из old_table будут потеряны при репликации" },
+        { "id": "c", "text": "CREATE TABLE требует эксклюзивной блокировки, которая конфликтует с GTID-транзакциями других клиентов" },
+        { "id": "d", "text": "Команда генерирует слишком большое событие в binlog, превышающее лимит GTID на размер транзакции" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "GTID назначается одной транзакции и предполагает атомарное воспроизведение на replica. CREATE TABLE ... SELECT -- это гибрид DDL (создание таблицы) и DML (вставка данных), который не может быть записан как единая атомарная операция в binlog с GTID. На replica DDL часть (CREATE TABLE) выполняется немедленно, а DML часть (INSERT) может быть откачена при ошибке -- это создаёт inconsistent state. Аналогичная проблема у транзакций, смешивающих InnoDB (transactional) и MyISAM (non-transactional) таблицы. Решение: разделить на два запроса -- CREATE TABLE new_table LIKE old_table; INSERT INTO new_table SELECT * FROM old_table;",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-02-q4",
+      "type": "multiple-choice",
+      "question": "При failover MySQL primary сервера Debezium, использующий GTID mode, автоматически продолжает чтение с нового primary. Однако Debezium, использующий file:position mode, требует полного resnapshot. Почему GTID обеспечивает автоматическое продолжение, а file:position -- нет?",
+      "options": [
+        { "id": "a", "text": "GTID автоматически синхронизирует binlog файлы между серверами, создавая идентичные имена и offset на всех replica" },
+        { "id": "b", "text": "GTID глобально уникален и одинаков на всех серверах в кластере -- Debezium запрашивает 'все транзакции после последнего обработанного GTID', и любой сервер может ответить. File:position привязан к конкретному серверу: одна и та же транзакция имеет разные (файл, смещение) на primary и replica" },
+        { "id": "c", "text": "File:position не поддерживается на replica серверах -- Debezium может подключиться только к primary" },
+        { "id": "d", "text": "GTID хранит backup всех binlog файлов в Kafka, поэтому при failover данные восстанавливаются из Kafka, а не из MySQL" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "GTID (source_uuid:transaction_id) -- это глобальный идентификатор транзакции, одинаковый на primary и всех replica. При failover Debezium говорит новому primary: 'Дай мне все транзакции после GTID ...562:100', и сервер находит нужную позицию в своём binlog по GTID. File:position (mysql-bin.000003:154) привязан к конкретному серверу: на primary это файл 000003 со смещением 154, а на replica та же транзакция может находиться в файле 000007 со смещением 892. Debezium не может вычислить соответствие между позициями разных серверов. Это ключевая причина, почему GTID mode рекомендуется для production CDC deployment.",
+      "hint": "Сравните, что именно хранит Debezium в offset storage для каждого режима. В file:position -- это координаты (имя файла + байтовое смещение), привязанные к физической структуре binlog конкретного сервера. В GTID -- это идентификатор транзакции, который одинаков на всех серверах. Подумайте, что произойдёт с каждым типом координат при переключении на другой сервер.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

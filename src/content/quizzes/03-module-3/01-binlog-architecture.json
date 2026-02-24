@@ -5,5 +5,63 @@
     "idPrefix": "m03-01",
     "description": "Use IDs: m03-01-q1, m03-01-q2, ... for MC/TF; m03-01-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-01-q1",
+      "type": "multiple-choice",
+      "question": "Почему для CDC с Debezium требуется именно формат binlog_format=ROW, а не STATEMENT или MIXED?",
+      "options": [
+        { "id": "a", "text": "ROW формат записывает фактические значения строк до и после изменения, что позволяет Debezium точно воспроизвести каждую операцию. STATEMENT записывает SQL-запросы, которые могут дать разные результаты из-за недетерминированных функций (NOW(), RAND(), UUID())" },
+        { "id": "b", "text": "ROW формат занимает меньше места в binlog, что уменьшает нагрузку на диск и сеть" },
+        { "id": "c", "text": "STATEMENT формат поддерживается только в MySQL 5.x и был полностью удален в MySQL 8.0" },
+        { "id": "d", "text": "ROW формат единственный, который поддерживает GTID mode для отслеживания транзакций" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "ROW формат записывает конкретные изменения строк (before/after values), что делает каждое событие детерминированным и самодостаточным для CDC. STATEMENT формат записывает SQL-запросы как текст, и функции вроде NOW(), RAND(), UUID() могут вернуть разные значения при воспроизведении на другом сервере или в Kafka consumer. MIXED формат непредсказуемо переключается между ROW и STATEMENT, усложняя обработку событий. Вариант B неверен -- ROW формат как раз генерирует больший объём binlog, так как записывает полные значения строк.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-01-q2",
+      "type": "multiple-choice",
+      "question": "Debezium прочитал следующую последовательность событий из binlog:\n\n1. GTID_EVENT: server_uuid:42\n2. QUERY_EVENT: BEGIN\n3. TABLE_MAP_EVENT: inventory.orders\n4. UPDATE_ROWS_EVENT: before={id:5, status:'pending'}, after={id:5, status:'shipped'}\n5. TABLE_MAP_EVENT: inventory.orders\n6. UPDATE_ROWS_EVENT: before={id:6, status:'pending'}, after={id:6, status:'shipped'}\n7. XID_EVENT: COMMIT\n\nКакая операция была выполнена в базе данных?",
+      "options": [
+        { "id": "a", "text": "Два отдельных UPDATE запроса в разных транзакциях, каждый обновивший по одной строке" },
+        { "id": "b", "text": "Один UPDATE запрос внутри одной транзакции, обновивший две строки таблицы orders (смена status с 'pending' на 'shipped')" },
+        { "id": "c", "text": "INSERT двух новых строк со статусом 'shipped' в таблицу orders" },
+        { "id": "d", "text": "DELETE двух строк с последующим INSERT новых строк (MySQL оптимизирует UPDATE как DELETE+INSERT)" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Вся последовательность от GTID_EVENT до XID_EVENT (COMMIT) представляет одну транзакцию. UPDATE_ROWS_EVENT содержит пары before/after, что однозначно указывает на UPDATE операцию (не INSERT и не DELETE). Два UPDATE_ROWS_EVENT в одной транзакции означают, что один SQL UPDATE затронул две строки. Каждому row event предшествует TABLE_MAP_EVENT, связывающий table_id с именем таблицы и её схемой. Вариант A неверен -- одна пара GTID + XID означает одну транзакцию, а не две.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-01-q3",
+      "type": "multiple-choice",
+      "question": "Администратор базы данных настроил MySQL для работы с Debezium. В конфигурации my.cnf указано:\n\n[mysqld]\nbinlog_format = STATEMENT\nserver-id = 1\nlog-bin = mysql-bin\n\nКакое последствие этой конфигурации для CDC pipeline?",
+      "options": [
+        { "id": "a", "text": "Debezium MySQL connector откажется стартовать с ошибкой: binlog_format должен быть ROW. В STATEMENT формате binlog содержит SQL-запросы, а не значения строк, что делает CDC невозможным" },
+        { "id": "b", "text": "Debezium будет работать, но производительность снизится на 50% из-за парсинга SQL-запросов" },
+        { "id": "c", "text": "Debezium автоматически переключит формат на ROW для отслеживаемых таблиц" },
+        { "id": "d", "text": "CDC будет работать корректно -- STATEMENT формат полностью поддерживается Debezium начиная с версии 2.0" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Debezium MySQL connector проверяет binlog_format при запуске и отказывается работать, если формат не ROW. Ошибка: 'The MySQL server is not configured to use a ROW binlog_format, which is required for this connector to work properly'. В STATEMENT формате binlog записывает SQL-запросы как текст, что создаёт две проблемы: (1) недетерминированные функции (NOW(), RAND()) дадут разные результаты, (2) Debezium не может извлечь конкретные значения строк для передачи в Kafka. Вариант C неверен -- Debezium не изменяет конфигурацию MySQL сервера, это требует привилегий SUPER и перезапуска сессий.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-01-q4",
+      "type": "multiple-choice",
+      "question": "Debezium отслеживает позицию в binlog через координаты (binlog_file, offset), например mysql-bin.000003:154. Почему эта схема отслеживания ненадёжна при failover на другой MySQL сервер?",
+      "options": [
+        { "id": "a", "text": "Файлы binlog имеют ограничение в 999999 файлов, после чего нумерация сбрасывается и offset становится невалидным" },
+        { "id": "b", "text": "Имена файлов и смещения привязаны к конкретному серверу: на новом primary binlog файлы имеют другие имена и другое содержимое, поэтому позиция mysql-bin.000003:154 на старом сервере не соответствует той же транзакции на новом" },
+        { "id": "c", "text": "MySQL не поддерживает чтение binlog с произвольной позиции -- Debezium всегда начинает с начала файла" },
+        { "id": "d", "text": "Offset в байтах зависит от кодировки символов, которая может отличаться на разных серверах" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Координаты (binlog_file, offset) являются локальными для конкретного MySQL сервера. Каждый сервер в кластере ведёт свою последовательность binlog файлов: на primary это может быть mysql-bin.000003:154, а на replica тот же набор транзакций будет записан в mysql-bin.000007:892 (другой файл, другое смещение). При failover Debezium не может использовать старые координаты на новом primary -- потребуется полный resnapshot базы данных. Именно эту проблему решает GTID (Global Transaction ID), который мы изучим в следующем уроке: GTID глобально уникален и одинаков на всех серверах в топологии.",
+      "hint": "Подумайте о том, что каждый MySQL сервер ведёт собственную нумерацию binlog файлов и записывает транзакции в свой поток. Сравните, что произойдёт с координатами (файл, смещение), когда Debezium переключится на replica, у которой совершенно другая история binlog файлов.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
