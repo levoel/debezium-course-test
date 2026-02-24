@@ -62,6 +62,60 @@
       "explanation": "REPLICA IDENTITY определяет, какие данные PostgreSQL записывает в WAL при UPDATE и DELETE. В режиме DEFAULT в WAL попадают только колонки Primary Key для идентификации изменённой строки — поэтому в `before` Debezium видит только `{id: 42}`. При переключении на FULL PostgreSQL записывает в WAL полную копию старой строки при каждом UPDATE и DELETE. Это позволяет потребителям CDC сравнивать before/after, но каждый UPDATE генерирует значительно больше WAL-данных — для таблиц с частыми обновлениями и широкими строками (много колонок, JSONB) увеличение WAL volume может достигать 30-50%.",
       "hint": "Обратите внимание на то, что REPLICA IDENTITY влияет на уровне WAL, а не на уровне Debezium. Подумайте, что именно PostgreSQL записывает в WAL при UPDATE в каждом из режимов, и как объём записываемых данных зависит от ширины строки.",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m02-01-code-1",
+      "type": "code-challenge",
+      "question": "Найдите и исправьте ошибки в конфигурации PostgreSQL коннектора Debezium. Функция получает JSON-строку с конфигурацией и должна вернуть исправленный объект.\n\nОшибки: (1) неверное значение plugin.name, (2) отсутствует slot.name для слота репликации, (3) отсутствует publication.name.",
+      "language": "javascript",
+      "starterCode": "function solve(configJson) {\n  const config = JSON.parse(configJson);\n  // Исправьте ошибки в config.config:\n  // 1. plugin.name должен быть 'pgoutput' (встроенный плагин PG 10+)\n  // 2. Добавьте slot.name для слота репликации\n  // 3. Добавьте publication.name для PostgreSQL Publication\n  return config;\n}",
+      "solutionCode": "function solve(configJson) {\n  const config = JSON.parse(configJson);\n  // 1. pgoutput -- встроенный плагин, работает на Aurora/RDS\n  config.config['plugin.name'] = 'pgoutput';\n  // 2. slot.name -- слот репликации для отслеживания позиции в WAL\n  config.config['slot.name'] = 'debezium_slot';\n  // 3. publication.name -- PostgreSQL Publication для фильтрации таблиц\n  config.config['publication.name'] = 'dbz_publication';\n  return config;\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Исправить неверный plugin.name и добавить slot.name и publication.name",
+          "input": "'{\"name\":\"pg-inventory-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.postgresql.PostgresConnector\",\"database.hostname\":\"postgres\",\"database.port\":\"5432\",\"database.user\":\"postgres\",\"database.password\":\"postgres\",\"database.dbname\":\"inventory\",\"topic.prefix\":\"inventory\",\"table.include.list\":\"public.orders,public.customers\",\"plugin.name\":\"wal2json\",\"snapshot.mode\":\"initial\"}}'",
+          "expectedOutput": "{\"name\":\"pg-inventory-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.postgresql.PostgresConnector\",\"database.hostname\":\"postgres\",\"database.port\":\"5432\",\"database.user\":\"postgres\",\"database.password\":\"postgres\",\"database.dbname\":\"inventory\",\"topic.prefix\":\"inventory\",\"table.include.list\":\"public.orders,public.customers\",\"plugin.name\":\"pgoutput\",\"snapshot.mode\":\"initial\",\"slot.name\":\"debezium_slot\",\"publication.name\":\"dbz_publication\"}}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Исправить конфигурацию для Aurora PostgreSQL",
+          "input": "'{\"name\":\"aurora-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.postgresql.PostgresConnector\",\"database.hostname\":\"aurora-pg.abc123.us-east-1.rds.amazonaws.com\",\"database.port\":\"5432\",\"database.user\":\"cdc_user\",\"database.password\":\"secret\",\"database.dbname\":\"orders\",\"topic.prefix\":\"aurora-orders\",\"table.include.list\":\"public.orders\",\"plugin.name\":\"decoderbufs\",\"snapshot.mode\":\"initial\"}}'",
+          "expectedOutput": "{\"name\":\"aurora-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.postgresql.PostgresConnector\",\"database.hostname\":\"aurora-pg.abc123.us-east-1.rds.amazonaws.com\",\"database.port\":\"5432\",\"database.user\":\"cdc_user\",\"database.password\":\"secret\",\"database.dbname\":\"orders\",\"topic.prefix\":\"aurora-orders\",\"table.include.list\":\"public.orders\",\"plugin.name\":\"pgoutput\",\"snapshot.mode\":\"initial\",\"slot.name\":\"debezium_slot\",\"publication.name\":\"dbz_publication\"}}",
+          "hidden": true
+        }
+      ],
+      "explanation": "PostgreSQL коннектор Debezium требует правильную настройку логического декодирования: (1) plugin.name должен быть 'pgoutput' -- это встроенный плагин PostgreSQL 10+, работающий на всех managed-платформах (Aurora, RDS, Cloud SQL). Плагины wal2json и decoderbufs требуют отдельной установки и недоступны на Aurora. (2) slot.name определяет слот репликации, который хранит позицию чтения в WAL и предотвращает удаление непрочитанных WAL-сегментов. (3) publication.name задает PostgreSQL Publication для фильтрации таблиц на уровне сервера.",
+      "hint": "Обратите внимание на три PostgreSQL-специфичных свойства: plugin.name (какой встроенный плагин работает на Aurora?), slot.name (механизм отслеживания позиции в WAL), publication.name (серверная фильтрация таблиц через Publications).",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m02-01-code-2",
+      "type": "code-challenge",
+      "question": "Создайте конфигурацию PostgreSQL коннектора Debezium по заданным требованиям. Функция получает JSON с требованиями и должна вернуть полную конфигурацию коннектора с PostgreSQL-специфичными свойствами.",
+      "language": "javascript",
+      "starterCode": "function solve(requirementsJson) {\n  const reqs = JSON.parse(requirementsJson);\n  // Создайте конфигурацию коннектора на основе требований:\n  // reqs.hostname, reqs.port, reqs.user, reqs.password,\n  // reqs.dbname, reqs.topicPrefix, reqs.tables (массив),\n  // reqs.slotName, reqs.publicationName\n  const config = {\n    name: '',\n    config: {\n      // Заполните обязательные поля PostgreSQL коннектора\n    }\n  };\n  return config;\n}",
+      "solutionCode": "function solve(requirementsJson) {\n  const reqs = JSON.parse(requirementsJson);\n  return {\n    name: reqs.topicPrefix + '-connector',\n    config: {\n      'connector.class': 'io.debezium.connector.postgresql.PostgresConnector',\n      'database.hostname': reqs.hostname,\n      'database.port': String(reqs.port),\n      'database.user': reqs.user,\n      'database.password': reqs.password,\n      'database.dbname': reqs.dbname,\n      'topic.prefix': reqs.topicPrefix,\n      'table.include.list': reqs.tables.join(','),\n      'plugin.name': 'pgoutput',\n      'slot.name': reqs.slotName,\n      'publication.name': reqs.publicationName,\n      'snapshot.mode': 'initial'\n    }\n  };\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Создать конфигурацию для inventory database",
+          "input": "'{\"hostname\":\"postgres\",\"port\":5432,\"user\":\"postgres\",\"password\":\"postgres\",\"dbname\":\"inventory\",\"topicPrefix\":\"inventory\",\"tables\":[\"public.orders\",\"public.customers\"],\"slotName\":\"debezium_slot\",\"publicationName\":\"dbz_publication\"}'",
+          "expectedOutput": "{\"name\":\"inventory-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.postgresql.PostgresConnector\",\"database.hostname\":\"postgres\",\"database.port\":\"5432\",\"database.user\":\"postgres\",\"database.password\":\"postgres\",\"database.dbname\":\"inventory\",\"topic.prefix\":\"inventory\",\"table.include.list\":\"public.orders,public.customers\",\"plugin.name\":\"pgoutput\",\"slot.name\":\"debezium_slot\",\"publication.name\":\"dbz_publication\",\"snapshot.mode\":\"initial\"}}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Создать конфигурацию для Aurora PostgreSQL",
+          "input": "'{\"hostname\":\"aurora-pg.cluster-abc123.us-east-1.rds.amazonaws.com\",\"port\":5432,\"user\":\"cdc_user\",\"password\":\"prod_secret\",\"dbname\":\"orders\",\"topicPrefix\":\"aurora-orders\",\"tables\":[\"public.orders\",\"public.customers\",\"public.products\"],\"slotName\":\"aurora_cdc_slot\",\"publicationName\":\"aurora_publication\"}'",
+          "expectedOutput": "{\"name\":\"aurora-orders-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.postgresql.PostgresConnector\",\"database.hostname\":\"aurora-pg.cluster-abc123.us-east-1.rds.amazonaws.com\",\"database.port\":\"5432\",\"database.user\":\"cdc_user\",\"database.password\":\"prod_secret\",\"database.dbname\":\"orders\",\"topic.prefix\":\"aurora-orders\",\"table.include.list\":\"public.orders,public.customers,public.products\",\"plugin.name\":\"pgoutput\",\"slot.name\":\"aurora_cdc_slot\",\"publication.name\":\"aurora_publication\",\"snapshot.mode\":\"initial\"}}",
+          "hidden": true
+        }
+      ],
+      "explanation": "Конфигурация PostgreSQL коннектора Debezium включает обязательные группы свойств: (1) connector.class для PostgreSQL, (2) database connection (hostname, port, user, password, dbname), (3) topic.prefix -- логический идентификатор для именования Kafka topics, (4) table.include.list -- фильтрация таблиц (через запятую, формат schema.table), (5) PostgreSQL-специфичные: plugin.name='pgoutput', slot.name для слота репликации (хранит позицию в WAL), publication.name для серверной фильтрации, (6) snapshot.mode для стратегии первого запуска. В отличие от MySQL, PostgreSQL использует server-side tracking через слоты репликации.",
+      "hint": "Обязательные PostgreSQL-специфичные свойства: slot.name (слот репликации для отслеживания позиции в WAL), publication.name (серверная фильтрация таблиц), plugin.name='pgoutput' (встроенный плагин). Также нужны database.dbname (имя базы данных) и topic.prefix (логический идентификатор для Kafka topics).",
+      "bloomLevel": "applied"
     }
   ]
 }

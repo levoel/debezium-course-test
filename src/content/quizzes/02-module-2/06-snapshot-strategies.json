@@ -62,6 +62,40 @@
       "explanation": "Incremental snapshot — единственный подход, отвечающий всем требованиям. Традиционный snapshot (вариант A) блокирует streaming на всё время выполнения: для 500GB это могут быть часы, в течение которых CDC-события накапливаются в слоте репликации, увеличивая WAL retention и создавая риск заполнения диска. Кроме того, традиционный snapshot не возобновляем — при сбое придётся начинать заново. Incremental snapshot работает порциями (chunks) по primary key, обрабатывая streaming-события параллельно. При сбое он возобновляется с последнего chunk благодаря watermark tracking. Режим `when_needed` (вариант C) не переключается автоматически на incremental — он просто запускает традиционный snapshot, если offset потерян.",
       "hint": "Сравните два подхода по трём критериям: блокировка streaming, возобновляемость при сбое и влияние на WAL retention. Подумайте, что произойдёт с CDC-потоком, если snapshot 500GB таблицы займёт несколько часов.",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m02-06-code-1",
+      "type": "code-challenge",
+      "question": "Разберите CDC-событие PostgreSQL коннектора Debezium. Извлеките тип операции, схему и таблицу, а также определите, какие поля изменились при UPDATE (сравнив before и after).",
+      "language": "javascript",
+      "starterCode": "function solve(eventJson) {\n  const event = JSON.parse(eventJson);\n  // Извлеките из CDC-события PostgreSQL коннектора:\n  // - operation: тип операции (c/u/d/r)\n  // - schema: схема таблицы из source.schema\n  // - table: имя таблицы из source.table\n  // - changedFields: для UPDATE (op='u') -- массив полей,\n  //   значения которых отличаются в before и after (отсортированный).\n  //   Для других операций -- все ключи из after (или before для DELETE),\n  //   отсортированные.\n  return {\n    operation: '',\n    schema: '',\n    table: '',\n    changedFields: []\n  };\n}",
+      "solutionCode": "function solve(eventJson) {\n  const event = JSON.parse(eventJson);\n  const payload = event.payload;\n  const operation = payload.op;\n  const schema = payload.source.schema;\n  const table = payload.source.table;\n  let changedFields;\n  if (operation === 'u' && payload.before && payload.after) {\n    // Для UPDATE -- только поля с отличающимися значениями\n    changedFields = Object.keys(payload.after)\n      .filter(k => JSON.stringify(payload.before[k]) !== JSON.stringify(payload.after[k]))\n      .sort();\n  } else if (operation === 'd') {\n    changedFields = Object.keys(payload.before).sort();\n  } else {\n    changedFields = Object.keys(payload.after).sort();\n  }\n  return { operation, schema, table, changedFields };\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Разобрать UPDATE событие и найти измененные поля",
+          "input": "'{\"payload\":{\"op\":\"u\",\"before\":{\"id\":42,\"name\":\"Alice\",\"email\":\"alice@old.com\",\"balance\":100},\"after\":{\"id\":42,\"name\":\"Alice\",\"email\":\"alice@new.com\",\"balance\":250},\"source\":{\"connector\":\"postgresql\",\"db\":\"inventory\",\"schema\":\"public\",\"table\":\"customers\",\"lsn\":23456789,\"txId\":1001},\"ts_ms\":1700000000000}}'",
+          "expectedOutput": "{\"operation\":\"u\",\"schema\":\"public\",\"table\":\"customers\",\"changedFields\":[\"balance\",\"email\"]}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Разобрать CREATE событие с pgoutput envelope",
+          "input": "'{\"payload\":{\"op\":\"c\",\"before\":null,\"after\":{\"id\":100,\"product\":\"Widget\",\"price\":29.99,\"quantity\":50},\"source\":{\"connector\":\"postgresql\",\"db\":\"inventory\",\"schema\":\"public\",\"table\":\"products\",\"lsn\":23456800,\"txId\":1002},\"ts_ms\":1700000001000}}'",
+          "expectedOutput": "{\"operation\":\"c\",\"schema\":\"public\",\"table\":\"products\",\"changedFields\":[\"id\",\"price\",\"product\",\"quantity\"]}",
+          "hidden": false
+        },
+        {
+          "id": "tc3",
+          "description": "Разобрать DELETE событие (использовать before, after=null)",
+          "input": "'{\"payload\":{\"op\":\"d\",\"before\":{\"id\":42,\"name\":\"Alice\",\"email\":\"alice@old.com\"},\"after\":null,\"source\":{\"connector\":\"postgresql\",\"db\":\"orders\",\"schema\":\"sales\",\"table\":\"archived_orders\",\"lsn\":23456900,\"txId\":1003},\"ts_ms\":1700000002000}}'",
+          "expectedOutput": "{\"operation\":\"d\",\"schema\":\"sales\",\"table\":\"archived_orders\",\"changedFields\":[\"email\",\"id\",\"name\"]}",
+          "hidden": true
+        }
+      ],
+      "explanation": "CDC-события PostgreSQL коннектора через pgoutput содержат payload с op (c=create, u=update, d=delete, r=read/snapshot), source с метаданными (schema, table, lsn, txId), и before/after с данными строки. PostgreSQL CDC-события включают schema (например, 'public') и LSN (Log Sequence Number) для точного позиционирования в WAL. При UPDATE с REPLICA IDENTITY FULL оба поля (before и after) заполнены, что позволяет вычислить конкретные измененные поля сравнением значений. При REPLICA IDENTITY DEFAULT в before будет только Primary Key.",
+      "hint": "Для UPDATE сравните значения каждого поля в before и after через JSON.stringify() для корректного сравнения. Для CREATE используйте Object.keys(after), для DELETE -- Object.keys(before). PostgreSQL CDC-события содержат source.schema (имя схемы) -- уникальная особенность PostgreSQL коннектора.",
+      "bloomLevel": "applied"
     }
   ]
 }
