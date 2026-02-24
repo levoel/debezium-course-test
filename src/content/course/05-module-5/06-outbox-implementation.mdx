@@ -320,7 +320,7 @@ conn.commit()
 
 <KnowledgeCheck
   question="Параметр table.expand.json.payload в Outbox Event Router может быть true или false. Какая разница для consumer, и какой вариант рекомендуется?"
-  answer="С table.expand.json.payload = false (default) consumer получает JSON string в value: {\"orderId\": \"123\"} (экранированная строка). С true consumer получает structured JSON object: {orderId: 123}. Рекомендуется true, потому что consumer code проще и type-safe -- не нужен дополнительный этап JSON.parse() для разбора строки."
+  answer="С table.expand.json.payload = false (default) consumer получает экранированную JSON строку, требующую дополнительного JSON.parse(). С true consumer получает structured JSON object напрямую. Рекомендуется true, потому что consumer code проще и type-safe -- не нужен дополнительный этап десериализации для разбора строки."
 />
 
 ## Consumer Idempotency Pattern
