@@ -63,6 +63,40 @@
       "explanation": "В Groovy сравнение null > 10000 вызывает NullPointerException, потому что оператор > не может работать с null. Это распространенная ошибка при написании routing expressions: разработчики тестируют с валидными данными, но в production попадаются записи с NULL-значениями. Исправление: value.amount != null && value.amount > 10000 ? 'orders-priority' : 'orders-standard'. Или использовать Groovy safe navigation: (value.amount ?: 0) > 10000. Это та же проблема null safety, что и в Filter SMT с DELETE-событиями.",
       "hint": "Вспомните, как Groovy обрабатывает арифметические операции и сравнения, когда один из операндов равен null. Аналогичная проблема возникает в Filter SMT при доступе к value.after на DELETE-событиях.",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m05-04-code-1",
+      "type": "code-challenge",
+      "question": "Создайте конфигурацию SMT-цепочки для маршрутизации CDC-событий. Функция получает JSON с требованиями (какие события фильтровать, какие поля маскировать, по какому полю маршрутизировать) и должна вернуть полную конфигурацию transforms.\n\nТребования описывают три шага:\n1. Фильтрация событий по типу операции\n2. Извлечение payload из Debezium envelope (unwrap)\n3. Маршрутизация в топики по значению поля",
+      "language": "javascript",
+      "starterCode": "function solve(requirementsJson) {\n  const reqs = JSON.parse(requirementsJson);\n  // reqs.filterOps -- массив операций для фильтрации (например ['c', 'u'])\n  // reqs.routeField -- поле для маршрутизации (например 'region')\n  // reqs.topicPrefix -- префикс топика (например 'events')\n  //\n  // Создайте конфигурацию SMT chain:\n  // 1. Filter: оставить только указанные операции\n  // 2. Unwrap: ExtractNewRecordState\n  // 3. Route: ContentBasedRouter по указанному полю\n  const config = {\n    'transforms': '',\n    // Добавьте transforms.* свойства\n  };\n  return config;\n}",
+      "solutionCode": "function solve(requirementsJson) {\n  const reqs = JSON.parse(requirementsJson);\n\n  // Формируем условие фильтрации: value.op == 'c' || value.op == 'u'\n  const filterCondition = reqs.filterOps\n    .map(op => \"value.op == '\" + op + \"'\")\n    .join(' || ');\n\n  // Формируем routing expression с null-safety\n  const routeExpr = \"value.\" + reqs.routeField + \" != null ? '\" +\n    reqs.topicPrefix + \"-' + value.\" + reqs.routeField +\n    \" : '\" + reqs.topicPrefix + \"-default'\";\n\n  return {\n    'transforms': 'filter,unwrap,route',\n    'transforms.filter.type': 'io.debezium.transforms.Filter',\n    'transforms.filter.language': 'jsr223.groovy',\n    'transforms.filter.condition': filterCondition,\n    'transforms.unwrap.type': 'io.debezium.transforms.ExtractNewRecordState',\n    'transforms.route.type': 'io.debezium.transforms.ContentBasedRouter',\n    'transforms.route.language': 'jsr223.groovy',\n    'transforms.route.topic.expression': routeExpr\n  };\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Маршрутизация по region с фильтрацией INSERT и UPDATE",
+          "input": "'{\"filterOps\":[\"c\",\"u\"],\"routeField\":\"region\",\"topicPrefix\":\"events\"}'",
+          "expectedOutput": "{\"transforms\":\"filter,unwrap,route\",\"transforms.filter.type\":\"io.debezium.transforms.Filter\",\"transforms.filter.language\":\"jsr223.groovy\",\"transforms.filter.condition\":\"value.op == 'c' || value.op == 'u'\",\"transforms.unwrap.type\":\"io.debezium.transforms.ExtractNewRecordState\",\"transforms.route.type\":\"io.debezium.transforms.ContentBasedRouter\",\"transforms.route.language\":\"jsr223.groovy\",\"transforms.route.topic.expression\":\"value.region != null ? 'events-' + value.region : 'events-default'\"}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Маршрутизация по tenant_id с фильтрацией только INSERT",
+          "input": "'{\"filterOps\":[\"c\"],\"routeField\":\"tenant_id\",\"topicPrefix\":\"tenant\"}'",
+          "expectedOutput": "{\"transforms\":\"filter,unwrap,route\",\"transforms.filter.type\":\"io.debezium.transforms.Filter\",\"transforms.filter.language\":\"jsr223.groovy\",\"transforms.filter.condition\":\"value.op == 'c'\",\"transforms.unwrap.type\":\"io.debezium.transforms.ExtractNewRecordState\",\"transforms.route.type\":\"io.debezium.transforms.ContentBasedRouter\",\"transforms.route.language\":\"jsr223.groovy\",\"transforms.route.topic.expression\":\"value.tenant_id != null ? 'tenant-' + value.tenant_id : 'tenant-default'\"}",
+          "hidden": false
+        },
+        {
+          "id": "tc3",
+          "description": "Скрытый тест: маршрутизация по priority с тремя типами операций",
+          "input": "'{\"filterOps\":[\"c\",\"u\",\"d\"],\"routeField\":\"priority\",\"topicPrefix\":\"orders\"}'",
+          "expectedOutput": "{\"transforms\":\"filter,unwrap,route\",\"transforms.filter.type\":\"io.debezium.transforms.Filter\",\"transforms.filter.language\":\"jsr223.groovy\",\"transforms.filter.condition\":\"value.op == 'c' || value.op == 'u' || value.op == 'd'\",\"transforms.unwrap.type\":\"io.debezium.transforms.ExtractNewRecordState\",\"transforms.route.type\":\"io.debezium.transforms.ContentBasedRouter\",\"transforms.route.language\":\"jsr223.groovy\",\"transforms.route.topic.expression\":\"value.priority != null ? 'orders-' + value.priority : 'orders-default'\"}",
+          "hidden": true
+        }
+      ],
+      "explanation": "Полная SMT-цепочка для content-based routing включает три этапа: (1) Filter отбрасывает ненужные события ДО разворачивания envelope -- это предотвращает ошибки на heartbeat-сообщениях и уменьшает нагрузку; (2) ExtractNewRecordState разворачивает Debezium envelope в плоский JSON; (3) ContentBasedRouter маршрутизирует в топики на основе значения поля. Критически важна null-safety в routing expression: если поле равно null, Groovy выбросит NullPointerException и коннектор упадет.",
+      "hint": "Три ключевых момента: (1) порядок цепочки -- filter,unwrap,route; (2) Filter использует Groovy (language: jsr223.groovy) и работает с envelope (value.op); (3) ContentBasedRouter работает ПОСЛЕ unwrap и обращается к плоским полям (value.routeField). Не забудьте null-safety в routing expression.",
+      "bloomLevel": "applied"
     }
   ]
 }

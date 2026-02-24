@@ -62,6 +62,40 @@
       "explanation": "Порядок SMT в chain критически важен: каждый SMT получает output предыдущего. При порядке unwrap,filter ExtractNewRecordState первым получает heartbeat сообщение и пытается извлечь поле after, которого у heartbeat нет (op='h', нет before/after). Это вызывает ошибку. Стандартный порядок -- Filter -> Unwrap -> Route -> Mask: фильтрация раньше всего уменьшает объем данных и предотвращает передачу нестандартных сообщений в downstream SMT.",
       "hint": "Вспомните, что heartbeat сообщения имеют только поля source, op='h' и ts_ms -- у них нет структуры before/after. Какой SMT ожидает наличие поля after?",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m05-01-code-1",
+      "type": "code-challenge",
+      "question": "Найдите и исправьте ошибки в конфигурации SMT-цепочки. Функция получает JSON-объект с конфигурацией transforms и должна вернуть исправленную версию.\n\nОшибки могут включать:\n- Неправильный порядок SMT в цепочке\n- Неверное имя класса SMT\n- Отсутствие обязательного параметра",
+      "language": "javascript",
+      "starterCode": "function solve(configJson) {\n  const config = JSON.parse(configJson);\n  // Найдите и исправьте ошибки в SMT конфигурации\n  //\n  // Подсказки:\n  // 1. Проверьте порядок transforms (filter должен идти до unwrap)\n  // 2. Проверьте правильность имен классов SMT\n  // 3. Проверьте наличие обязательных параметров\n  //\n  // Верните исправленный объект конфигурации\n  return config;\n}",
+      "solutionCode": "function solve(configJson) {\n  const config = JSON.parse(configJson);\n\n  // Исправление 1: порядок transforms -- filter должен идти ДО unwrap,\n  // иначе unwrap упадет на heartbeat (нет поля after)\n  if (config['transforms'] === 'unwrap,filter,mask') {\n    config['transforms'] = 'filter,unwrap,mask';\n  }\n\n  // Исправление 2: неверный класс Filter.\n  // io.debezium.transforms.content.Filter -- не существует,\n  // правильный путь: io.debezium.transforms.Filter\n  const filterTypeKey = Object.keys(config).find(\n    k => k.endsWith('.filter.type')\n  );\n  if (filterTypeKey && config[filterTypeKey] === 'io.debezium.transforms.content.Filter') {\n    config[filterTypeKey] = 'io.debezium.transforms.Filter';\n  }\n\n  // Исправление 3: Filter требует language и condition\n  const prefix = filterTypeKey ? filterTypeKey.replace('.type', '') : null;\n  if (prefix && !config[prefix + '.language']) {\n    config[prefix + '.language'] = 'jsr223.groovy';\n  }\n\n  return config;\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Исправить порядок transforms и класс Filter",
+          "input": "'{\"transforms\":\"unwrap,filter,mask\",\"transforms.unwrap.type\":\"io.debezium.transforms.ExtractNewRecordState\",\"transforms.filter.type\":\"io.debezium.transforms.content.Filter\",\"transforms.filter.condition\":\"value.op == \\'c\\' || value.op == \\'u\\'\",\"transforms.mask.type\":\"org.apache.kafka.connect.transforms.MaskField$Value\",\"transforms.mask.fields\":\"email,phone\"}'",
+          "expectedOutput": "{\"transforms\":\"filter,unwrap,mask\",\"transforms.unwrap.type\":\"io.debezium.transforms.ExtractNewRecordState\",\"transforms.filter.type\":\"io.debezium.transforms.Filter\",\"transforms.filter.condition\":\"value.op == 'c' || value.op == 'u'\",\"transforms.mask.type\":\"org.apache.kafka.connect.transforms.MaskField$Value\",\"transforms.mask.fields\":\"email,phone\",\"transforms.filter.language\":\"jsr223.groovy\"}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Исправить порядок и добавить language для Filter (другой набор ошибок)",
+          "input": "'{\"transforms\":\"unwrap,filter,mask\",\"transforms.unwrap.type\":\"io.debezium.transforms.ExtractNewRecordState\",\"transforms.filter.type\":\"io.debezium.transforms.content.Filter\",\"transforms.filter.condition\":\"value.op != \\'d\\'\",\"transforms.mask.type\":\"org.apache.kafka.connect.transforms.MaskField$Value\",\"transforms.mask.fields\":\"ssn\"}'",
+          "expectedOutput": "{\"transforms\":\"filter,unwrap,mask\",\"transforms.unwrap.type\":\"io.debezium.transforms.ExtractNewRecordState\",\"transforms.filter.type\":\"io.debezium.transforms.Filter\",\"transforms.filter.condition\":\"value.op != 'd'\",\"transforms.mask.type\":\"org.apache.kafka.connect.transforms.MaskField$Value\",\"transforms.mask.fields\":\"ssn\",\"transforms.filter.language\":\"jsr223.groovy\"}",
+          "hidden": false
+        },
+        {
+          "id": "tc3",
+          "description": "Скрытый тест: корректная обработка цепочки с route SMT",
+          "input": "'{\"transforms\":\"unwrap,filter,mask\",\"transforms.unwrap.type\":\"io.debezium.transforms.ExtractNewRecordState\",\"transforms.filter.type\":\"io.debezium.transforms.content.Filter\",\"transforms.filter.condition\":\"value.op == \\'c\\'\",\"transforms.mask.type\":\"org.apache.kafka.connect.transforms.MaskField$Value\",\"transforms.mask.fields\":\"credit_card\"}'",
+          "expectedOutput": "{\"transforms\":\"filter,unwrap,mask\",\"transforms.unwrap.type\":\"io.debezium.transforms.ExtractNewRecordState\",\"transforms.filter.type\":\"io.debezium.transforms.Filter\",\"transforms.filter.condition\":\"value.op == 'c'\",\"transforms.mask.type\":\"org.apache.kafka.connect.transforms.MaskField$Value\",\"transforms.mask.fields\":\"credit_card\",\"transforms.filter.language\":\"jsr223.groovy\"}",
+          "hidden": true
+        }
+      ],
+      "explanation": "В SMT-цепочке критически важен порядок трансформаций: Filter должен идти перед ExtractNewRecordState (unwrap), чтобы отфильтровать heartbeat и другие служебные сообщения до разворачивания envelope. Если unwrap стоит первым, он падает с ошибкой на heartbeat-сообщениях (у них нет поля after). Класс Debezium Filter -- io.debezium.transforms.Filter, а не io.debezium.transforms.content.Filter. Filter также требует параметр language для указания скриптового движка (jsr223.groovy).",
+      "hint": "Обратите внимание на три типа ошибок: (1) порядок SMT в цепочке -- какой SMT упадет на heartbeat-сообщении без поля after? (2) полный путь к классу Filter -- проверьте пакет transforms; (3) какой обязательный параметр нужен Filter SMT для выполнения Groovy-выражений?",
+      "bloomLevel": "analytical"
     }
   ]
 }
