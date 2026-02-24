@@ -152,6 +152,11 @@ Queue utilization % = 100 * (1 - QueueRemainingCapacity / QueueTotalCapacity)
 ))
 ```
 
+<KnowledgeCheck
+  question="Почему MilliSecondsBehindSource никогда не равен нулю, даже когда CDC pipeline работает идеально?"
+  answer="Всегда существует processing delay: время на чтение WAL, сериализацию события и отправку в Kafka. Типичные значения 50-200ms при idle системе — это нормальный overhead, а не признак проблемы."
+/>
+
 ## Framework интерпретации метрик
 
 Когда возникает проблема — используйте этот decision tree.
@@ -237,6 +242,11 @@ Queue utilization % = 100 * (1 - QueueRemainingCapacity / QueueTotalCapacity)
 | Connected | - | = 0 | 1 min |
 
 > **Примечание:** Эти пороги — отправная точка. Настраивайте под ваш SLO. Для финансовых систем порог lag может быть 1 секунда, для аналитики — 5 минут.
+
+<KnowledgeCheck
+  question="Мониторинг показывает QueueRemainingCapacity = 100 из 8192, а MilliSecondsBehindSource растет. В какой части pipeline находится bottleneck — в чтении WAL или в записи в Kafka?"
+  answer="Bottleneck в записи в Kafka. QueueRemainingCapacity близок к нулю означает, что очередь почти заполнена — WAL reader помещает события в очередь быстрее, чем Kafka writer их забирает. Нужно проверить Kafka broker latency и network."
+/>
 
 ## Особенности метрик в Debezium 2.5.4
 

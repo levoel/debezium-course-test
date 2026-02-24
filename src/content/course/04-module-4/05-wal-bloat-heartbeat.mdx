@@ -103,6 +103,11 @@ Parameter: max_slot_wal_keep_size
 Value: 10737418240 (в байтах = 10GB)
 ```
 
+<KnowledgeCheck
+  question="Replication slot удерживает WAL от ВСЕХ транзакций в базе данных, а не только от мониторируемых таблиц. Почему это делает low-traffic таблицы особенно опасными для WAL bloat?"
+  answer="Slot продвигается только при обработке событий от мониторируемых таблиц. Если таблица не меняется, slot замирает на старой позиции. При этом WAL от других активных таблиц продолжает накапливаться — slot не позволяет PostgreSQL удалить эти сегменты. Heartbeat решает проблему, генерируя synthetic events для продвижения slot."
+/>
+
 ## Layer 2: Heartbeat Configuration
 
 Heartbeat заставляет slot продвигаться даже когда мониторируемые таблицы не меняются.
@@ -249,6 +254,11 @@ ORDER BY retained_bytes DESC NULLS LAST;
 | `extended` | WAL превысил max_wal_size, но slot держит | Следить внимательно |
 | `unreserved` | WAL может быть удален в любой момент | Немедленная проверка коннектора |
 | `lost` | WAL уже удален, slot невосстановим | Требуется полный resnapshot |
+
+<KnowledgeCheck
+  question="Почему heartbeat через pg_logical_emit_message() предпочтительнее heartbeat table для PostgreSQL 14+?"
+  answer="pg_logical_emit_message() создает запись напрямую в WAL без необходимости таблицы, UPDATE-операций и блокировок. Heartbeat table требует создания таблицы, настройки прав, добавления в table.include.list, и каждый UPDATE создает дополнительную нагрузку. pg_logical_emit_message() — минимальный overhead с максимальным эффектом."
+/>
 
 ## Layer 4: Operational Runbooks
 

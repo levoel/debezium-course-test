@@ -177,6 +177,11 @@ rate(debezium_metrics_TotalNumberOfEventsSeen{context="streaming"}[1m])
 
 **Position:** Width 6, Height 4
 
+<KnowledgeCheck
+  question="Почему для панели Current Lag используется Gauge, а не Stat? Какое преимущество дает Gauge для метрики отставания?"
+  answer="Gauge визуально показывает текущее значение относительно шкалы с цветовыми порогами (зеленый/желтый/красный). Оператор мгновенно видит, в какой зоне находится lag — нормальной, предупредительной или критической — без необходимости интерпретировать числовое значение."
+/>
+
 ### Промежуточный результат
 
 После первых четырех панелей ваш дашборд должен выглядеть так:
@@ -272,6 +277,11 @@ rate(debezium_metrics_NumberOfCommittedTransactions{context="streaming"}[1m])
 - **Unit:** short
 
 **Position:** Width 12, Height 6
+
+<KnowledgeCheck
+  question="Зачем на графике Lag Trend добавлять визуальные threshold lines на 5s и 30s, если алерты уже настроены на эти значения?"
+  answer="Threshold lines на графике дают контекст при визуальном анализе: оператор видит, насколько близко lag подходил к порогам, даже если алерт не сработал. Это помогает при capacity planning и post-mortem — например, обнаружить тренд приближения к warning уровню."
+/>
 
 ## Настройка переменных (Variables)
 
