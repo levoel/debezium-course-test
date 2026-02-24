@@ -5,5 +5,64 @@
     "idPrefix": "m05-05",
     "description": "Use IDs: m05-05-q1, m05-05-q2, ... for MC/TF; m05-05-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m05-05-q1",
+      "type": "multiple-choice",
+      "question": "Что такое проблема двойной записи (dual-write problem) в контексте микросервисной архитектуры?",
+      "options": [
+        { "id": "a", "text": "Два микросервиса одновременно записывают в одну и ту же таблицу базы данных" },
+        { "id": "b", "text": "Микросервис выполняет два независимых write-операции (UPDATE БД и SEND в Kafka), и одна из них может завершиться неудачей, приводя к несогласованности данных" },
+        { "id": "c", "text": "Kafka записывает одно и то же сообщение в два разных топика одновременно" },
+        { "id": "d", "text": "Debezium дублирует CDC события при переподключении к базе данных" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Dual-write problem возникает, когда приложение выполняет два независимых write-операции: обновляет базу данных и отправляет событие в Kafka. Между COMMIT в БД и send() в Kafka может произойти network failure, crash приложения или недоступность Kafka. В результате БД обновлена, но событие потеряно -- downstream-системы не узнают об изменении. Вариант A описывает другую проблему -- конкурентный доступ к данным.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m05-05-q2",
+      "type": "multiple-choice",
+      "question": "Микросервис Orders обновляет статус заказа и должен отправить событие OrderApproved в Kafka. Сетевое соединение с Kafka потеряно на 30 секунд после COMMIT в БД. Какой будет результат при прямой отправке (dual-write) vs Outbox-паттерн?",
+      "options": [
+        { "id": "a", "text": "Dual-write: событие потеряно навсегда. Outbox: событие доставлено после восстановления сети, потому что оно записано в WAL через outbox-таблицу" },
+        { "id": "b", "text": "Dual-write: событие будет доставлено с задержкой 30 секунд. Outbox: событие доставлено мгновенно" },
+        { "id": "c", "text": "Оба подхода доставят событие после восстановления сети -- Kafka producer автоматически retry" },
+        { "id": "d", "text": "Dual-write: транзакция БД откатится. Outbox: транзакция зафиксируется без события" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "При dual-write транзакция БД уже зафиксирована (COMMIT прошел), но Kafka producer не может отправить сообщение из-за network failure. Если приложение не реализует сложную retry-логику с persistent queue, событие потеряно. С Outbox-паттерном событие записывается в outbox-таблицу в той же транзакции, что и UPDATE заказа. Debezium читает WAL, видит INSERT в outbox и доставит событие в Kafka, когда сеть восстановится. Вариант C неверен: Kafka producer retry работает только пока приложение запущено и сохраняет состояние.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-05-q3",
+      "type": "multiple-choice",
+      "question": "Почему Outbox-паттерн гарантирует атомарность, тогда как прямая отправка в Kafka (dual-write) -- нет? Какой механизм обеспечивает эту гарантию?",
+      "options": [
+        { "id": "a", "text": "Outbox использует Kafka transactions для обеспечения exactly-once записи в БД и Kafka одновременно" },
+        { "id": "b", "text": "Outbox сводит два независимых write к одному: UPDATE бизнес-данных и INSERT в outbox-таблицу выполняются в одной транзакции БД, а CDC (Debezium) асинхронно доставляет событие из WAL" },
+        { "id": "c", "text": "Outbox блокирует Kafka producer до завершения транзакции БД через distributed lock" },
+        { "id": "d", "text": "Outbox использует двухфазный коммит (2PC) между PostgreSQL и Kafka для атомарности" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Ключевая идея Outbox-паттерна: один write вместо двух. UPDATE бизнес-данных + INSERT в outbox выполняются в одной транзакции БД -- если COMMIT успешен, оба write гарантированно зафиксированы (атомарность ACID). Debezium читает WAL и асинхронно доставляет событие из outbox в Kafka. Outbox НЕ использует distributed transactions (2PC) и НЕ гарантирует exactly-once (только at-least-once). Вариант A неверен: Kafka transactions -- отдельный механизм, не связанный с БД-транзакциями.",
+      "hint": "Подумайте о scope транзакции: dual-write охватывает два независимых ресурса (БД и Kafka), а Outbox сводит проблему к одному ресурсу. Какой механизм обеспечивает атомарность в рамках одного ресурса?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m05-05-q4",
+      "type": "multiple-choice",
+      "question": "Outbox-паттерн гарантирует at-least-once доставку событий. Почему consumers обязаны быть идемпотентными, и какой паттерн обеспечивает идемпотентность?",
+      "options": [
+        { "id": "a", "text": "Consumers должны быть идемпотентными, потому что Outbox может записать дубликат события в outbox-таблицу. Паттерн: проверка aggregateid перед обработкой" },
+        { "id": "b", "text": "Consumers должны быть идемпотентными, потому что Debezium может повторно прочитать WAL-сегмент (например, после restart), доставив одно и то же событие дважды. Паттерн: deduplication по event ID (поле id из outbox) с хранением обработанных ID в БД или Redis" },
+        { "id": "c", "text": "Consumers не обязаны быть идемпотентными -- Outbox гарантирует exactly-once через Kafka idempotent producer" },
+        { "id": "d", "text": "Consumers должны быть идемпотентными из-за network partitions между Kafka brokers. Паттерн: использование Kafka transactions на стороне consumer" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "At-least-once delivery означает: событие доставится минимум один раз, возможно больше. Debezium может повторно обработать WAL-сегмент после restart или failover, доставив дубликат. Consumer реализует deduplication: сохраняет event ID (UUID из поля id outbox-таблицы) в таблицу processed_events и проверяет перед обработкой. Если event ID уже обработан -- пропускает. Вариант C неверен: Kafka idempotent producer предотвращает дубликаты только на уровне producer -> broker, не на уровне CDC -> consumer.",
+      "hint": "Рассмотрите, что происходит при restart Debezium: оффсет может указывать на уже обработанные WAL-записи. Какие данные из outbox-события позволяют consumer определить, было ли оно уже обработано?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

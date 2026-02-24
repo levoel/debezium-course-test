@@ -5,5 +5,58 @@
     "idPrefix": "m05-08",
     "description": "Use IDs: m05-08-q1, m05-08-q2, ... for MC/TF; m05-08-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m05-08-q1",
+      "type": "true-false",
+      "question": "При BACKWARD compatibility mode новая версия schema гарантирует, что старые consumers (использующие предыдущую версию schema) смогут читать данные, записанные по новой schema.",
+      "correctAnswer": true,
+      "explanation": "BACKWARD compatibility (режим по умолчанию в Schema Registry) гарантирует именно это: old consumer + new data = compatible. Старый consumer-код может десериализовать сообщения, записанные по новой schema, игнорируя неизвестные поля. Это позволяет обновлять producers (Debezium) до обновления consumers. Обратное направление (new consumer + old data) НЕ гарантировано в BACKWARD mode -- для этого нужен FULL mode.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m05-08-q2",
+      "type": "multiple-choice",
+      "question": "В PostgreSQL выполнена операция ALTER TABLE customers ADD COLUMN phone VARCHAR(20) DEFAULT NULL. Debezium с Avro converter и Schema Registry в BACKWARD mode работает на этой таблице. Является ли это изменение backward compatible?",
+      "options": [
+        { "id": "a", "text": "Нет -- любое добавление колонки ломает BACKWARD compatibility" },
+        { "id": "b", "text": "Да -- Debezium сгенерирует Avro schema с полем phone: [\"null\", \"string\"] (nullable с default null), что является safe change для BACKWARD mode, так как старые consumers просто игнорируют новое поле" },
+        { "id": "c", "text": "Да, но только если consumer использует FORWARD mode" },
+        { "id": "d", "text": "Зависит от версии Debezium -- в 2.x nullable колонки обрабатываются иначе" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Добавление nullable колонки с DEFAULT NULL -- единственное безопасное изменение, совместимое со всеми compatibility modes (BACKWARD, FORWARD, FULL). Debezium автоматически генерирует Avro schema с union type [\"null\", \"string\"] и default: null для nullable PostgreSQL колонок. Schema Registry проверяет BACKWARD compatibility и принимает новую schema: старые consumers не знают о поле phone и просто игнорируют его при десериализации. Если бы колонка была NOT NULL (без default), Schema Registry отклонил бы schema как несовместимую.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-08-q3",
+      "type": "multiple-choice",
+      "question": "Команде нужно переименовать колонку email в contact_email в таблице с активным CDC. Это breaking schema change. Какая стратегия миграции сохранит работоспособность CDC pipeline?",
+      "options": [
+        { "id": "a", "text": "Выполнить ALTER TABLE RENAME COLUMN email TO contact_email и перезапустить Debezium -- Schema Registry автоматически обработает переименование" },
+        { "id": "b", "text": "Добавить колонку contact_email (nullable), backfill данные из email, обновить consumers для чтения contact_email, затем удалить email -- поэтапная миграция без breaking change" },
+        { "id": "c", "text": "Установить compatibility mode в NONE, переименовать колонку, затем вернуть BACKWARD" },
+        { "id": "d", "text": "Использовать Avro aliases для маппинга email -> contact_email на уровне Schema Registry" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Переименование колонки в Avro воспринимается как DELETE old field + ADD new field, что не проходит BACKWARD compatibility check. Правильная стратегия: (1) ADD COLUMN contact_email nullable; (2) backfill: UPDATE SET contact_email = email; (3) обновить consumers для чтения contact_email; (4) DROP COLUMN email. Каждый шаг по отдельности -- safe change. Вариант C (NONE mode) опасен: отключение проверок позволяет зарегистрировать любую schema, но сломанные consumers не будут обнаружены до runtime. Вариант D: Avro aliases работают теоретически, но Debezium auto-generated schemas их не используют.",
+      "hint": "Подумайте о том, как Schema Registry интерпретирует переименование поля в Avro schema. Если старое поле исчезает и появляется новое с другим именем -- какие это два отдельных изменения? Можно ли разбить 'переименование' на последовательность safe changes?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m05-08-q4",
+      "type": "multiple-choice",
+      "question": "Сравните BACKWARD и FULL compatibility modes для CDC pipeline. Когда FULL mode оправдан, несмотря на более строгие ограничения?",
+      "options": [
+        { "id": "a", "text": "FULL mode всегда лучше BACKWARD, так как обеспечивает двустороннюю совместимость. Ограничений нет -- все изменения, допустимые в BACKWARD, допустимы в FULL" },
+        { "id": "b", "text": "FULL mode оправдан, когда producers и consumers обновляются независимо (нет контроля над порядком deployment). Цена: нельзя удалять required поля (допустимо в BACKWARD), только optional поля с default" },
+        { "id": "c", "text": "FULL mode нужен только для multi-datacenter репликации. В single-cluster BACKWARD достаточен" },
+        { "id": "d", "text": "FULL mode автоматически мигрирует данные между версиями schema, устраняя необходимость ручной миграции" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "BACKWARD гарантирует: old consumer + new data = OK. FULL гарантирует оба направления: old consumer + new data = OK, И new consumer + old data = OK. FULL mode необходим, когда нет контроля над порядком обновлений -- например, в multi-team окружении, где producer и consumer деплоятся разными командами. Цена FULL: более строгие ограничения -- допускается только добавление/удаление optional полей с default value. В BACKWARD mode можно удалять required поля (старый consumer использует default), но в FULL это запрещено (новый consumer не сможет прочитать старые данные без required поля).",
+      "hint": "Рассмотрите два сценария deployment: (1) вы контролируете порядок обновления consumers -> producers, и (2) producers и consumers обновляются независимо разными командами. В каком сценарии BACKWARD недостаточен?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

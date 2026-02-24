@@ -5,5 +5,35 @@
     "idPrefix": "m05-06",
     "description": "Use IDs: m05-06-q1, m05-06-q2, ... for MC/TF; m05-06-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m05-06-q1",
+      "type": "multiple-choice",
+      "question": "Outbox Event Router SMT по умолчанию удаляет (игнорирует) DELETE-события из outbox-таблицы. Почему это правильное поведение, и что произойдет, если router будет обрабатывать DELETE-события?",
+      "options": [
+        { "id": "a", "text": "DELETE-события из outbox -- это cleanup mechanism (удаление обработанных записей), а не бизнес-события. Если router обработает DELETE, downstream consumers получат пустое событие без payload, что вызовет ошибки десериализации" },
+        { "id": "b", "text": "DELETE-события содержат только ключ (id) без полей aggregatetype и payload. Router не сможет определить целевой топик и упадет с ошибкой маршрутизации" },
+        { "id": "c", "text": "DELETE в outbox не генерирует WAL-записей, поэтому Debezium их не видит" },
+        { "id": "d", "text": "DELETE-события безопасны для обработки, но router игнорирует их для экономии throughput" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "В Outbox-паттерне записи в outbox-таблице удаляются после того, как Debezium захватил INSERT (Strategy 1: DELETE в той же транзакции, или Strategy 2: external cleanup job). DELETE -- это механизм очистки, не несущий бизнес-смысла. Debezium видит INSERT в WAL, Event Router маршрутизирует payload в целевой топик. Следующий DELETE в WAL игнорируется router. Если бы router обрабатывал DELETE, consumers получили бы события без payload (after = null в DELETE), что не является валидным domain event.",
+      "hint": "Вспомните две стратегии очистки outbox-таблицы из теоретического урока. Какую роль играет DELETE в жизненном цикле outbox-записи? Это бизнес-событие или техническая операция?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m05-06-q2",
+      "type": "multiple-choice",
+      "question": "В outbox-таблице есть поле aggregatetype (например, 'Order', 'Customer', 'Payment'). Какова его роль в Outbox Event Router SMT?",
+      "options": [
+        { "id": "a", "text": "aggregatetype определяет формат сериализации payload (JSON, Avro, Protobuf)" },
+        { "id": "b", "text": "aggregatetype используется для маршрутизации: значение поля подставляется в шаблон топика (route.topic.replacement), например 'Order' -> outbox.event.Order, обеспечивая разделение domain events по типу entity" },
+        { "id": "c", "text": "aggregatetype используется как Kafka partition key для равномерного распределения событий" },
+        { "id": "d", "text": "aggregatetype нужен только для документирования -- Event Router его не использует" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Параметр route.by.field указывает Event Router, какое поле outbox-таблицы определяет целевой топик. При route.by.field=aggregatetype и route.topic.replacement=outbox.event.${routedByValue}, значение aggregatetype подставляется в шаблон: 'Order' -> outbox.event.Order, 'Customer' -> outbox.event.Customer. Это позволяет одной outbox-таблице обслуживать несколько типов domain events с маршрутизацией в отдельные топики. Kafka partition key определяется полем aggregateid (table.field.event.key), а не aggregatetype.",
+      "bloomLevel": "applied"
+    }
+  ]
 }

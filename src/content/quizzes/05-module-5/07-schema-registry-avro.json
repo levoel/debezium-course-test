@@ -5,5 +5,63 @@
     "idPrefix": "m05-07",
     "description": "Use IDs: m05-07-q1, m05-07-q2, ... for MC/TF; m05-07-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m05-07-q1",
+      "type": "multiple-choice",
+      "question": "Какие две ключевые проблемы JSON-сериализации в CDC pipeline решает комбинация Avro + Schema Registry?",
+      "options": [
+        { "id": "a", "text": "Низкая скорость чтения WAL и отсутствие шифрования данных" },
+        { "id": "b", "text": "Отсутствие schema enforcement (producer может отправить некорректные данные) и большой размер сообщений (каждое содержит полные имена полей)" },
+        { "id": "c", "text": "Невозможность маршрутизации событий и отсутствие предикатов для фильтрации" },
+        { "id": "d", "text": "Ограничение на количество топиков и отсутствие поддержки мультиязычных consumers" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "JSON-сериализация имеет два ключевых недостатка для production CDC: (1) нет schema enforcement -- producer может отправить событие с пропущенными или некорректными полями, и ошибка обнаружится только при десериализации на стороне consumer; (2) каждое JSON-сообщение повторяет полные имена полей, что увеличивает размер на ~50% по сравнению с Avro, где данные сериализуются в binary-формат с использованием schema ID (5 bytes вместо полных имен). Schema Registry добавляет centralized schema management и compatibility enforcement.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m05-07-q2",
+      "type": "multiple-choice",
+      "question": "Дана конфигурация Debezium коннектора для Avro сериализации:\n\n```\n\"key.converter\": \"io.confluent.connect.avro.AvroConverter\",\n\"key.converter.schema.registry.url\": \"http://schema-registry:8081\",\n\"value.converter\": \"io.confluent.connect.avro.AvroConverter\",\n\"value.converter.schema.registry.url\": \"http://schema-registry:8081\"\n```\n\nЧто произойдет, если Schema Registry недоступен при запуске коннектора?",
+      "options": [
+        { "id": "a", "text": "Коннектор запустится и будет использовать JSON fallback до восстановления Schema Registry" },
+        { "id": "b", "text": "Коннектор не сможет сериализовать первое сообщение, так как AvroConverter обращается к Schema Registry для регистрации schema и получения schema ID -- коннектор перейдет в FAILED state" },
+        { "id": "c", "text": "Коннектор запустится, но будет буферизовать сообщения в памяти до восстановления Registry" },
+        { "id": "d", "text": "Коннектор запустится с последней кешированной схемой из локального хранилища" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "AvroConverter при сериализации первого сообщения извлекает Avro schema из CDC-события и отправляет её в Schema Registry для регистрации (или проверки). Если Registry недоступен, converter не может получить schema ID, необходимый для binary Avro формата (magic byte + schema ID + data). Без schema ID сериализация невозможна, и Kafka Connect task переходит в FAILED state. Вариант A неверен: AvroConverter не поддерживает automatic fallback на JSON. В production рекомендуется обеспечить высокую доступность Schema Registry.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-07-q3",
+      "type": "multiple-choice",
+      "question": "Avro binary сообщение в Kafka начинается с 5 bytes: magic byte (0x00) + 4-byte schema ID. Как consumer использует эту информацию для десериализации?",
+      "options": [
+        { "id": "a", "text": "Consumer игнорирует schema ID и всегда использует latest schema из Registry" },
+        { "id": "b", "text": "Consumer извлекает 4-byte schema ID, запрашивает Schema Registry по ID (GET /schemas/ids/{id}), получает Avro schema и использует её для десериализации binary payload. Schema кешируется для последующих сообщений с тем же ID" },
+        { "id": "c", "text": "Consumer использует schema ID только для проверки версии, а десериализацию выполняет по имени топика" },
+        { "id": "d", "text": "Schema ID указывает consumer, какой тип сериализации использовать: JSON, Avro или Protobuf" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Формат Avro сообщения в Kafka: [0x00][4-byte schema ID][binary data]. Consumer-side AvroDeserializer: (1) читает magic byte 0x00 (подтверждает Avro формат); (2) извлекает 4-byte schema ID; (3) запрашивает Schema Registry: GET /schemas/ids/{id}; (4) получает полную Avro schema; (5) десериализует binary data с использованием schema. Schema кешируется на стороне consumer, поэтому повторные запросы к Registry не нужны для сообщений с тем же schema ID. Это обеспечивает compact serialization без повторения schema в каждом сообщении.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-07-q4",
+      "type": "multiple-choice",
+      "question": "Команда переключила Debezium коннектор с JSON converter на Avro converter. После переключения некоторые consumers перестали обрабатывать события. Какая наиболее вероятная причина и как её исправить?",
+      "options": [
+        { "id": "a", "text": "Avro converter изменил имена топиков. Исправление: обновить подписки consumers на новые топики" },
+        { "id": "b", "text": "Consumers всё ещё используют JSON deserializer (JsonDeserializer) и не могут распарсить binary Avro данные. Исправление: обновить consumers для использования AvroDeserializer с настроенным schema.registry.url" },
+        { "id": "c", "text": "Schema Registry отклонил Avro schema как несовместимую с JSON schema. Исправление: удалить JSON schema из Registry" },
+        { "id": "d", "text": "Avro converter удалил поле op из CDC событий. Исправление: добавить add.fields в конфигурацию converter" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "При переключении с JSON на Avro converter данные в топике меняют формат с текстового JSON на binary Avro. Consumers, использующие JsonDeserializer, получают binary payload и не могут его распарсить (garbage characters или exception). Исправление: обновить каждый consumer для использования io.confluent.kafka.serializers.KafkaAvroDeserializer с параметром schema.registry.url. Это требует координированного обновления: сначала создать новые consumers (или обновить десериализатор), затем переключить connector. Вариант A неверен: converter не влияет на имена топиков.",
+      "hint": "Подумайте о том, что видит consumer: при JSON он получал текстовые данные ({\"id\": 1, ...}), а после переключения получает binary payload. Какой компонент на стороне consumer отвечает за преобразование binary данных обратно в объект?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
