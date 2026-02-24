@@ -5,5 +5,155 @@
     "idPrefix": "exam-m04",
     "description": "Use IDs: exam-m04-q1, exam-m04-q2, ... (8-10 analytical questions)"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "exam-m04-q1",
+      "type": "multiple-choice",
+      "question": "Мониторинг показывает: MilliSecondsBehindSource растет на 2 секунды каждую минуту, а pg_wal_lsn_diff() для replication slot увеличивается на 500 МБ/час. QueueRemainingCapacity стабильно на уровне 7000 из 8192. Где находится проблема и каков план remediation?",
+      "options": [
+        { "id": "a", "text": "Проблема в Kafka -- очередь заполнена, события не отправляются. Нужно увеличить max.queue.size" },
+        { "id": "b", "text": "WAL reader не успевает обрабатывать транзакции (Queue не заполнен, значит bottleneck до очереди). План: (1) проверить наличие больших транзакций или LOB-колонок, (2) проверить нагрузку на PostgreSQL, (3) при необходимости разделить таблицы на несколько коннекторов; параллельно мониторить WAL retention через wal_status для предотвращения slot invalidation" },
+        { "id": "c", "text": "Коннектор потерял соединение с БД. Нужно проверить Connected метрику и перезапустить task" },
+        { "id": "d", "text": "WAL bloat -- нужно немедленно удалить replication slot для освобождения места" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 01 (интерпретация метрик), 05 (WAL bloat) и 04 (alerting). QueueRemainingCapacity = 7000/8192 означает, что очередь почти пуста -- Kafka забирает события быстро. Значит bottleneck НЕ в записи в Kafka, а в чтении WAL (до очереди). Растущий lag при низком Queue utilization -- классический признак WAL read bottleneck: большие транзакции, LOB-колонки или сложные transforms замедляют обработку. Параллельно WAL retention растет, что создает риск slot invalidation при достижении max_slot_wal_keep_size. Вариант A ошибочен -- Queue не заполнен, backpressure нет. Вариант D опасен -- удаление slot потеряет все накопленные данные.",
+      "hint": "Queue utilization показывает, где bottleneck: высокий = Kafka медленный, низкий = WAL reader медленный. Какой компонент pipeline находится ДО очереди? Какие факторы могут замедлить чтение WAL?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m04-q2",
+      "type": "multiple-choice",
+      "question": "Дана Prometheus панель с тремя метриками за последние 30 минут:\n\n- MilliSecondsBehindSource: стабильно 500ms\n- QueueRemainingCapacity: 0 (ноль)\n- rate(TotalNumberOfEventsSeen[5m]): 0 events/sec\n\nКакое состояние коннектора эти метрики описывают и какой диагностический шаг критически необходим?",
+      "options": [
+        { "id": "a", "text": "Коннектор здоров -- lag 500ms это норма, Queue пуст потому что все события обработаны" },
+        { "id": "b", "text": "Полный backpressure -- Queue заполнен до отказа (0 remaining), но MilliSecondsBehindSource замерла на старом значении 500ms, потому что новых событий нет (throughput = 0). Критический шаг: проверить MilliSecondsSinceLastEvent и Connected -- коннектор может быть отключен или Kafka недоступен" },
+        { "id": "c", "text": "Коннектор только что завершил snapshot -- все метрики сбрасываются к начальным значениям" },
+        { "id": "d", "text": "Prometheus потерял связь с JMX Exporter -- все данные устаревшие" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 01 (метрики и их взаимосвязь), 02 (PromQL) и 03 (дашборд интерпретация). QueueRemainingCapacity = 0 означает очередь ПОЛНОСТЬЮ заполнена -- критический backpressure. Но throughput = 0 events/sec означает, что события не проходят через pipeline. MilliSecondsBehindSource = 500ms -- это 'замороженное' значение от последнего обработанного события, которое не обновляется без новых событий. Эта комбинация указывает на полную блокировку: WAL reader заполнил очередь, но Kafka writer не может отправить данные. Вариант A ошибочен -- QueueRemainingCapacity = 0 означает ПОЛНУЮ очередь, а не пустую (для пустой QueueRemaining = QueueTotal).",
+      "hint": "Обратите внимание на разницу: QueueRemainingCapacity = 0 означает 0 свободного места (очередь ПОЛНАЯ), а не 0 занятого. MilliSecondsBehindSource обновляется только при получении событий. Если throughput = 0 -- когда было измерено значение 500ms?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m04-q3",
+      "type": "multiple-choice",
+      "question": "Команда увеличивает tasks.max до 4, чтобы справиться с растущим потоком 50,000 events/sec от PostgreSQL. После деплоя throughput не изменился. Какова архитектурная причина и какой подход действительно решит проблему?",
+      "options": [
+        { "id": "a", "text": "tasks.max=4 работает, но нужно перезапустить Kafka Connect кластер для применения изменений" },
+        { "id": "b", "text": "PostgreSQL коннектор всегда использует 1 task (WAL -- последовательный журнал с одной точкой чтения). Для 50K events/sec нужно: разделить таблицы на несколько коннекторов (каждый со своим slot) + downstream параллелизация через Kafka partitions + consumer group instances" },
+        { "id": "c", "text": "tasks.max=4 увеличивает throughput, но PostgreSQL WAL не генерирует достаточно данных для 4 tasks" },
+        { "id": "d", "text": "Нужно переключиться на MongoDB коннектор, который поддерживает параллелизм" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 06 (масштабирование) и 07 (DR -- разделение коннекторов). PostgreSQL WAL -- последовательный журнал с единой точкой чтения через replication slot. Logical decoding читает WAL строго по порядку от restart_lsn. tasks.max для PostgreSQL коннектора ВСЕГДА = 1, независимо от настройки. Для достижения 50K events/sec при потолке ~7K/коннектор: (1) разделить таблицы на 8-10 коннекторов по доменам/SLO (каждый со своим slot), (2) настроить Kafka topics с достаточным количеством партиций, (3) использовать consumer group с N instances для параллельной обработки. Вариант C ошибочен: WAL генерирует достаточно данных, ограничение -- скорость чтения.",
+      "hint": "Вспомните архитектуру: WAL читается последовательно, slot отслеживает одну позицию. Как физические свойства WAL ограничивают параллелизм? Где именно в pipeline можно добавить параллелизм?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m04-q4",
+      "type": "multiple-choice",
+      "question": "Low-traffic таблица audit_log обновляется раз в неделю. Alert MilliSecondsSinceLastEvent > 300s срабатывает каждые 5 минут для коннектора, мониторящего эту таблицу. Является ли это реальной проблемой или ложным срабатыванием? Как отличить и какое решение предотвратит оба сценария?",
+      "options": [
+        { "id": "a", "text": "Всегда ложное срабатывание -- 300s тишины нормально для low-traffic таблиц. Нужно увеличить порог до 1 часа" },
+        { "id": "b", "text": "Всегда реальная проблема -- если MilliSecondsSinceLastEvent > 300s, коннектор сломан" },
+        { "id": "c", "text": "Без heartbeat невозможно отличить: тишина может означать 'нет транзакций' (норма) или 'slot не продвигается, WAL растет' (проблема). Решение: настроить heartbeat.interval.ms = 10000 -- heartbeat генерирует synthetic events каждые 10s, обновляя метрики и продвигая slot. После этого MilliSecondsSinceLastEvent > 300s однозначно означает проблему" },
+        { "id": "d", "text": "Нужно создать отдельный алерт для low-traffic таблиц с увеличенным порогом" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Этот сценарий объединяет концепции из уроков 04 (alerting, false alarms) и 05 (heartbeat, low-traffic problem). Без heartbeat MilliSecondsSinceLastEvent растет при ЛЮБОМ отсутствии событий -- как при нормальном простое, так и при проблемах коннектора. Это делает алерт бесполезным для low-traffic таблиц. Heartbeat решает обе проблемы: (1) synthetic events каждые 10s обновляют метрики, делая MilliSecondsSinceLastEvent > 300s однозначным сигналом проблемы; (2) heartbeat продвигает slot, предотвращая WAL bloat от низкоактивных таблиц. Вариант A опасен: увеличение порога до часа может скрыть реальную проблему с растущим WAL.",
+      "hint": "Ключевой вопрос: как отличить 'нет транзакций в таблице' от 'коннектор не обрабатывает события'? Какой механизм создает гарантированный поток событий независимо от активности таблиц?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m04-q5",
+      "type": "multiple-choice",
+      "question": "Kafka кластер потерян. Offsets утрачены. PostgreSQL replication slot debezium_orders существует (active=false), wal_status='reserved', retained WAL = 150 ГБ. Какая последовательность действий приведет к корректному восстановлению CDC?",
+      "options": [
+        { "id": "a", "text": "Удалить slot, восстановить Kafka, пересоздать коннектор -- он выполнит full resnapshot с чистого состояния" },
+        { "id": "b", "text": "Восстановить Kafka из backup -> проверить connect-offsets (если offsets есть и совпадают с позицией slot -- пересоздать коннектор для продолжения; если нет -- удалить slot и resnapshot). В обоих случаях мониторить WAL retention: 150 ГБ создает риск disk exhaustion до завершения восстановления" },
+        { "id": "c", "text": "Немедленно запустить коннектор -- Debezium автоматически обнаружит потерю Kafka и выполнит resnapshot" },
+        { "id": "d", "text": "Подождать -- PostgreSQL автоматически удалит slot и освободит 150 ГБ WAL через 24 часа" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет уроки 07 (DR procedures, offset restore), 05 (WAL management, slot invalidation risk) и 01 (мониторинг). Последовательность критична: (1) Kafka должен быть восстановлен первым -- коннектор при запуске читает offsets из connect-offsets. (2) Проверка offsets определяет стратегию: если backup offsets совпадают с restart_lsn slot -- можно продолжить без потерь; если offsets потеряны -- resnapshot неизбежен. (3) 150 ГБ WAL -- серьезный риск: пока slot существует, WAL продолжает расти. Если восстановление займет долго, disk может заполниться. Нужно мониторить pg_wal и при необходимости установить max_slot_wal_keep_size. Вариант A потеряет возможность продолжить без resnapshot, если offsets восстановимы.",
+      "hint": "Разделите проблему на три части: (1) восстановление инфраструктуры (что запускать первым?), (2) согласование состояния (offsets vs slot position), (3) защита от побочных эффектов (150 ГБ WAL продолжает расти). В каком порядке решать?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m04-q6",
+      "type": "multiple-choice",
+      "question": "Команда проектирует мониторинг для 10 Debezium коннекторов, обслуживающих 3 базы данных PostgreSQL. Каждый коннектор мониторит 10-50 таблиц. Какая архитектура мониторинга обеспечит масштабируемость и операционную эффективность?",
+      "options": [
+        { "id": "a", "text": "Один Prometheus с scrape_interval 1s для максимальной детализации по всем 10 коннекторам" },
+        { "id": "b", "text": "Отдельный Prometheus + Grafana для каждой базы данных (3 стека мониторинга)" },
+        { "id": "c", "text": "Один Prometheus (scrape_interval 15s), JMX Exporter на каждом Connect worker, metric_relabel_configs для фильтрации по debezium_* и kafka_connect_*. Grafana с переменной $connector для drill-down. Dashboard layout: Row 1 -- aggregated health (max lag across all connectors), Row 2 -- per-connector trends, Row 3 -- per-database slot health. Alerting: 2-level (warning/critical) с notification routing по severity" },
+        { "id": "d", "text": "Только логи Kafka Connect достаточны для мониторинга -- метрики избыточны" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Этот сценарий объединяет уроки 01 (JMX метрики), 02 (Prometheus конфигурация, cardinality), 03 (Grafana dashboard layout) и 04 (alerting hierarchy). Централизованный Prometheus с 15s scrape -- оптимальный баланс: при 10 коннекторах 1s interval создаст избыточную нагрузку без улучшения alerting (вариант A). metric_relabel_configs критичны для cardinality: 10 коннекторов x JVM метрики = тысячи ненужных series без фильтрации. Переменная $connector в Grafana позволяет видеть как общую картину (max lag by connector), так и drill-down в конкретный коннектор. 3 отдельных стека (вариант B) дублируют инфраструктуру и усложняют корреляцию cross-database проблем.",
+      "hint": "Рассмотрите три измерения: cardinality (10 коннекторов x N метрик), операционная эффективность (один стек vs несколько), drill-down capability (от общей картины к конкретному коннектору). Какая архитектура оптимизирует все три?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m04-q7",
+      "type": "multiple-choice",
+      "question": "CDC SLO установлен в 30 секунд. Команда проектирует пороги алертов. Учитывая, что batch INSERT может создавать spike lag до 20 секунд длительностью 3-4 минуты, какая конфигурация info/warning/critical порогов оптимальна?",
+      "options": [
+        { "id": "a", "text": "Warning: lag > 1s, for: 30s; Critical: lag > 30s, for: 1m -- реагируем максимально быстро" },
+        { "id": "b", "text": "Warning: lag > 5s, for: 2m; Critical: lag > 30s, for: 5m. Warning отфильтрует batch spikes (20s < 5s * 2min window не выполняется, но устойчивый 5s+ lag за 2 минуты сигнализирует проблему). Critical на 30s/5min означает устойчивое нарушение SLO" },
+        { "id": "c", "text": "Только Critical: lag > 30s, for: 0s -- единственный алерт при нарушении SLO" },
+        { "id": "d", "text": "Info: lag > 1s, for: 1m; Warning: lag > 10s, for: 3m; Critical: lag > 25s, for: 5m -- три уровня для максимальной гранулярности" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет уроки 01 (понимание lag метрики) и 04 (alerting design, SLO, for clause). Warning 5s/2min: batch INSERT создает spike до 20s, но Debezium обрабатывает backlog и lag снижается за 3-4 минуты. Если lag > 5s устойчиво 2 минуты -- это не batch spike, а реальная проблема, дающая время среагировать до SLO breach. Critical 30s/5min: 5 минут устойчивого lag > 30s означает, что SLO однозначно нарушен, и это не кратковременный spike. Вариант A создает alert fatigue: Warning на 1s/30s сработает при каждом batch. Вариант C без 'for' clause (0s) будет срабатывать мгновенно на каждый spike. Вариант D с тремя уровнями и Critical на 25s (ниже SLO) будет алертить до фактического нарушения.",
+      "hint": "Ключевые параметры: SLO = 30s, batch spike = 20s на 3-4 минуты. Warning должен отфильтровать batch spikes, но поймать устойчивую проблему. Critical должен означать 'SLO нарушен однозначно'. Как 'for' clause помогает отличить spike от проблемы?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m04-q8",
+      "type": "multiple-choice",
+      "question": "PostgreSQL с 200 таблицами требует sub-second CDC. Один коннектор обрабатывает 15,000 events/sec. Целевая нагрузка вырастет до 50,000 events/sec. Какой подход к масштабированию наиболее эффективен?",
+      "options": [
+        { "id": "a", "text": "Увеличить tasks.max до 4 и max.queue.size до 65536 -- четырехкратный параллелизм решит проблему" },
+        { "id": "b", "text": "Один коннектор с performance tuning (max.queue.size=16384, max.batch.size=4096, lz4 compression) для максимизации throughput до ~7K/sec. Для остальных 43K/sec -- разделить таблицы на 4-5 коннекторов по доменам (каждый со своим slot), настроить Kafka topics с 8+ партиций, consumer group с масштабированием instances" },
+        { "id": "c", "text": "Создать 50 коннекторов -- по одному на каждые 4 таблицы" },
+        { "id": "d", "text": "Переключиться на polling (timestamp-based CDC) -- он масштабируется линейно" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет уроки 06 (scaling strategies, performance ceiling) и 01 (throughput мониторинг). Performance ceiling одного PostgreSQL коннектора -- ~7K events/sec. Performance tuning (queue size, batch size, compression) максимизирует единичный коннектор, но не пробьет потолок. Для 50K events/sec нужно 7-8 коннекторов с параллельной обработкой. Разделение по доменам (orders, payments, inventory) обеспечивает failure isolation и per-domain мониторинг. Downstream parallelization через Kafka partitions + consumer group масштабирует обработку. tasks.max (вариант A) не работает для PostgreSQL. 50 коннекторов (вариант C) -- excessive: 50 slots создают огромный WAL retention overhead. Polling (вариант D) теряет гарантии log-based CDC.",
+      "hint": "Начните с потолка: один коннектор ~7K events/sec. Сколько коннекторов нужно для 50K? Как минимизировать WAL overhead при нескольких коннекторах? Где добавить параллелизм без увеличения числа slots?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m04-q9",
+      "type": "multiple-choice",
+      "question": "Спроектируйте многослойную защиту от WAL bloat для production CDC: max_slot_wal_keep_size + heartbeat + мониторинг. Какова роль каждого слоя и почему все три необходимы одновременно?",
+      "options": [
+        { "id": "a", "text": "Достаточно одного max_slot_wal_keep_size -- он жестко ограничивает WAL и защищает от всех сценариев" },
+        { "id": "b", "text": "Heartbeat (активная защита) продвигает slot при отсутствии транзакций -- предотвращает WAL bloat от low-traffic таблиц. max_slot_wal_keep_size (пассивная защита) -- жесткий лимит на случай отказа коннектора, когда heartbeat не выполняется. Мониторинг (observability) -- раннее обнаружение через wal_status и retained_bytes для реагирования до срабатывания жесткого лимита. Один heartbeat не защитит при остановке коннектора; один лимит вызовет resnapshot без раннего предупреждения; без мониторинга проблема обнаружится только при outage" },
+        { "id": "c", "text": "Heartbeat и мониторинг достаточны -- max_slot_wal_keep_size слишком рискован, так как инвалидирует slot" },
+        { "id": "d", "text": "Все три слоя делают одно и то же -- ограничивают размер WAL, поэтому достаточно любого одного" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет уроки 05 (multilayer defense, heartbeat, max_slot_wal_keep_size) и 04 (alerting на WAL retention). Каждый слой покрывает уникальный failure mode: Heartbeat защищает от low-traffic scenario (slot не продвигается при нормальной работе коннектора). max_slot_wal_keep_size защищает от abandoned/crashed коннектора (heartbeat не выполняется, WAL растет без ограничений). Мониторинг защищает от слепой зоны: дает время среагировать ДО инвалидации slot (alert на retained_bytes > 1ГБ предупреждает задолго до лимита 10ГБ). Вариант A: без heartbeat low-traffic таблица вызовет WAL bloat до лимита -> resnapshot -> downtime. Вариант C: без max_slot_wal_keep_size crashed коннектор заполнит диск независимо от мониторинга.",
+      "hint": "Для каждого слоя найдите failure mode, от которого он защищает: что произойдет, если убрать heartbeat? А если убрать max_slot_wal_keep_size? А если нет мониторинга? Пересекаются ли эти failure modes?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m04-q10",
+      "type": "multiple-choice",
+      "question": "Почему утверждение 'untested DR is no DR' особенно критично для CDC pipeline по сравнению со стандартными stateless-приложениями?",
+      "options": [
+        { "id": "a", "text": "CDC pipeline перезапускается дольше из-за Java Virtual Machine -- нужно тестировать время старта" },
+        { "id": "b", "text": "CDC имеет распределенное состояние (offsets в Kafka + replication slot в PostgreSQL), которое должно быть согласовано. При некорректном восстановлении pipeline выглядит работающим, но тихо создает дубли или пропуски данных -- проблема обнаруживается через часы или дни downstream. В отличие от stateless-сервиса, который при неудачном DR просто не запускается, CDC с рассогласованным состоянием является 'скрытой бомбой'" },
+        { "id": "c", "text": "CDC использует больше ресурсов, чем stateless-сервисы, поэтому DR занимает больше времени" },
+        { "id": "d", "text": "Нет принципиальной разницы -- DR одинаково важен для всех систем" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот вопрос объединяет философию из урока 07 (DR procedures, distributed state) с операционным контекстом всего модуля. CDC pipeline уникально уязвим: его состояние распределено между двумя независимыми системами -- offsets в connect-offsets (Kafka) указывают LSN позицию, а slot в PostgreSQL удерживает WAL от restart_lsn. Эти два состояния должны быть согласованы: если offset указывает на позицию, которую slot уже 'забыл' -- данные потеряны без видимой ошибки. Если offset старше реального -- дубли. Stateless-сервис при неудачном восстановлении очевидно не работает. CDC с рассогласованным состоянием ВЫГЛЯДИТ работающим, но downstream получает неконсистентные данные.",
+      "bloomLevel": "conceptual"
+    }
+  ]
 }
