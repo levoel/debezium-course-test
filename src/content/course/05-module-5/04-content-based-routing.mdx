@@ -256,6 +256,11 @@ CREATE TABLE public.events (
 - `tenant_id = 'acme'` → топик `events-acme`
 - `tenant_id = 'globex'` → топик `events-globex`
 
+<KnowledgeCheck
+  question="Чем отличается ByLogicalTableRouter от ContentBasedRouter? В каком сценарии нужен каждый?"
+  answer="ByLogicalTableRouter маршрутизирует по имени топика (regex на имя таблицы) -- используется для объединения sharded таблиц в один топик. ContentBasedRouter маршрутизирует по значению поля в событии (Groovy expression) -- используется для multi-tenant routing, региональной маршрутизации, priority queues. Например, consolidation customers_shard_0/1/2 в один топик -- ByLogicalTableRouter, а routing по region EU/US -- ContentBasedRouter."
+/>
+
 ## Предикаты: Routing с защитой от ошибок
 
 **Проблема:** ContentBasedRouter применяется ко **всем событиям**, включая heartbeat и tombstone, у которых нет поля `after`.
@@ -414,6 +419,11 @@ consumer.subscribe(['orders-us'])
 ```
 
 **Преимущество:** Каждый региональный consumer обрабатывает только релевантные события, без фильтрации в application logic.
+
+<KnowledgeCheck
+  question="Почему null safety критична для ContentBasedRouter? Что произойдет с выражением value.region == 'EU', если поле region содержит NULL?"
+  answer="Groovy не может выполнить операцию сравнения с null: выражение null == 'EU' вызовет NullPointerException, и коннектор перейдет в FAILED state. Безопасное выражение: value.region != null && value.region == 'EU' ? 'orders-eu' : 'orders-default'. Это распространенная ошибка, потому что разработчики тестируют с валидными данными, но в production встречаются записи с NULL-значениями."
+/>
 
 ## Важные особенности и ограничения
 

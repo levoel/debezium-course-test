@@ -161,6 +161,11 @@ Schema Registry поддерживает несколько **compatibility mode
 2. Consumers можно обновить постепенно (canary, blue-green)
 3. Producer (Debezium) один, обновить можно атомарно
 
+<KnowledgeCheck
+  question="В чем разница между BACKWARD и FULL compatibility modes? Когда FULL оправдан, несмотря на более строгие ограничения?"
+  answer="BACKWARD гарантирует: старый consumer может читать новые данные (old consumer + new data = OK). FULL гарантирует оба направления: old consumer + new data = OK, И new consumer + old data = OK. FULL нужен, когда producers и consumers обновляются независимо (нет контроля над порядком deployment). Цена: в FULL допускается только добавление/удаление optional полей с default value."
+/>
+
 ## Безопасные и небезопасные изменения схем
 
 Давайте систематизируем, какие изменения схем безопасны для каждого mode.
@@ -369,6 +374,11 @@ curl http://localhost:8081/subjects/dbserver1.inventory.customers-value/versions
 **Способ 3: Manual construction (для тестирования планируемых изменений):**
 
 Добавьте поле в JSON вручную и протестируйте compatibility.
+
+<KnowledgeCheck
+  question="Команда хочет переименовать колонку email в contact_email. Почему это breaking change для Avro Schema Registry, и какая поэтапная стратегия миграции обходит проблему?"
+  answer="В Avro переименование воспринимается как удаление старого поля + добавление нового, что не проходит compatibility check ни в одном mode. Поэтапная стратегия: (1) ADD COLUMN contact_email nullable; (2) backfill данные из email; (3) обновить consumers для чтения contact_email; (4) DROP COLUMN email. Каждый шаг по отдельности -- safe change для BACKWARD mode."
+/>
 
 ## Debezium и schema evolution: Практические сценарии
 

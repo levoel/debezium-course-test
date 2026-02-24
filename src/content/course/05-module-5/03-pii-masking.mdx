@@ -153,6 +153,11 @@ MaskField работает по-разному в зависимости от т
 
 > **Важно:** Для числовых полей `replacement` игнорируется — всегда используется `0`. Для boolean — всегда `false`.
 
+<KnowledgeCheck
+  question="MaskField заменяет строковое поле email на '***MASKED***'. Что произойдет с числовым полем age и boolean полем is_premium при маскировании?"
+  answer="MaskField обрабатывает типы по-разному: строковые поля заменяются на значение replacement, но числовые поля (int, long, float) всегда заменяются на 0 (replacement игнорируется), а boolean поля всегда заменяются на false. Downstream-системы должны учитывать, что 0 и false могут означать замаскированные данные, а не реальные значения."
+/>
+
 ## Комбинация с ExtractNewRecordState
 
 В реальных сценариях MaskField часто используется вместе с `ExtractNewRecordState` для маскирования **после** flattening событий.
@@ -364,6 +369,11 @@ Address: 123 Main St
 Operation: r
 ---
 ```
+
+<KnowledgeCheck
+  question="Почему MaskField рекомендуется использовать после ExtractNewRecordState (unwrap), а не до него? Что произойдет, если MaskField применить к Debezium envelope напрямую?"
+  answer="MaskField$Value работает на верхнем уровне записи. При применении до unwrap верхний уровень содержит Debezium envelope (before, after, op, source), а не данные строки. MaskField не сможет найти поле email на верхнем уровне, потому что оно вложено внутри after. После unwrap данные из after извлекаются на верхний уровень, и MaskField корректно маскирует email."
+/>
 
 ## Важные ограничения MaskField
 

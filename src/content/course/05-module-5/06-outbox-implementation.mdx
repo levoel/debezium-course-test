@@ -85,6 +85,11 @@ dbserver.public.outbox → (Outbox Event Router) → outbox.event.Order
 
 **Outbox connector должен захватывать ТОЛЬКО outbox-таблицу.** Business tables захватываются другими коннекторами (если нужно).
 
+<KnowledgeCheck
+  question="Почему для outbox-коннектора критически важен параметр table.include.list = 'public.outbox'? Что произойдет без него?"
+  answer="Без table.include.list Debezium захватывает ВСЕ таблицы базы данных, и бизнес-данные (orders, customers) попадут в CDC pipeline вместе с outbox-событиями. Outbox connector должен захватывать ТОЛЬКО outbox-таблицу. Бизнес-таблицы при необходимости захватываются отдельными коннекторами. Это обеспечивает разделение ответственности: outbox-коннектор публикует domain events, а не raw CDC."
+/>
+
 ## Complete Outbox Event Router Configuration
 
 Production-ready configuration со всеми важными параметрами:
@@ -312,6 +317,11 @@ conn.commit()
 **Debezium behavior:** Обрабатывает INSERT, игнорирует DELETE (default для Outbox Event Router).
 
 > **Важно:** DELETE не доставляется как событие — это чистый cleanup mechanism.
+
+<KnowledgeCheck
+  question="Параметр table.expand.json.payload в Outbox Event Router может быть true или false. Какая разница для consumer, и какой вариант рекомендуется?"
+  answer="С table.expand.json.payload = false (default) consumer получает JSON string в value: {\"orderId\": \"123\"} (экранированная строка). С true consumer получает structured JSON object: {orderId: 123}. Рекомендуется true, потому что consumer code проще и type-safe -- не нужен дополнительный этап JSON.parse() для разбора строки."
+/>
 
 ## Consumer Idempotency Pattern
 

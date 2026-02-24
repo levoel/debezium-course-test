@@ -222,6 +222,11 @@ Kafka Connect (требуется версия 2.6+) предоставляет 
 }
 ```
 
+<KnowledgeCheck
+  question="В чем разница между предикатом и Filter SMT? Когда использовать каждый инструмент?"
+  answer="Предикат определяет, применять ли конкретный SMT к сообщению (условное применение трансформации). Filter SMT удаляет сообщение целиком, если условие не выполнено. Предикат используется, когда нужно пропустить SMT для определенных сообщений (например, не применять unwrap к heartbeat). Filter используется, когда нужно отбросить сообщение из pipeline (например, удалить DELETE-события)."
+/>
+
 ## Negate — Инверсия предиката
 
 Любой predicate можно инвертировать с помощью параметра `negate`.
@@ -424,6 +429,11 @@ Filter → Unwrap → Route → Mask
 | Фильтр по `op` | Filter SMT | `value.op == 'c' \|\| value.op == 'u'` |
 | Фильтр по значению поля | Filter SMT | `value.after.status == 'ACTIVE'` |
 | Агрегация, join | Kafka Streams | `groupBy()`, `join()` |
+
+<KnowledgeCheck
+  question="Почему Groovy-выражение value.after.status в Filter SMT вызывает NullPointerException на DELETE-событиях? Как написать безопасную версию?"
+  answer="DELETE-события в Debezium имеют after = null, потому что после удаления записи нет нового состояния. Обращение к value.after.status при after = null вызывает NullPointerException. Безопасные варианты: (1) явная проверка value.after != null && value.after.status == 'ACTIVE', или (2) Groovy safe navigation operator value?.after?.status == 'ACTIVE'."
+/>
 
 ## Pitfall: Filter на DELETE событиях
 

@@ -198,6 +198,11 @@ Debezium 2.5.4 предоставляет набор production-ready SMT для
 }
 ```
 
+<KnowledgeCheck
+  question="Какие четыре обязанности обычно лежат на каждом консьюмере без SMT, и как SMT устраняет это дублирование?"
+  answer="Без SMT каждый консьюмер должен: (1) парсить Debezium envelope (before/after/op/source), (2) извлекать нужные поля, (3) обрабатывать разные типы операций (c/u/d), (4) фильтровать ненужные события. SMT выполняет эти задачи централизованно на уровне Kafka Connect до публикации в Kafka, и все консьюмеры получают готовый формат данных."
+/>
+
 ## SMT Chaining — Комбинирование трансформаций
 
 Реальные pipeline требуют **нескольких** трансформаций в последовательности.
@@ -321,6 +326,11 @@ rate(debezium_metrics_TotalNumberOfEventsSeen[5m])
 3. **Filter early** — чем раньше отбросите события, тем меньше обрабатывается downstream SMT
 4. **Профилируйте Groovy** — сложные Groovy expressions могут быть медленными
 5. **Offload complex logic** — если SMT не справляется → Kafka Streams
+
+<KnowledgeCheck
+  question="Почему стандартный порядок SMT chain именно Filter -> Unwrap -> Route -> Mask? Что произойдет, если поменять местами Filter и Unwrap?"
+  answer="Filter идет первым, чтобы уменьшить объем данных для downstream SMT и потому что Filter работает с Debezium envelope (доступен value.op). Unwrap разворачивает envelope в flat JSON, после чего Route и Mask работают с плоскими полями. Если поменять на Unwrap -> Filter, то Filter после unwrap потеряет доступ к value.op (оно либо удалено, либо перемещено в добавленное поле), и фильтрация по типу операции не сработает."
+/>
 
 ## Когда НЕ использовать SMT
 
