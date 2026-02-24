@@ -5,5 +5,64 @@
     "idPrefix": "m03-14",
     "description": "Use IDs: m03-14-q1, m03-14-q2, ... for MC/TF; m03-14-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-14-q1",
+      "type": "multiple-choice",
+      "question": "Почему каждый Debezium коннектор, подключающийся к одному и тому же MySQL кластеру, должен иметь уникальный database.server.id?",
+      "options": [
+        { "id": "a", "text": "MySQL использует server.id для маршрутизации данных к правильному коннектору, и дублирование приведёт к потере событий" },
+        { "id": "b", "text": "MySQL идентифицирует каждый replication client по server_id, и при попытке подключения с дублирующим server_id MySQL блокирует второе подключение с ошибкой COM_REGISTER_SLAVE" },
+        { "id": "c", "text": "Kafka Connect использует server.id для распределения задач между workers и не допускает дубликатов" },
+        { "id": "d", "text": "server.id определяет партицию в Kafka topic, и дубликат приведёт к конфликту записи" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Когда Debezium подключается к MySQL для чтения binlog, он регистрируется как replica с указанным database.server.id. MySQL разрешает только одно активное replication подключение с конкретным server_id. При попытке второго подключения с тем же server_id MySQL выдаёт ошибку: 'A slave with the same server_uuid/server_id as this slave has connected to the master'. Это фатальная ошибка -- второй коннектор не может стартовать. Server ID Registry Pattern (диапазон 184000-184999) решает эту проблему через централизованное отслеживание allocations.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-14-q2",
+      "type": "multiple-choice",
+      "question": "Даны конфигурации двух коннекторов к одному MySQL кластеру. Определите конфликт.\n\nКоннектор A:\n```json\n{\n  \"name\": \"orders-cdc\",\n  \"database.server.id\": \"184001\",\n  \"database.server.name\": \"mysql_orders\",\n  \"schema.history.internal.kafka.topic\": \"schema-history.mysql_orders\"\n}\n```\n\nКоннектор B:\n```json\n{\n  \"name\": \"users-cdc\",\n  \"database.server.id\": \"184001\",\n  \"database.server.name\": \"mysql_users\",\n  \"schema.history.internal.kafka.topic\": \"schema-history.mysql_users\"\n}\n```",
+      "options": [
+        { "id": "a", "text": "Конфликт database.server.name -- оба коннектора пишут в одинаковые Kafka topics" },
+        { "id": "b", "text": "Конфликт database.server.id -- оба коннектора используют 184001, MySQL заблокирует подключение второго коннектора" },
+        { "id": "c", "text": "Конфликт schema.history.internal.kafka.topic -- оба используют одинаковый schema history topic" },
+        { "id": "d", "text": "Конфликтов нет -- оба коннектора имеют разные name и database.server.name" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Оба коннектора имеют database.server.id=184001. При multi-connector deployment три свойства MUST быть уникальны: database.server.id (для MySQL replication), database.server.name (для topic prefix isolation), и schema.history.internal.kafka.topic (для schema isolation). В данном случае server.name и schema history topic уникальны, но server.id дублируется. MySQL заблокирует второе подключение. Исправление: изменить server.id коннектора B на 184002 и обновить server-id-registry.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-14-q3",
+      "type": "multiple-choice",
+      "question": "Три коннектора мониторят разные schemas одного MySQL кластера: orders-cdc (ecommerce.orders), users-cdc (ecommerce.users), analytics-cdc (analytics.*). Спроектируйте стратегию topic isolation, которая предотвращает data corruption при schema changes.",
+      "options": [
+        { "id": "a", "text": "Достаточно использовать разные table.include.list -- Kafka Connect автоматически изолирует topics" },
+        { "id": "b", "text": "Назначить каждому коннектору уникальный database.server.name (topic prefix) и отдельный schema.history.internal.kafka.topic с infinite retention, чтобы DDL события одного коннектора не влияли на schema history другого" },
+        { "id": "c", "text": "Использовать один общий schema.history.internal.kafka.topic для всех коннекторов, чтобы все DDL были в одном месте" },
+        { "id": "d", "text": "Размещать коннекторы на разных Kafka Connect workers для физической изоляции" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Topic isolation требует уникальный database.server.name для каждого коннектора (определяет prefix всех data topics) и отдельный schema.history.internal.kafka.topic. Вариант C (shared schema history) -- катастрофическая ошибка: если orders-cdc запишет DDL для ecommerce.orders, то analytics-cdc при рестарте прочитает этот DDL и попытается применить его к analytics.* таблицам, вызвав schema mismatch errors и data corruption. Naming convention: database.server.name=mysql_{domain}, schema history=schema-history.mysql_{domain}.",
+      "hint": "Подумайте о том, что происходит, когда коннектор перезапускается и читает schema history topic. Если topic содержит DDL от другого коннектора, как это повлияет на обработку событий?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m03-14-q4",
+      "type": "multiple-choice",
+      "question": "Два коннектора (orders-cdc и users-cdc) используют один и тот же schema.history.internal.kafka.topic. Администратор выполняет ALTER TABLE ecommerce.users ADD COLUMN phone VARCHAR(20). Что произойдёт при следующем рестарте коннектора orders-cdc?",
+      "options": [
+        { "id": "a", "text": "Ничего -- orders-cdc проигнорирует DDL для таблицы ecommerce.users, так как она не входит в его table.include.list" },
+        { "id": "b", "text": "orders-cdc прочитает DDL от users-cdc из shared schema history topic и может попытаться применить его к своему внутреннему представлению схемы, что приведёт к schema mismatch errors или silent data corruption" },
+        { "id": "c", "text": "Kafka автоматически фильтрует DDL записи по connector name" },
+        { "id": "d", "text": "orders-cdc немедленно остановится с ошибкой duplicate schema history entry" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Schema history topic содержит все DDL события от всех коннекторов, которые в него пишут. При рестарте orders-cdc Debezium последовательно replay-ит все записи из schema history topic для восстановления внутреннего представления схемы. DDL от users-cdc (ALTER TABLE ecommerce.users) будет прочитан и применён к внутреннему schema store. В зависимости от версии Debezium и конкретного DDL, это может вызвать schema mismatch errors, неправильную десериализацию событий, или silent data corruption в downstream consumers.",
+      "hint": "Представьте, что schema history topic -- это журнал всех DDL операций. При рестарте коннектор replay-ит весь журнал. Что произойдёт, если в журнале есть DDL для таблиц, которые этот коннектор не мониторит?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

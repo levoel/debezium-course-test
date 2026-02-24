@@ -5,5 +5,64 @@
     "idPrefix": "m03-15",
     "description": "Use IDs: m03-15-q1, m03-15-q2, ... for MC/TF; m03-15-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-15-q1",
+      "type": "multiple-choice",
+      "question": "Как gh-ost выполняет zero-downtime schema migration таблицы orders?",
+      "options": [
+        { "id": "a", "text": "gh-ost модифицирует оригинальную таблицу in-place, используя ALTER TABLE с ALGORITHM=INPLACE" },
+        { "id": "b", "text": "gh-ost создаёт ghost-таблицу (_orders_gho) с новой схемой, копирует данные chunk-by-chunk, параллельно синхронизирует изменения через чтение binlog, и выполняет атомарный RENAME TABLE в конце" },
+        { "id": "c", "text": "gh-ost останавливает все writes на время миграции и копирует данные в background thread" },
+        { "id": "d", "text": "gh-ost создаёт триггеры на оригинальной таблице для синхронизации изменений с копией" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "gh-ost -- triggerless online DDL tool. Он создаёт ghost-таблицу (_orders_gho) с новой схемой и changelog-таблицу (_orders_ghc) для метаданных миграции. Данные копируются из оригинальной таблицы chunk-by-chunk (по умолчанию 1000 строк). Параллельно gh-ost читает binlog для синхронизации изменений, происходящих во время копирования. В конце выполняется атомарный RENAME TABLE (блокировка на миллисекунды). Вариант D описывает pt-online-schema-change, а не gh-ost.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-15-q2",
+      "type": "multiple-choice",
+      "question": "Какой паттерн table.exclude.list или SMT фильтр предотвратит попадание gh-ost helper-таблиц в CDC-поток?",
+      "options": [
+        { "id": "a", "text": "table.exclude.list с паттерном .*_gho -- достаточно исключить только ghost-таблицу" },
+        { "id": "b", "text": "Filter SMT с regex: !value.source.table.matches('.*_(gho|ghc|new|old)$') при использовании table.include.list: \"mydb.*\" -- широкий capture pattern + фильтрация всех helper table паттернов обоих инструментов" },
+        { "id": "c", "text": "Не нужна фильтрация -- Debezium автоматически игнорирует временные таблицы" },
+        { "id": "d", "text": "table.include.list с явным перечислением только production таблиц -- helper tables автоматически исключаются" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Рекомендуемый подход (Pattern 1): широкий capture pattern table.include.list: \"mydb.*\" + Filter SMT для отбрасывания событий от helper tables. Regex покрывает паттерны обоих инструментов: _gho и _ghc (gh-ost), _new и _old (pt-online-schema-change). Вариант D опасен: если table.include.list содержит только production таблицы, а gh-ost создаёт _orders_gho, Debezium увидит DDL в binlog для таблицы не в schema history, что вызовет crash коннектора с ошибкой 'Table not found in schema history'.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-15-q3",
+      "type": "multiple-choice",
+      "question": "Во время gh-ost миграции таблицы orders CDC коннектор начал захватывать события одновременно из оригинальной таблицы orders и ghost-таблицы _orders_gho. Downstream consumers получают дублирующиеся данные. Как диагностировать и исправить проблему?",
+      "options": [
+        { "id": "a", "text": "Остановить gh-ost миграцию, перезапустить коннектор, и начать миграцию заново" },
+        { "id": "b", "text": "Проверить, есть ли Filter SMT в конфигурации коннектора. Если нет -- добавить transforms.FilterHelperTables с regex фильтром для _gho и _ghc паттернов. Применить обновлённую конфигурацию через PUT /connectors/{name}/config -- коннектор перезапустится с фильтром, и gh-ost миграция продолжится без прерывания" },
+        { "id": "c", "text": "Добавить _orders_gho в table.exclude.list и пересоздать коннектор" },
+        { "id": "d", "text": "Увеличить chunk-size gh-ost для ускорения миграции и уменьшения количества дублирующих событий" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Проблема: Filter SMT отсутствует или неправильно настроен в конфигурации коннектора. Диагностика: 1) Проверить конфигурацию через GET /connectors/{name}/config -- найти transforms.FilterHelperTables. 2) Если отсутствует, добавить Filter SMT с regex '!value.source.table.matches(\".*_(gho|ghc)$\")'. 3) Применить через PUT -- Kafka Connect обновит конфигурацию коннектора без необходимости останавливать gh-ost. Вариант C (table.exclude.list) может вызвать crash: если _orders_gho excluded, но DDL для неё уже в binlog, коннектор не найдёт её в schema history.",
+      "hint": "Обратите внимание на то, что Filter SMT работает на уровне Debezium до отправки в Kafka. Можно ли изменить конфигурацию коннектора 'на лету' через REST API, не прерывая gh-ost миграцию?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m03-15-q4",
+      "type": "multiple-choice",
+      "question": "Сравните gh-ost и pt-online-schema-change с точки зрения CDC noise (количество лишних событий в binlog). Какой инструмент создаёт меньше CDC noise и почему?",
+      "options": [
+        { "id": "a", "text": "gh-ost создаёт меньше noise, так как не использует триггеры и не генерирует дополнительные DML события" },
+        { "id": "b", "text": "pt-online-schema-change создаёт меньше CDC noise, несмотря на trigger overhead, потому что его триггеры синхронизируют данные через DML в helper table, а gh-ost читает тот же binlog, что и Debezium, удваивая binlog I/O нагрузку" },
+        { "id": "c", "text": "Оба инструмента генерируют одинаковое количество CDC noise" },
+        { "id": "d", "text": "gh-ost не создаёт noise вообще, так как работает только с ghost-таблицей" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "С точки зрения CDC noise: pt-osc использует триггеры, которые добавляют INSERT/UPDATE/DELETE в _orders_new для каждой операции на orders. Это увеличивает binlog размер (trigger events), но все события от _new фильтруются SMT -- consumers не видят noise. gh-ost triggerless, но он сам читает binlog параллельно с Debezium, удваивая binlog I/O на MySQL сервере. Кроме того, gh-ost записывает chunked copy в _orders_gho, генерируя INSERT events в binlog. Итого: pt-osc создаёт больше binlog events (triggers), но gh-ost создаёт больше binlog I/O load (двойное чтение). Для CDC pipeline pt-osc предпочтительнее по суммарной нагрузке.",
+      "hint": "Различайте два типа 'noise': 1) количество событий в binlog (trigger DML vs chunked copy), и 2) I/O нагрузка на MySQL (одинарное vs двойное чтение binlog). Какой тип noise более критичен для CDC pipeline?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
