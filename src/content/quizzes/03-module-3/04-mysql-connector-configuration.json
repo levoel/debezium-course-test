@@ -63,6 +63,94 @@
       "explanation": "Debezium создаёт отдельный Kafka topic для каждой отслеживаемой таблицы. Имя topic формируется по паттерну: {database.server.name}.{database_name}.{table_name}. В данном случае: orders-db.shop.orders для таблицы shop.orders и orders-db.shop.customers для таблицы shop.customers. Свойство database.server.name служит prefix для всех topic -- это позволяет идентифицировать источник событий при наличии нескольких MySQL серверов. Важно: после deployment нельзя менять database.server.name -- это создаст новые topic с другим prefix, а старые topic с накопленными offset будут заброшены.",
       "hint": "Проследите путь от конфигурации к именам topic. database.server.name -- это логический идентификатор MySQL сервера, а table.include.list задаёт отслеживаемые таблицы в формате database.table. Как Debezium комбинирует эти значения для формирования уникального имени topic?",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m03-04-code-1",
+      "type": "code-challenge",
+      "question": "Найдите и исправьте ошибки в конфигурации MySQL коннектора Debezium. Функция получает JSON-строку с конфигурацией и должна вернуть исправленный объект конфигурации.\n\nОшибки: (1) отсутствует database.server.id, (2) snapshot.mode имеет недопустимое значение, (3) отсутствует schema.history.internal.kafka.topic.",
+      "language": "javascript",
+      "starterCode": "function solve(configJson) {\n  const config = JSON.parse(configJson);\n  // Исправьте ошибки в config.config:\n  // 1. Добавьте database.server.id (уникальное число в виде строки)\n  // 2. Исправьте snapshot.mode на корректное значение\n  // 3. Добавьте schema.history.internal.kafka.topic\n  return config;\n}",
+      "solutionCode": "function solve(configJson) {\n  const config = JSON.parse(configJson);\n  // 1. database.server.id -- обязателен для MySQL cluster topology\n  config.config['database.server.id'] = '184054';\n  // 2. snapshot.mode -- 'full' не существует, корректное значение 'initial'\n  config.config['snapshot.mode'] = 'initial';\n  // 3. schema.history.internal.kafka.topic -- обязателен для хранения DDL\n  config.config['schema.history.internal.kafka.topic'] = 'schema-changes.inventory-db';\n  return config;\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Исправить отсутствующий server.id, неверный snapshot.mode и отсутствующий schema history topic",
+          "input": "'{\"name\":\"inventory-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.mysql.MySqlConnector\",\"database.hostname\":\"mysql\",\"database.port\":\"3306\",\"database.user\":\"debezium\",\"database.password\":\"dbz\",\"database.server.name\":\"inventory-db\",\"table.include.list\":\"inventory.orders\",\"snapshot.mode\":\"full\",\"schema.history.internal.kafka.bootstrap.servers\":\"kafka:9092\"}}'",
+          "expectedOutput": "{\"name\":\"inventory-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.mysql.MySqlConnector\",\"database.hostname\":\"mysql\",\"database.port\":\"3306\",\"database.user\":\"debezium\",\"database.password\":\"dbz\",\"database.server.name\":\"inventory-db\",\"table.include.list\":\"inventory.orders\",\"snapshot.mode\":\"initial\",\"schema.history.internal.kafka.bootstrap.servers\":\"kafka:9092\",\"database.server.id\":\"184054\",\"schema.history.internal.kafka.topic\":\"schema-changes.inventory-db\"}}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Исправить конфигурацию с другим server.name и несколькими таблицами",
+          "input": "'{\"name\":\"orders-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.mysql.MySqlConnector\",\"database.hostname\":\"mysql-primary\",\"database.port\":\"3306\",\"database.user\":\"cdc_user\",\"database.password\":\"secret\",\"database.server.name\":\"orders-db\",\"table.include.list\":\"shop.orders,shop.customers\",\"snapshot.mode\":\"full\",\"schema.history.internal.kafka.bootstrap.servers\":\"kafka:9092\"}}'",
+          "expectedOutput": "{\"name\":\"orders-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.mysql.MySqlConnector\",\"database.hostname\":\"mysql-primary\",\"database.port\":\"3306\",\"database.user\":\"cdc_user\",\"database.password\":\"secret\",\"database.server.name\":\"orders-db\",\"table.include.list\":\"shop.orders,shop.customers\",\"snapshot.mode\":\"initial\",\"schema.history.internal.kafka.bootstrap.servers\":\"kafka:9092\",\"database.server.id\":\"184054\",\"schema.history.internal.kafka.topic\":\"schema-changes.orders-db\"}}",
+          "hidden": true
+        }
+      ],
+      "explanation": "MySQL коннектор Debezium требует три обязательных MySQL-специфичных свойства: (1) database.server.id -- уникальный числовой идентификатор в MySQL cluster topology (Debezium подключается как replica), (2) snapshot.mode -- допустимые значения: initial, initial_only, when_needed, never, schema_only (значение 'full' не существует), (3) schema.history.internal.kafka.topic -- Kafka topic с retention.ms=-1 для хранения DDL истории, без которого connector не сможет перезапуститься.",
+      "hint": "Проверьте три обязательных поля MySQL коннектора: database.server.id (уникальное число), snapshot.mode (допустимые значения: initial, never, when_needed, schema_only), и schema.history.internal.kafka.topic (формат: schema-changes.{server.name}).",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-04-code-2",
+      "type": "code-challenge",
+      "question": "Создайте конфигурацию MySQL коннектора Debezium по заданным требованиям. Функция получает JSON с требованиями и должна вернуть полную конфигурацию коннектора.",
+      "language": "javascript",
+      "starterCode": "function solve(requirementsJson) {\n  const reqs = JSON.parse(requirementsJson);\n  // Создайте конфигурацию коннектора на основе требований:\n  // reqs.hostname, reqs.port, reqs.user, reqs.password,\n  // reqs.serverName, reqs.serverId, reqs.tables (массив),\n  // reqs.kafkaBootstrap\n  const config = {\n    name: '',\n    config: {\n      // Заполните обязательные поля MySQL коннектора\n    }\n  };\n  return config;\n}",
+      "solutionCode": "function solve(requirementsJson) {\n  const reqs = JSON.parse(requirementsJson);\n  return {\n    name: reqs.serverName + '-connector',\n    config: {\n      'connector.class': 'io.debezium.connector.mysql.MySqlConnector',\n      'database.hostname': reqs.hostname,\n      'database.port': String(reqs.port),\n      'database.user': reqs.user,\n      'database.password': reqs.password,\n      'database.server.id': String(reqs.serverId),\n      'database.server.name': reqs.serverName,\n      'table.include.list': reqs.tables.join(','),\n      'schema.history.internal.kafka.topic': 'schema-changes.' + reqs.serverName,\n      'schema.history.internal.kafka.bootstrap.servers': reqs.kafkaBootstrap,\n      'snapshot.mode': 'initial'\n    }\n  };\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Создать конфигурацию для inventory database",
+          "input": "'{\"hostname\":\"mysql\",\"port\":3306,\"user\":\"debezium\",\"password\":\"dbz\",\"serverName\":\"inventory-db\",\"serverId\":184054,\"tables\":[\"inventory.orders\",\"inventory.products\"],\"kafkaBootstrap\":\"kafka:9092\"}'",
+          "expectedOutput": "{\"name\":\"inventory-db-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.mysql.MySqlConnector\",\"database.hostname\":\"mysql\",\"database.port\":\"3306\",\"database.user\":\"debezium\",\"database.password\":\"dbz\",\"database.server.id\":\"184054\",\"database.server.name\":\"inventory-db\",\"table.include.list\":\"inventory.orders,inventory.products\",\"schema.history.internal.kafka.topic\":\"schema-changes.inventory-db\",\"schema.history.internal.kafka.bootstrap.servers\":\"kafka:9092\",\"snapshot.mode\":\"initial\"}}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Создать конфигурацию для Aurora MySQL с другими параметрами",
+          "input": "'{\"hostname\":\"aurora-cluster.abc123.us-east-1.rds.amazonaws.com\",\"port\":3306,\"user\":\"cdc_user\",\"password\":\"prod_secret\",\"serverName\":\"aurora-orders\",\"serverId\":185001,\"tables\":[\"shop.orders\",\"shop.customers\",\"shop.products\"],\"kafkaBootstrap\":\"kafka-prod:9092\"}'",
+          "expectedOutput": "{\"name\":\"aurora-orders-connector\",\"config\":{\"connector.class\":\"io.debezium.connector.mysql.MySqlConnector\",\"database.hostname\":\"aurora-cluster.abc123.us-east-1.rds.amazonaws.com\",\"database.port\":\"3306\",\"database.user\":\"cdc_user\",\"database.password\":\"prod_secret\",\"database.server.id\":\"185001\",\"database.server.name\":\"aurora-orders\",\"table.include.list\":\"shop.orders,shop.customers,shop.products\",\"schema.history.internal.kafka.topic\":\"schema-changes.aurora-orders\",\"schema.history.internal.kafka.bootstrap.servers\":\"kafka-prod:9092\",\"snapshot.mode\":\"initial\"}}",
+          "hidden": true
+        }
+      ],
+      "explanation": "Конфигурация MySQL коннектора Debezium включает обязательные группы свойств: (1) connector.class для MySQL, (2) database connection (hostname, port, user, password), (3) MySQL-специфичные (database.server.id, database.server.name), (4) фильтрация таблиц (table.include.list через запятую), (5) schema history topic (с bootstrap.servers для Kafka), (6) snapshot.mode для стратегии первого запуска. Имя коннектора формируется как {serverName}-connector.",
+      "hint": "Обязательные свойства MySQL коннектора: connector.class, database.hostname/port/user/password, database.server.id (строка), database.server.name, table.include.list (таблицы через запятую), schema.history.internal.kafka.topic и bootstrap.servers, snapshot.mode.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-04-code-3",
+      "type": "code-challenge",
+      "question": "Разберите CDC-событие MySQL коннектора Debezium. Извлеките тип операции, имя таблицы и список измененных полей из структуры события.",
+      "language": "javascript",
+      "starterCode": "function solve(eventJson) {\n  const event = JSON.parse(eventJson);\n  // Извлеките из CDC-события:\n  // - operation: тип операции (c/u/d/r)\n  // - table: имя таблицы из source.table\n  // - database: имя базы из source.db\n  // - changedFields: массив имен полей из after (отсортированный)\n  //   Для DELETE (op='d') используйте before вместо after\n  return {\n    operation: '',\n    table: '',\n    database: '',\n    changedFields: []\n  };\n}",
+      "solutionCode": "function solve(eventJson) {\n  const event = JSON.parse(eventJson);\n  const payload = event.payload;\n  const operation = payload.op;\n  const table = payload.source.table;\n  const database = payload.source.db;\n  // Для DELETE используем before, для остальных -- after\n  const record = operation === 'd' ? payload.before : payload.after;\n  const changedFields = Object.keys(record).sort();\n  return {\n    operation,\n    table,\n    database,\n    changedFields\n  };\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Разобрать CREATE (INSERT) событие для таблицы orders",
+          "input": "'{\"payload\":{\"op\":\"c\",\"before\":null,\"after\":{\"id\":1001,\"customer_id\":42,\"total\":250.00,\"status\":\"new\"},\"source\":{\"connector\":\"mysql\",\"db\":\"inventory\",\"table\":\"orders\",\"server_id\":184054,\"gtid\":\"a1b2c3d4:1\"},\"ts_ms\":1700000000000}}'",
+          "expectedOutput": "{\"operation\":\"c\",\"table\":\"orders\",\"database\":\"inventory\",\"changedFields\":[\"customer_id\",\"id\",\"status\",\"total\"]}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Разобрать UPDATE событие с before и after",
+          "input": "'{\"payload\":{\"op\":\"u\",\"before\":{\"id\":1001,\"customer_id\":42,\"total\":250.00,\"status\":\"new\"},\"after\":{\"id\":1001,\"customer_id\":42,\"total\":250.00,\"status\":\"shipped\"},\"source\":{\"connector\":\"mysql\",\"db\":\"inventory\",\"table\":\"orders\",\"server_id\":184054,\"gtid\":\"a1b2c3d4:2\"},\"ts_ms\":1700000001000}}'",
+          "expectedOutput": "{\"operation\":\"u\",\"table\":\"orders\",\"database\":\"inventory\",\"changedFields\":[\"customer_id\",\"id\",\"status\",\"total\"]}",
+          "hidden": false
+        },
+        {
+          "id": "tc3",
+          "description": "Разобрать DELETE событие (использовать before вместо after)",
+          "input": "'{\"payload\":{\"op\":\"d\",\"before\":{\"id\":1001,\"customer_id\":42,\"total\":250.00,\"status\":\"cancelled\"},\"after\":null,\"source\":{\"connector\":\"mysql\",\"db\":\"shop\",\"table\":\"customers\",\"server_id\":184054,\"gtid\":\"a1b2c3d4:3\"},\"ts_ms\":1700000002000}}'",
+          "expectedOutput": "{\"operation\":\"d\",\"table\":\"customers\",\"database\":\"shop\",\"changedFields\":[\"customer_id\",\"id\",\"status\",\"total\"]}",
+          "hidden": true
+        }
+      ],
+      "explanation": "CDC-события Debezium MySQL коннектора содержат payload с полем op (c=create/INSERT, u=update, d=delete, r=read/snapshot), вложенный объект source с метаданными (db, table, server_id, gtid), и поля before/after с данными строки. При DELETE after равен null, поэтому для получения полей необходимо использовать before. При CREATE before равен null. Парсинг структуры CDC-события -- базовая операция при построении consumer-приложений.",
+      "hint": "Структура события: payload.op содержит тип операции, payload.source.table и payload.source.db -- метаданные таблицы. Данные строки в payload.after (для c/u/r) или payload.before (для d). Используйте Object.keys() для получения имен полей и .sort() для сортировки.",
+      "bloomLevel": "applied"
     }
   ]
 }
