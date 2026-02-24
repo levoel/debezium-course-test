@@ -5,5 +5,64 @@
     "idPrefix": "m05-02",
     "description": "Use IDs: m05-02-q1, m05-02-q2, ... for MC/TF; m05-02-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m05-02-q1",
+      "type": "multiple-choice",
+      "question": "Какую возможность предоставляют предикаты (predicates) в Kafka Connect, которую нельзя реализовать обычной SMT chain без предикатов?",
+      "options": [
+        { "id": "a", "text": "Предикаты позволяют фильтровать сообщения по содержимому полей" },
+        { "id": "b", "text": "Предикаты позволяют применять конкретный SMT условно -- только к сообщениям, удовлетворяющим условию, пропуская остальные без изменений" },
+        { "id": "c", "text": "Предикаты ускоряют обработку SMT chain за счет параллельного выполнения" },
+        { "id": "d", "text": "Предикаты позволяют комбинировать несколько SMT в одну трансформацию" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Без предикатов SMT в chain применяется ко всем сообщениям без исключения. Это приводит к ошибкам, когда SMT получает сообщение неподходящего формата (например, ExtractNewRecordState падает на heartbeat, у которого нет поля after). Предикаты позволяют указать условие: если predicate вернул true -- SMT применяется, если false -- сообщение проходит без изменений. Фильтрация по содержимому (вариант A) -- это функция Filter SMT, а не предикатов.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m05-02-q2",
+      "type": "multiple-choice",
+      "question": "Дана конфигурация предиката для исключения heartbeat сообщений:\n\n```\n\"transforms\": \"unwrap\",\n\"transforms.unwrap.type\": \"io.debezium.transforms.ExtractNewRecordState\",\n\"transforms.unwrap.predicate\": \"IsNotHeartbeat\",\n\"predicates\": \"IsNotHeartbeat\",\n\"predicates.IsNotHeartbeat.type\": \"org.apache.kafka.connect.transforms.predicates.TopicNameMatches\",\n\"predicates.IsNotHeartbeat.pattern\": \"__debezium-heartbeat\\\\..*\",\n\"predicates.IsNotHeartbeat.negate\": \"true\"\n```\n\nЧто произойдет с heartbeat сообщением, отправленным в топик __debezium-heartbeat.dbserver1?",
+      "options": [
+        { "id": "a", "text": "Heartbeat будет отброшено и не попадет в Kafka" },
+        { "id": "b", "text": "ExtractNewRecordState упадет с ошибкой, так как heartbeat не содержит поле after" },
+        { "id": "c", "text": "Heartbeat пройдет в Kafka без изменений, потому что предикат вернет false и SMT unwrap не будет применен" },
+        { "id": "d", "text": "Heartbeat будет преобразован в пустое сообщение с null value" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Предикат TopicNameMatches проверяет, соответствует ли топик regex-паттерну __debezium-heartbeat\\..*. Для heartbeat сообщения паттерн совпадает (true), но параметр negate: true инвертирует результат (false). Когда предикат возвращает false, SMT unwrap НЕ применяется, и heartbeat проходит в Kafka без изменений. Это решает проблему падения ExtractNewRecordState на heartbeat сообщениях без потери самих heartbeat.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-02-q3",
+      "type": "multiple-choice",
+      "question": "Вам нужно маскировать поле email в событиях таблицы customers (топик inventory.public.customers), но НЕ маскировать email в событиях таблицы orders (топик inventory.public.orders). Оба топика обрабатываются одним коннектором. Какая комбинация предиката и SMT решает эту задачу?",
+      "options": [
+        { "id": "a", "text": "Filter SMT с Groovy условием value.source.table == 'customers' для удаления events из orders" },
+        { "id": "b", "text": "MaskField SMT с предикатом TopicNameMatches, pattern: .*customers -- маскирование применяется только к топику customers" },
+        { "id": "c", "text": "Два отдельных MaskField SMT без предикатов -- один для customers, другой для orders" },
+        { "id": "d", "text": "ContentBasedRouter SMT для разделения events по разным топикам перед маскированием" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Предикат TopicNameMatches с паттерном .*customers привязывает MaskField SMT только к событиям из топика inventory.public.customers. События из inventory.public.orders не соответствуют паттерну, предикат возвращает false, и MaskField пропускается. Это стандартный паттерн селективного применения SMT. Вариант A (Filter) удалит события orders целиком, а не просто пропустит маскирование, что приведет к потере данных.",
+      "hint": "Подумайте о разнице между фильтрацией (удалением) сообщений и условным применением трансформации. Какой механизм позволяет применить SMT только к подмножеству сообщений, не удаляя остальные?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m05-02-q4",
+      "type": "multiple-choice",
+      "question": "Почему Groovy-based фильтрация через Filter SMT считается более мощным, но и более опасным инструментом, чем встроенные предикаты (TopicNameMatches, RecordIsTombstone, HasHeaderKey)?",
+      "options": [
+        { "id": "a", "text": "Groovy выполняется в отдельном потоке и может вызвать deadlock в Kafka Connect worker" },
+        { "id": "b", "text": "Groovy позволяет фильтровать по любым полям сообщения (value.after.*, value.source.*), но выполняется синхронно для каждого сообщения, добавляя latency, а ошибки в Groovy-выражении (например, NullPointerException на DELETE) роняют весь коннектор" },
+        { "id": "c", "text": "Groovy-based фильтрация не поддерживает предикаты и не может комбинироваться с другими SMT" },
+        { "id": "d", "text": "Groovy требует отдельной JVM для выполнения, что увеличивает потребление памяти в 2 раза" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Groovy-based Filter дает доступ к любым полям Debezium envelope (value.op, value.after.status, value.source.table), что делает его значительно мощнее предикатов, ограниченных проверкой топика, tombstone и headers. Однако Groovy выполняется синхронно для каждого сообщения -- сложные выражения с regex могут добавлять 5-10ms overhead. Главная опасность: если Groovy-выражение обращается к value.after.field на DELETE-событии (after = null), возникает NullPointerException, который останавливает коннектор. Встроенные предикаты не имеют этих рисков, так как работают с метаданными сообщения.",
+      "hint": "Сравните два аспекта: (1) к каким данным имеет доступ Groovy-выражение vs встроенные предикаты, и (2) что происходит, когда Groovy-выражение обращается к полю after у DELETE-события, где after = null.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

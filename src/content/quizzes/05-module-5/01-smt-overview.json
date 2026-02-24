@@ -5,5 +5,63 @@
     "idPrefix": "m05-01",
     "description": "Use IDs: m05-01-q1, m05-01-q2, ... for MC/TF; m05-01-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m05-01-q1",
+      "type": "multiple-choice",
+      "question": "Какую основную проблему решают Single Message Transformations (SMT) в Kafka Connect?",
+      "options": [
+        { "id": "a", "text": "Ускоряют чтение WAL за счет параллельной обработки потоков" },
+        { "id": "b", "text": "Централизуют логику обработки событий в коннекторе, устраняя дублирование кода в каждом консьюмере" },
+        { "id": "c", "text": "Обеспечивают exactly-once доставку событий между Kafka и базой данных" },
+        { "id": "d", "text": "Автоматически создают топики для каждой таблицы в базе данных" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Без SMT каждый консьюмер должен самостоятельно парсить Debezium envelope, извлекать нужные поля, фильтровать события и обрабатывать разные типы операций. SMT централизуют эту логику на уровне Kafka Connect -- трансформация выполняется до публикации в Kafka, и все консьюмеры получают готовый формат данных. Вариант A неверен: SMT выполняются синхронно в том же потоке и не ускоряют чтение WAL.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m05-01-q2",
+      "type": "multiple-choice",
+      "question": "Дана конфигурация коннектора:\n\n```\n\"transforms\": \"filter,unwrap,mask\",\n\"transforms.filter.type\": \"io.debezium.transforms.Filter\",\n\"transforms.filter.language\": \"jsr223.groovy\",\n\"transforms.filter.condition\": \"value.op == 'c' || value.op == 'u'\",\n\"transforms.unwrap.type\": \"io.debezium.transforms.ExtractNewRecordState\",\n\"transforms.mask.type\": \"org.apache.kafka.connect.transforms.MaskField$Value\",\n\"transforms.mask.fields\": \"email,phone\"\n```\n\nКакие события получит консьюмер из Kafka?",
+      "options": [
+        { "id": "a", "text": "Все CDC события (INSERT, UPDATE, DELETE) с полным Debezium envelope, но с замаскированными полями email и phone" },
+        { "id": "b", "text": "Только INSERT и UPDATE события в формате flat JSON (без envelope), с полями email и phone, замененными на null" },
+        { "id": "c", "text": "Только DELETE события с замаскированными полями email и phone" },
+        { "id": "d", "text": "Все события с полным Debezium envelope, где email и phone замаскированы внутри объекта after" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Цепочка SMT выполняется последовательно: (1) Filter отбрасывает события с op != 'c' и op != 'u', оставляя только INSERT и UPDATE; (2) ExtractNewRecordState разворачивает Debezium envelope в flat JSON (извлекает содержимое after); (3) MaskField заменяет поля email и phone на null в уже развернутых данных. Вариант D неверен, потому что ExtractNewRecordState удаляет envelope-структуру -- консьюмер получает плоский JSON, а не вложенный объект.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-01-q3",
+      "type": "multiple-choice",
+      "question": "Legacy-система потребляет события из Kafka и ожидает плоский JSON с полями id, name, email -- без Debezium envelope (before, after, op, source). Какой встроенный SMT решает эту задачу?",
+      "options": [
+        { "id": "a", "text": "Filter SMT -- отфильтровать метаданные envelope и оставить только данные" },
+        { "id": "b", "text": "ExtractNewRecordState -- развернуть envelope и извлечь содержимое after как плоский JSON" },
+        { "id": "c", "text": "ByLogicalTableRouter -- перенаправить события в другой топик без envelope" },
+        { "id": "d", "text": "ContentBasedRouter -- маршрутизировать события по содержимому after в отдельный топик" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "ExtractNewRecordState (также известный как unwrap) -- самый распространенный Debezium SMT. Он извлекает содержимое поля after из CDC envelope и публикует его как плоский JSON-объект. Это именно то, что нужно legacy-системам, которые не умеют работать со структурой Debezium. Filter SMT (вариант A) удаляет сообщения целиком по условию, а не преобразует их структуру.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-01-q4",
+      "type": "multiple-choice",
+      "question": "В конфигурации коннектора SMT chain объявлен как \"transforms\": \"unwrap,filter\". Debezium обрабатывает heartbeat сообщение (op='h', без поля after). Почему такой порядок приводит к ошибке, и как его исправить?",
+      "options": [
+        { "id": "a", "text": "ExtractNewRecordState первым обрабатывает heartbeat и падает с ошибкой 'Field after not found', потому что heartbeat не содержит after. Исправление: поменять порядок на filter,unwrap, чтобы Filter отбросил heartbeat до unwrap" },
+        { "id": "b", "text": "Filter первым обрабатывает heartbeat и падает с ошибкой типизации. Исправление: добавить predicate для Filter" },
+        { "id": "c", "text": "Оба SMT корректно обработают heartbeat -- ошибка в другом месте конфигурации" },
+        { "id": "d", "text": "ExtractNewRecordState автоматически пропускает heartbeat сообщения, проблема только в Filter" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Порядок SMT в chain критически важен: каждый SMT получает output предыдущего. При порядке unwrap,filter ExtractNewRecordState первым получает heartbeat сообщение и пытается извлечь поле after, которого у heartbeat нет (op='h', нет before/after). Это вызывает ошибку. Стандартный порядок -- Filter -> Unwrap -> Route -> Mask: фильтрация раньше всего уменьшает объем данных и предотвращает передачу нестандартных сообщений в downstream SMT.",
+      "hint": "Вспомните, что heartbeat сообщения имеют только поля source, op='h' и ts_ms -- у них нет структуры before/after. Какой SMT ожидает наличие поля after?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

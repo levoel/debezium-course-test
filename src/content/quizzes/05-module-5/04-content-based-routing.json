@@ -5,5 +5,64 @@
     "idPrefix": "m05-04",
     "description": "Use IDs: m05-04-q1, m05-04-q2, ... for MC/TF; m05-04-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m05-04-q1",
+      "type": "multiple-choice",
+      "question": "Чем ContentBasedRouter отличается от стандартной маршрутизации топиков в Debezium, при которой каждая таблица получает свой топик?",
+      "options": [
+        { "id": "a", "text": "ContentBasedRouter использует regex для объединения нескольких таблиц в один топик" },
+        { "id": "b", "text": "ContentBasedRouter маршрутизирует события из одной таблицы в разные топики на основе значений полей в самом событии, а стандартная маршрутизация назначает топик по имени таблицы" },
+        { "id": "c", "text": "ContentBasedRouter ускоряет маршрутизацию за счет кеширования Groovy-выражений" },
+        { "id": "d", "text": "ContentBasedRouter автоматически создает предикаты для каждого условия маршрутизации" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Стандартная маршрутизация Debezium детерминистически назначает топик по имени таблицы: таблица orders -> топик dbserver1.public.orders. ContentBasedRouter динамически выбирает целевой топик, вычисляя Groovy-выражение для каждого сообщения на основе значений полей. Например, поле region определяет, попадет ли событие в orders-eu или orders-us. ByLogicalTableRouter (вариант A) работает с regex по имени топика, а не по содержимому.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m05-04-q2",
+      "type": "multiple-choice",
+      "question": "Дана конфигурация ContentBasedRouter для multi-tenant SaaS системы:\n\n```\n\"transforms\": \"unwrap,route\",\n\"transforms.unwrap.type\": \"io.debezium.transforms.ExtractNewRecordState\",\n\"transforms.route.type\": \"io.debezium.transforms.ContentBasedRouter\",\n\"transforms.route.language\": \"jsr223.groovy\",\n\"transforms.route.topic.expression\": \"'events-' + value.tenant_id\"\n```\n\nЗапись с tenant_id='acme' вставлена в таблицу events. В какой топик попадет событие?",
+      "options": [
+        { "id": "a", "text": "inventory.public.events -- стандартный топик, ContentBasedRouter переопределяется" },
+        { "id": "b", "text": "events-acme -- Groovy expression конкатенирует 'events-' с значением tenant_id" },
+        { "id": "c", "text": "events-null -- unwrap удаляет tenant_id из данных" },
+        { "id": "d", "text": "acme.events -- Groovy expression формирует имя в обратном порядке" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "ContentBasedRouter выполняет Groovy expression для каждого сообщения. После unwrap (ExtractNewRecordState) событие содержит плоский JSON с полем tenant_id='acme'. Expression 'events-' + value.tenant_id конкатенирует строку 'events-' с значением поля, формируя имя топика events-acme. Обратите внимание: unwrap идет ДО route, чтобы ContentBasedRouter работал с плоскими полями (value.tenant_id), а не с вложенной структурой (value.after.tenant_id).",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-04-q3",
+      "type": "multiple-choice",
+      "question": "Для GDPR compliance данные EU пользователей должны оставаться в топиках eu-*, а non-EU данные -- в global-*. Таблица содержит поле region. Какое поле следует использовать для маршрутизации и какая главная проблема может возникнуть?",
+      "options": [
+        { "id": "a", "text": "Маршрутизация по region. Главная проблема: если region = null, Groovy-выражение выбросит NullPointerException и коннектор упадет" },
+        { "id": "b", "text": "Маршрутизация по email домену. Главная проблема: домен не всегда соответствует физическому расположению пользователя" },
+        { "id": "c", "text": "Маршрутизация по IP-адресу. Главная проблема: IP отсутствует в CDC событии, так как Debezium читает WAL" },
+        { "id": "d", "text": "Маршрутизация по region. Главная проблема: ContentBasedRouter не может создавать топики автоматически" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Маршрутизация по полю region -- правильный выбор для региональной изоляции. Главная проблема -- null safety: если region не заполнен (NULL в БД), Groovy-выражение value.region == 'EU' выбросит NullPointerException, останавливая коннектор. Безопасное expression: value.region != null && value.region == 'EU' ? 'eu-users' : 'global-users'. Вариант D неверен: Kafka с auto.create.topics.enable=true создает топики автоматически, хотя с default настройками, что может быть проблемой для production.",
+      "hint": "Подумайте о том, что происходит с Groovy-выражением, когда поле в базе данных содержит NULL. Как Groovy обрабатывает операции сравнения с null-значениями?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m05-04-q4",
+      "type": "multiple-choice",
+      "question": "В системе обработки заказов ContentBasedRouter направляет VIP-заказы (amount > 10000) в топик orders-priority для ускоренной обработки. Выражение: value.amount > 10000 ? 'orders-priority' : 'orders-standard'. Что произойдет, если поле amount содержит null (заказ без суммы)?",
+      "options": [
+        { "id": "a", "text": "Заказ попадет в orders-standard, так как null > 10000 вернет false" },
+        { "id": "b", "text": "Заказ попадет в orders-priority, так как null интерпретируется как 0" },
+        { "id": "c", "text": "Groovy выбросит NullPointerException при сравнении null > 10000, и коннектор перейдет в состояние FAILED" },
+        { "id": "d", "text": "ContentBasedRouter пропустит событие без маршрутизации и оно попадет в default топик" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "В Groovy сравнение null > 10000 вызывает NullPointerException, потому что оператор > не может работать с null. Это распространенная ошибка при написании routing expressions: разработчики тестируют с валидными данными, но в production попадаются записи с NULL-значениями. Исправление: value.amount != null && value.amount > 10000 ? 'orders-priority' : 'orders-standard'. Или использовать Groovy safe navigation: (value.amount ?: 0) > 10000. Это та же проблема null safety, что и в Filter SMT с DELETE-событиями.",
+      "hint": "Вспомните, как Groovy обрабатывает арифметические операции и сравнения, когда один из операндов равен null. Аналогичная проблема возникает в Filter SMT при доступе к value.after на DELETE-событиях.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

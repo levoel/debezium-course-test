@@ -5,5 +5,57 @@
     "idPrefix": "m05-03",
     "description": "Use IDs: m05-03-q1, m05-03-q2, ... for MC/TF; m05-03-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m05-03-q1",
+      "type": "true-false",
+      "question": "MaskField SMT шифрует PII данные в Kafka Connect, обеспечивая полную защиту персональных данных от источника до потребителя.",
+      "correctAnswer": false,
+      "explanation": "MaskField НЕ шифрует данные -- он заменяет значения полей на фиксированное значение (null, 0, ***MASKED***). Это downstream protection: исходные PII остаются в WAL базы данных и в replication slot до применения трансформации. Для полного compliance по GDPR (Article 25, Data Protection by Design) требуется дополнительное шифрование на уровне базы данных. MaskField защищает только данные в Kafka и downstream-системах.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m05-03-q2",
+      "type": "multiple-choice",
+      "question": "Таблица customers содержит поля: id (INT), name (VARCHAR), email (VARCHAR), age (INT), is_premium (BOOLEAN). Вы настроили MaskField SMT:\n\n```\n\"transforms.mask.type\": \"org.apache.kafka.connect.transforms.MaskField$Value\",\n\"transforms.mask.fields\": \"email,age,is_premium\",\n\"transforms.mask.replacement\": \"***MASKED***\"\n```\n\nКаким будет результат маскирования для записи {name: 'Alice', email: 'alice@example.com', age: 28, is_premium: true}?",
+      "options": [
+        { "id": "a", "text": "email: '***MASKED***', age: '***MASKED***', is_premium: '***MASKED***'" },
+        { "id": "b", "text": "email: '***MASKED***', age: 0, is_premium: false" },
+        { "id": "c", "text": "email: null, age: null, is_premium: null" },
+        { "id": "d", "text": "email: '***MASKED***', age: 28, is_premium: true -- числовые и boolean поля не маскируются" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "MaskField обрабатывает разные типы данных по-разному: строковые поля (email) заменяются на значение replacement ('***MASKED***'), числовые поля (age) всегда заменяются на 0 (replacement игнорируется для числовых типов), boolean поля (is_premium) всегда заменяются на false. Это важно учитывать при проектировании pipeline: downstream-системы должны знать, что 0 и false могут означать замаскированные данные, а не реальные значения.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-03-q3",
+      "type": "multiple-choice",
+      "question": "При UPDATE записи Debezium генерирует событие с полями before (старое значение) и after (новое значение). Если MaskField SMT применяется к полю email, что произойдет с email в before и after?",
+      "options": [
+        { "id": "a", "text": "Маскируется только after.email, before.email сохраняется в открытом виде" },
+        { "id": "b", "text": "Маскируются оба: before.email и after.email, если MaskField применяется до ExtractNewRecordState" },
+        { "id": "c", "text": "MaskField работает только с after.email и игнорирует before" },
+        { "id": "d", "text": "При стандартном порядке unwrap,mask маскируется только извлеченное значение (бывшее after), потому что ExtractNewRecordState уже удалил envelope структуру" }
+      ],
+      "correctAnswer": "d",
+      "explanation": "При стандартном порядке трансформаций unwrap,mask: сначала ExtractNewRecordState извлекает содержимое after и создает плоский JSON (envelope удален). Затем MaskField маскирует поле email в этом плоском JSON. Поле before к этому моменту уже отброшено. Если бы MaskField применялся ДО unwrap, он бы работал с вложенной структурой и маскировал бы email внутри объекта after (но не before, так как $Value работает на верхнем уровне). Именно поэтому стандартный порядок -- unwrap, затем mask.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m05-03-q4",
+      "type": "multiple-choice",
+      "question": "Команда аналитики предлагает два подхода к маскированию email в CDC pipeline: (A) MaskField с replacement '***MASKED***' (полная замена) или (B) хеш-функция SHA-256 для email. Когда предпочтительнее каждый подход?",
+      "options": [
+        { "id": "a", "text": "Хеш (B) всегда лучше, так как сохраняет уникальность и позволяет JOIN между таблицами без раскрытия PII" },
+        { "id": "b", "text": "Полная замена (A) лучше для максимальной защиты, когда идентификация пользователя не нужна; хеш (B) лучше, когда downstream-системам нужно связывать записи одного пользователя без доступа к исходному email" },
+        { "id": "c", "text": "Полная замена (A) не подходит для GDPR, только хеш (B) обеспечивает compliance" },
+        { "id": "d", "text": "MaskField не поддерживает хеш-функции, поэтому вариант B невозможен в Kafka Connect" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Полная замена на '***MASKED***' обеспечивает максимальную data minimization -- невозможно восстановить исходные данные или идентифицировать пользователя. Это подходит для сценариев, где downstream-системе не нужна связь между записями одного пользователя. Хеш SHA-256 (pseudonymization) сохраняет детерминистическое соответствие: один и тот же email всегда дает один и тот же хеш, позволяя JOIN-операции. Однако хеш теоретически обратим через rainbow tables для коротких email. Вариант D неверен: MaskField не поддерживает хеш 'из коробки', но можно реализовать через custom SMT или Kafka Streams.",
+      "hint": "Сравните два свойства: (1) можно ли восстановить исходные данные из замаскированного значения, и (2) можно ли связать записи одного пользователя в разных таблицах без доступа к исходному email. Как каждый подход влияет на эти свойства?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
