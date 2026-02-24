@@ -1,9 +1,0 @@
-{
-  "lessonSlug": "05-module-5/05-outbox-pattern-theory",
-  "moduleId": "05-module-5",
-  "_meta": {
-    "idPrefix": "m05-05",
-    "description": "Use IDs: m05-05-q1, m05-05-q2, ... for MC/TF; m05-05-code-1 for code challenges"
-  },
-  "questions": []
-}

@@ -1,9 +1,0 @@
-{
-  "lessonSlug": "03-module-3/11-gtid-failover-procedures",
-  "moduleId": "03-module-3",
-  "_meta": {
-    "idPrefix": "m03-11",
-    "description": "Use IDs: m03-11-q1, m03-11-q2, ... for MC/TF; m03-11-code-1 for code challenges"
-  },
-  "questions": []
-}

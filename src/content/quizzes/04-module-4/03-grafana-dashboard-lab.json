@@ -1,9 +1,0 @@
-{
-  "lessonSlug": "04-module-4/03-grafana-dashboard-lab",
-  "moduleId": "04-module-4",
-  "_meta": {
-    "idPrefix": "m04-03",
-    "description": "Use IDs: m04-03-q1, m04-03-q2, ... for MC/TF; m04-03-code-1 for code challenges"
-  },
-  "questions": []
-}

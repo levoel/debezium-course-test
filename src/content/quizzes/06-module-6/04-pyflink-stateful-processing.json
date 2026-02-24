@@ -1,9 +1,0 @@
-{
-  "lessonSlug": "06-module-6/04-pyflink-stateful-processing",
-  "moduleId": "06-module-6",
-  "_meta": {
-    "idPrefix": "m06-04",
-    "description": "Use IDs: m06-04-q1, m06-04-q2, ... for MC/TF; m06-04-code-1 for code challenges"
-  },
-  "questions": []
-}

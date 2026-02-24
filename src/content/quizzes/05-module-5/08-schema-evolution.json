@@ -1,9 +1,0 @@
-{
-  "lessonSlug": "05-module-5/08-schema-evolution",
-  "moduleId": "05-module-5",
-  "_meta": {
-    "idPrefix": "m05-08",
-    "description": "Use IDs: m05-08-q1, m05-08-q2, ... for MC/TF; m05-08-code-1 for code challenges"
-  },
-  "questions": []
-}

@@ -1,9 +1,0 @@
-{
-  "lessonSlug": "03-module-3/01-binlog-architecture",
-  "moduleId": "03-module-3",
-  "_meta": {
-    "idPrefix": "m03-01",
-    "description": "Use IDs: m03-01-q1, m03-01-q2, ... for MC/TF; m03-01-code-1 for code challenges"
-  },
-  "questions": []
-}
