@@ -5,5 +5,57 @@
     "idPrefix": "m02-04",
     "description": "Use IDs: m02-04-q1, m02-04-q2, ... for MC/TF; m02-04-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m02-04-q1",
+      "type": "multiple-choice",
+      "question": "В чём ключевое различие между DB Cluster Parameter Group и DB Instance Parameter Group в Amazon Aurora PostgreSQL?",
+      "options": [
+        { "id": "a", "text": "DB Cluster Parameter Group применяется ко всем инстансам кластера (Writer + Readers) и содержит параметры уровня движка (wal_level, replication). DB Instance Parameter Group — параметры конкретного инстанса (память, соединения)" },
+        { "id": "b", "text": "DB Cluster Parameter Group для production, DB Instance Parameter Group для development и тестирования" },
+        { "id": "c", "text": "DB Cluster Parameter Group не требует перезагрузки, а DB Instance Parameter Group всегда требует" },
+        { "id": "d", "text": "Разницы нет — это два названия одного и того же объекта в разных версиях AWS Console" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "DB Cluster Parameter Group содержит параметры, влияющие на весь кластер Aurora — включая движковые настройки, такие как rds.logical_replication (эквивалент wal_level=logical). Эти параметры применяются ко всем инстансам кластера. DB Instance Parameter Group содержит параметры конкретного инстанса (memory buffers, max_connections). Критически важно понимать это различие: rds.logical_replication доступен ТОЛЬКО в DB Cluster Parameter Group — если вы создадите DB Instance Parameter Group, вы не найдёте этот параметр.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m02-04-q2",
+      "type": "multiple-choice",
+      "question": "Инженер создал DB Instance Parameter Group в AWS Console, но не может найти параметр `rds.logical_replication`. Поиск не даёт результатов. В чём причина?",
+      "options": [
+        { "id": "a", "text": "Параметр rds.logical_replication доступен только в версиях Aurora PostgreSQL 13 и выше" },
+        { "id": "b", "text": "Параметр rds.logical_replication существует только в DB Cluster Parameter Group, а не в DB Instance Parameter Group — инженер создал неправильный тип группы параметров" },
+        { "id": "c", "text": "Нужно сначала включить Advanced Parameters в настройках AWS Console" },
+        { "id": "d", "text": "Параметр называется по-другому в Aurora: `aurora.logical_replication` вместо `rds.logical_replication`" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Это одна из самых частых ошибок при настройке Aurora для CDC. Параметр rds.logical_replication — это настройка уровня кластера, определяющая формат WAL для всех инстансов. Поэтому он доступен только в DB Cluster Parameter Group. Если вы создали DB Instance Parameter Group, этот параметр просто не будет отображаться. Решение: создать новую parameter group с типом DB Cluster Parameter Group (при создании в AWS Console — выбрать тип 'DB Cluster Parameter Group', в CLI — использовать create-db-cluster-parameter-group).",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m02-04-q3",
+      "type": "true-false",
+      "question": "После изменения rds.logical_replication=1 в DB Cluster Parameter Group, логическая репликация включается автоматически без перезагрузки инстанса Aurora.",
+      "correctAnswer": false,
+      "explanation": "Изменение rds.logical_replication=1 НЕ применяется автоматически. После сохранения параметра в DB Cluster Parameter Group необходимо выполнить reboot Writer-инстанса кластера. Без reboot параметр wal_level останется 'replica', и Debezium не сможет создать слот репликации. Это подтверждается командой SHOW wal_level; — если она возвращает 'replica' вместо 'logical', reboot не был выполнен. Статус инстанса в AWS Console покажет 'pending-reboot', пока перезагрузка не завершена.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m02-04-q4",
+      "type": "multiple-choice",
+      "question": "Команда планирует использовать Debezium с Aurora Serverless для CDC. Какие ограничения и альтернативы необходимо учесть при выборе конфигурации?",
+      "options": [
+        { "id": "a", "text": "Aurora Serverless полностью поддерживает CDC. Ограничений нет — настройка идентична Aurora Provisioned" },
+        { "id": "b", "text": "Aurora Serverless v1 НЕ поддерживает логическую репликацию. Необходимо использовать Aurora Serverless v2 (поддерживает CDC) или Aurora Provisioned. Миграция с v1 на v2 обязательна для работы с Debezium" },
+        { "id": "c", "text": "Aurora Serverless не поддерживает CDC ни в какой версии. Единственная альтернатива — self-hosted PostgreSQL на EC2" },
+        { "id": "d", "text": "Aurora Serverless поддерживает CDC, но только через wal2json, а не pgoutput" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Aurora Serverless v1 не поддерживает логическую репликацию из-за архитектурных ограничений (shared storage layer без поддержки custom parameter groups для wal_level). Aurora Serverless v2 — значительно переработанная версия, совместимая с DB Cluster Parameter Groups и поддерживающая rds.logical_replication=1. Aurora Provisioned также полностью поддерживает CDC. При планировании важно учесть: если проект уже использует Aurora Serverless v1, миграция на v2 или Provisioned — обязательный шаг перед внедрением Debezium. Вариант C неверен — Aurora Provisioned и Serverless v2 работают с Debezium.",
+      "hint": "Обратите внимание на эволюцию Aurora Serverless: v1 и v2 — это существенно разные архитектуры с разными возможностями. Подумайте, какие функции PostgreSQL доступны через DB Cluster Parameter Groups и почему v1 может их не поддерживать.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
