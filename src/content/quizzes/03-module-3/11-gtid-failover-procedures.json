@@ -5,5 +5,64 @@
     "idPrefix": "m03-11",
     "description": "Use IDs: m03-11-q1, m03-11-q2, ... for MC/TF; m03-11-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-11-q1",
+      "type": "multiple-choice",
+      "question": "Почему GTID позволяет Debezium коннектору продолжить чтение binlog после failover на новый primary без потери данных?",
+      "options": [
+        { "id": "a", "text": "GTID кэширует все события локально на стороне коннектора, поэтому failover не влияет на чтение" },
+        { "id": "b", "text": "GTID представляет собой глобально уникальный идентификатор транзакции, одинаковый на всех серверах топологии, что позволяет коннектору найти свою позицию на любом сервере" },
+        { "id": "c", "text": "GTID автоматически создаёт backup binlog файлов при каждом failover" },
+        { "id": "d", "text": "GTID заставляет MySQL реплицировать данные синхронно, исключая потерю транзакций" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "GTID (Global Transaction ID) -- глобально уникальный идентификатор, который одинаков на primary и всех replica серверах. При failover Debezium коннектор сохраняет в оффсете последний обработанный GTID. Когда коннектор подключается к новому primary, MySQL находит эту позицию по GTID и продолжает стриминг. В отличие от file:position (вариант без GTID), где binlog файлы имеют разные имена на разных серверах, GTID обеспечивает единую систему координат.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-11-q2",
+      "type": "multiple-choice",
+      "question": "Вы выполняете запланированный (planned) failover Aurora MySQL кластера. Какая последовательность шагов обеспечит корректное переключение CDC коннектора?",
+      "options": [
+        { "id": "a", "text": "Остановить коннектор → выполнить failover → запустить коннектор → проверить GTID continuity" },
+        { "id": "b", "text": "Проверить статус коннектора и lag → записать текущий GTID → выполнить failover → дождаться auto-reconnect коннектора → проверить GTID continuity и event flow" },
+        { "id": "c", "text": "Выполнить failover → пересоздать коннектор с snapshot.mode=initial → дождаться полного resnapshot" },
+        { "id": "d", "text": "Удалить коннектор → выполнить failover → создать новый коннектор с новым server_id" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Правильная процедура planned failover включает pre-validation (проверка RUNNING статуса, оценка lag, запись текущего GTID на primary), затем выполнение failover через aws rds failover-db-cluster. Коннектор автоматически переподключается через errors.retry.timeout (default 5 минут). После reconnect необходимо проверить GTID continuity (оффсет GTID должен быть внутри executed GTID range на новом primary) и тестовый INSERT для подтверждения event flow. Вариант C избыточен -- resnapshot не нужен при GTID failover.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-11-q3",
+      "type": "multiple-choice",
+      "question": "После незапланированного failover коннектор автоматически переподключился к новому primary, но downstream consumers начали получать дублирующиеся события. Какая наиболее вероятная причина?",
+      "options": [
+        { "id": "a", "text": "Новый primary имеет другой server_uuid, и коннектор начал читать те же транзакции под новым UUID" },
+        { "id": "b", "text": "gtid.source.includes не включает UUID нового primary, и коннектор перечитывает события от старого primary через relay log" },
+        { "id": "c", "text": "Replica не успела синхронизироваться с primary до failover (асинхронная репликация), и коннектор оффсет указывает на позицию дальше, чем executed GTID нового primary, что вызвало partial resnapshot" },
+        { "id": "d", "text": "heartbeat.interval.ms не был настроен, и коннектор потерял актуальную позицию на idle таблицах" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "При асинхронной репликации replica может отставать от primary. Если failover произошёл до полной синхронизации, executed GTID нового primary меньше, чем оффсет коннектора. Например, оффсет коннектора 1-10000, но новый primary имеет только 1-9950. Debezium при snapshot.mode=when_needed может триггернуть snapshot для восстановления consistency, что приводит к дублированию. Вариант D (heartbeat) влияет на position loss при idle таблицах, но не вызывает дубликаты при активном стриминге.",
+      "hint": "Подумайте о разнице между GTID оффсетом коннектора и executed GTID set на новом primary. Что происходит, когда оффсет коннектора указывает на транзакции, которых нет на новом primary?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m03-11-q4",
+      "type": "multiple-choice",
+      "question": "Сравните поведение при failover для Aurora MySQL и self-managed MySQL. Какое ключевое преимущество Aurora обеспечивает для CDC коннектора, которого нет при ручном failover?",
+      "options": [
+        { "id": "a", "text": "Aurora использует синхронную репликацию внутри кластера и автоматически обновляет DNS endpoint, что устраняет необходимость ручной реконфигурации database.hostname в коннекторе" },
+        { "id": "b", "text": "Aurora хранит binlog в распределённом хранилище, что делает GTID ненужным для failover" },
+        { "id": "c", "text": "Aurora автоматически пересоздаёт коннектор в Kafka Connect при каждом failover" },
+        { "id": "d", "text": "Aurora запрещает незапланированные failover, гарантируя нулевой data loss" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Aurora MySQL использует shared distributed storage (Aurora Storage), где все instances в кластере читают одни и те же данные. При failover новый primary автоматически выбирается из existing read replicas, а cluster endpoint DNS обновляется автоматически (10-30 секунд propagation). Коннектор Debezium не требует изменения database.hostname -- он переподключится через тот же cluster endpoint. В self-managed MySQL нужно вручную выполнить STOP SLAVE / RESET SLAVE ALL / SET GLOBAL read_only=OFF на replica, затем обновить DNS или изменить connector config.",
+      "hint": "Сравните, что нужно сделать вручную при self-managed failover (promotion replica, DNS, connector config) и что Aurora делает автоматически. Обратите внимание на роль cluster endpoint.",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

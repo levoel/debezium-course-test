@@ -5,5 +5,64 @@
     "idPrefix": "m03-13",
     "description": "Use IDs: m03-13-q1, m03-13-q2, ... for MC/TF; m03-13-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-13-q1",
+      "type": "multiple-choice",
+      "question": "Коннектор MySQL CDC падает при старте с ошибкой: \"The connector is trying to read binlog starting at binlog file 'mysql-bin.000134', but this file no longer exists on the server\". Какова корневая причина этой ошибки?",
+      "options": [
+        { "id": "a", "text": "Коннектор настроен на неправильный MySQL сервер и пытается читать binlog файл, который никогда не существовал" },
+        { "id": "b", "text": "Binlog файлы были удалены (purge) из-за истечения binlog_expire_logs_seconds или ручного выполнения PURGE BINARY LOGS, и сохранённый оффсет коннектора указывает на позицию в удалённом файле" },
+        { "id": "c", "text": "Schema history topic повреждён, и коннектор не может найти правильную позицию в binlog" },
+        { "id": "d", "text": "MySQL перезапустился и создал новый binlog файл с другим именем" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Ошибка \"binlog file no longer exists\" означает, что оффсет коннектора (сохранённый в connect-offsets topic) указывает на binlog файл, который уже удалён с MySQL сервера. Наиболее частые причины: коннектор был offline дольше, чем binlog_expire_logs_seconds, или DBA вручную выполнил PURGE BINARY LOGS для освобождения диска. Диагностика: сравните SHOW BINARY LOGS (доступные файлы) с оффсетом коннектора из connect-offsets topic.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-13-q2",
+      "type": "multiple-choice",
+      "question": "Коннектор Debezium перестал работать после ALTER TABLE на production таблице. Ошибка: \"Table 'customers' not found in schema history topic\". Администратор подозревает повреждение schema history topic. Какой первый диагностический шаг определит, является ли проблема потерей binlog position или повреждением schema history?",
+      "options": [
+        { "id": "a", "text": "Перезапустить коннектор с snapshot.mode=initial для полного resnapshot" },
+        { "id": "b", "text": "Проверить retention.ms на schema history topic и подсчитать количество сообщений -- если retention.ms не равен -1 или topic содержит меньше сообщений, чем ожидаемое количество DDL операций, проблема в schema history" },
+        { "id": "c", "text": "Удалить schema history topic и позволить коннектору пересоздать его" },
+        { "id": "d", "text": "Изменить database.server.name для создания нового набора топиков" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Decision tree для диагностики: 1) Проверить retention.ms schema history topic (должен быть -1 для infinite retention). Если 604800000 (7 дней) -- это \"7-дневная бомба\" из Lesson 06, topic потерял старые DDL записи. 2) Подсчитать messages через GetOffsetShell и сравнить с ожидаемым количеством DDL. 3) Проверить SHOW BINARY LOGS и сравнить с оффсетом для исключения binlog position loss. Варианты A и C деструктивны -- они должны применяться только после точной диагностики.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-13-q3",
+      "type": "multiple-choice",
+      "question": "Произошла потеря binlog position. Вам доступны два варианта восстановления: snapshot.mode=when_needed (автоматический resnapshot) и ручной сброс оффсета с snapshot.mode=initial. Когда предпочтительнее использовать when_needed, а когда -- manual reset с initial?",
+      "options": [
+        { "id": "a", "text": "when_needed всегда лучше, так как не требует ручного вмешательства и быстрее завершает восстановление" },
+        { "id": "b", "text": "when_needed подходит для production с минимальным downtime (автоматический resnapshot при обнаружении unavailable position), а manual reset с initial предпочтителен, когда нужен fresh start или когда when_needed не работает из-за edge cases, например повреждения оффсета" },
+        { "id": "c", "text": "initial всегда лучше, так как гарантирует полную consistency данных" },
+        { "id": "d", "text": "Оба варианта эквивалентны и занимают одинаковое время" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "snapshot.mode=when_needed автоматически определяет, что binlog position unavailable, и триггерит snapshot без ручного вмешательства. Это идеально для production, где важно минимизировать manual steps. Однако when_needed может создать дублирующие события (snapshot + streaming overlap), требуя idempotent consumers. Manual reset с initial нужен, когда: when_needed не детектирует проблему, оффсет повреждён настолько, что коннектор не может стартовать, или вы хотите fresh start с чистым оффсетом (новое имя коннектора).",
+      "hint": "Сравните сценарии: автоматическое восстановление (коннектор сам решает, что делать) vs контролируемое восстановление (вы вручную управляете процессом). Когда автоматика может подвести?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m03-13-q4",
+      "type": "multiple-choice",
+      "question": "Спроектируйте стратегию defense-in-depth для предотвращения потери binlog position и повреждения schema history. Какая комбинация мер обеспечивает максимальную надёжность?",
+      "options": [
+        { "id": "a", "text": "Достаточный binlog retention (binlog_expire_logs_seconds >= max_downtime * safety_margin) + heartbeat events для обновления оффсета на idle таблицах + мониторинг lag + infinite retention на schema history topic (retention.ms=-1) + регулярные backups schema history" },
+        { "id": "b", "text": "snapshot.mode=always для автоматического resnapshot при каждом рестарте коннектора" },
+        { "id": "c", "text": "Увеличить max_connections на MySQL для предотвращения connection timeout коннектора" },
+        { "id": "d", "text": "Настроить Kafka Connect в standalone mode для более быстрого recovery" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Defense-in-depth включает несколько уровней защиты: Layer 1 -- adequate binlog retention (формула: max(max_downtime, snapshot_duration) * safety_margin). Layer 2 -- heartbeat events (heartbeat.interval.ms=10000) предотвращают position loss на idle таблицах. Layer 3 -- мониторинг и alerting на MilliSecondsBehindSource > threshold. Layer 4 -- infinite retention на schema history topic (retention.ms=-1 И retention.bytes=-1, оба параметра обязательны). Layer 5 -- регулярные backups schema history для recovery за минуты вместо часов resnapshot. Вариант B (snapshot.mode=always) -- антипаттерн, вызывающий resnapshot при каждом рестарте.",
+      "hint": "Подумайте о каждом уровне защиты как о страховке от конкретного типа сбоя. Binlog retention защищает от position loss, heartbeat -- от stale offset на idle таблицах, backups -- от schema history corruption. Какая комбинация покрывает все сценарии?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }

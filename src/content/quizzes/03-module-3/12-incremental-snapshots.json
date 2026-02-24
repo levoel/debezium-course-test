@@ -5,5 +5,64 @@
     "idPrefix": "m03-12",
     "description": "Use IDs: m03-12-q1, m03-12-q2, ... for MC/TF; m03-12-code-1 for code challenges"
   },
-  "questions": []
+  "questions": [
+    {
+      "id": "m03-12-q1",
+      "type": "multiple-choice",
+      "question": "Какую проблему incremental snapshot решает по сравнению с initial snapshot?",
+      "options": [
+        { "id": "a", "text": "Incremental snapshot использует меньше дискового пространства для хранения данных в Kafka" },
+        { "id": "b", "text": "Incremental snapshot позволяет выполнить on-demand snapshot конкретных таблиц без перезапуска коннектора и без остановки binlog стриминга" },
+        { "id": "c", "text": "Incremental snapshot автоматически сжимает данные при передаче в Kafka" },
+        { "id": "d", "text": "Incremental snapshot устраняет необходимость настройки signal table" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Initial snapshot имеет три ключевых ограничения: требует перезапуска коннектора, snapshot выполняется для всех таблиц из table.include.list (all-or-nothing), и binlog стриминг блокируется до завершения snapshot. Incremental snapshot решает все три проблемы: триггерится on-demand через INSERT в signal table, позволяет указать конкретные таблицы, и binlog стриминг продолжается параллельно с chunk-based чтением данных.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m03-12-q2",
+      "type": "multiple-choice",
+      "question": "Дана конфигурация коннектора с signal table. Какой SQL-запрос корректно запустит incremental snapshot таблицы inventory.orders?\n\nКонфигурация:\n```json\n{\n  \"signal.data.collection\": \"inventory.debezium_signal\",\n  \"incremental.snapshot.chunk.size\": \"2048\"\n}\n```",
+      "options": [
+        { "id": "a", "text": "INSERT INTO inventory.debezium_signal (id, type, data) VALUES (UUID(), 'execute-snapshot', '{\"data-collections\": [\"inventory.orders\"]}');" },
+        { "id": "b", "text": "INSERT INTO inventory.debezium_signal (id, type, data) VALUES (UUID(), 'start-snapshot', '{\"tables\": [\"inventory.orders\"]}');" },
+        { "id": "c", "text": "UPDATE inventory.debezium_signal SET type = 'execute-snapshot' WHERE id = 'orders';" },
+        { "id": "d", "text": "INSERT INTO inventory.debezium_signal (id, type) VALUES (UUID(), 'snapshot-orders');" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Signal table требует три обязательных поля: id (уникальный идентификатор, рекомендуется UUID()), type (тип сигнала -- 'execute-snapshot' для запуска snapshot) и data (JSON payload с ключом 'data-collections', содержащим массив fully-qualified имён таблиц). Вариант B использует неправильный тип сигнала и формат data. Вариант C использует UPDATE вместо INSERT -- Debezium мониторит INSERT события в binlog. Вариант D не содержит поле data с указанием таблиц.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-12-q3",
+      "type": "multiple-choice",
+      "question": "Во время incremental snapshot таблицы orders приложение продолжает выполнять INSERT и UPDATE операции на той же таблице. Как Debezium обеспечивает consistency данных между snapshot chunks и concurrent binlog событиями?",
+      "options": [
+        { "id": "a", "text": "Debezium блокирует таблицу на время каждого chunk, предотвращая concurrent writes" },
+        { "id": "b", "text": "Debezium читает chunks через SELECT с PK range без блокировок, а между chunks обрабатывает binlog события. При обнаружении, что binlog событие изменило строку, которая уже была прочитана в chunk, Debezium использует binlog версию как более актуальную" },
+        { "id": "c", "text": "Debezium отменяет весь snapshot при обнаружении concurrent write и начинает заново" },
+        { "id": "d", "text": "Debezium игнорирует concurrent writes во время snapshot, и consumers получают устаревшие данные" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Incremental snapshot использует watermark-based подход: Debezium читает chunk через SELECT WHERE pk >= X AND pk < X+chunk_size без блокировок, затем между chunks обрабатывает накопившиеся binlog события. Если binlog содержит UPDATE для строки, которая уже была прочитана в chunk, Debezium отдаёт приоритет binlog версии (более актуальной). Это обеспечивает eventual consistency без блокировки таблицы и без прерывания snapshot.",
+      "hint": "Подумайте о том, что происходит между обработкой двух последовательных chunks. Какие события Debezium обрабатывает в этом промежутке, и как он решает конфликт между snapshot данными и binlog данными для одной и той же строки?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m03-12-q4",
+      "type": "multiple-choice",
+      "question": "Команде нужно выполнить snapshot таблицы размером 2TB без остановки стриминга. Binlog retention настроен на 7 дней. Estimated chunk time -- 3 секунды при chunk_size=2048. Какой подход обеспечит успешное завершение snapshot?",
+      "options": [
+        { "id": "a", "text": "Запустить incremental snapshot с default настройками -- 7 дней retention достаточно для любой таблицы" },
+        { "id": "b", "text": "Рассчитать estimated duration (total_rows / chunk_size * avg_chunk_time), убедиться, что binlog retention превышает duration с safety margin, мониторить прогресс через JMX метрики SnapshotRunning и RemainingTableCount" },
+        { "id": "c", "text": "Увеличить chunk_size до 1000000 для максимальной скорости snapshot" },
+        { "id": "d", "text": "Использовать initial snapshot вместо incremental -- он быстрее для больших таблиц" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Для 2TB таблицы расчёт: предположим ~400 млн строк / 2048 = ~195 000 chunks * 3 сек = ~585 000 сек = ~162 часа = ~6.7 дней. При 7-дневном retention и safety margin 2x необходим retention минимум 13.5 дней. Формула: Required Retention >= Snapshot Duration + Safety Margin + Buffer. Вариант C (chunk_size=1000000) вызовет memory pressure и длительные блокировки. Вариант D (initial snapshot) блокирует binlog стриминг на всё время выполнения.",
+      "hint": "Рассчитайте приблизительное время выполнения snapshot по формуле: (total_rows / chunk_size) * avg_chunk_time. Сравните это с binlog retention. Что произойдёт, если snapshot длится дольше, чем binlog retention?",
+      "bloomLevel": "analytical"
+    }
+  ]
 }
