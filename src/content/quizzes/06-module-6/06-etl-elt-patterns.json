@@ -1,0 +1,67 @@
+{
+  "lessonSlug": "06-module-6/06-etl-elt-patterns",
+  "moduleId": "06-module-6",
+  "_meta": {
+    "idPrefix": "m06-06",
+    "description": "Use IDs: m06-06-q1, m06-06-q2, ... for MC/TF; m06-06-code-1 for code challenges"
+  },
+  "questions": [
+    {
+      "id": "m06-06-q1",
+      "type": "multiple-choice",
+      "question": "Чем ELT подход отличается от ETL при использовании CDC в качестве источника данных?",
+      "options": [
+        { "id": "a", "text": "ELT сначала загружает raw CDC события в data lake, затем трансформирует в warehouse средствами SQL/dbt" },
+        { "id": "b", "text": "ELT применяет трансформации до записи и загружает только clean data в warehouse" },
+        { "id": "c", "text": "ELT не поддерживает CDC и работает только с full table dumps" },
+        { "id": "d", "text": "ELT требует Schema Registry для маппинга CDC схемы перед загрузкой" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "В ELT паттерне данные сначала загружаются в raw-формате в data lake (Extract + Load), а трансформации выполняются позднее средствами warehouse (SQL, dbt). Это сохраняет raw данные для возможного re-processing и даёт гибкость: новая метрика = новый SQL-запрос без изменения pipeline. В отличие от ETL, где трансформация происходит до загрузки (вариант B), ELT использует compute power самого warehouse. Современный тренд -- ELT благодаря дешёвому хранилищу (S3, Azure Blob) и мощным облачным warehouse (Snowflake, BigQuery).",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m06-06-q2",
+      "type": "multiple-choice",
+      "question": "Вы проектируете CDC pipeline для записи в data lake с append-only history pattern. Какие metadata columns необходимо добавить к каждому CDC событию для обеспечения audit trail и troubleshooting?",
+      "options": [
+        { "id": "a", "text": "Только _operation (c/u/d) -- остальные метаданные доступны через Kafka headers" },
+        { "id": "b", "text": "_operation (тип операции), _cdc_timestamp (timestamp из базы данных), _processed_at (время обработки Spark), _source_table (имя таблицы)" },
+        { "id": "c", "text": "Kafka offset и partition -- этого достаточно для восстановления полной истории" },
+        { "id": "d", "text": "_checksum (хеш строки) и _batch_id (идентификатор micro-batch)" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Для production append-only history необходимы: _operation (тип CDC операции: c/u/d/r) для фильтрации по типу изменения, _cdc_timestamp (timestamp транзакции из базы данных) для восстановления состояния на определённый момент времени, _processed_at (когда Spark обработал событие) для диагностики задержек pipeline, _source_table для multi-table pipelines. Kafka offset (вариант C) теряется при записи в Parquet и не несёт бизнес-контекста. Вариант A недостаточен для troubleshooting.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-06-q3",
+      "type": "multiple-choice",
+      "question": "При использовании Delta Lake MERGE для применения CDC событий, функция foreachBatch обрабатывает micro-batch, содержащий INSERT (op='c'), UPDATE (op='u') и DELETE (op='d') для одной таблицы. Какой порядок обработки в MERGE корректен?",
+      "options": [
+        { "id": "a", "text": "whenNotMatchedInsertAll для op='c', затем whenMatchedUpdateAll для op='u', затем whenMatchedDelete для op='d'" },
+        { "id": "b", "text": "whenMatchedDelete для op='d', whenMatchedUpdateAll для op='u', whenNotMatchedInsertAll для op='c' -- все три условия в одном MERGE" },
+        { "id": "c", "text": "Три отдельных MERGE: один для INSERT, один для UPDATE, один для DELETE" },
+        { "id": "d", "text": "Порядок не имеет значения -- Delta Lake автоматически определяет тип операции по primary key" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Delta Lake MERGE поддерживает все три действия (delete, update, insert) в одной атомарной операции. Порядок: (1) whenMatchedDelete для удалений, (2) whenMatchedUpdateAll для обновлений, (3) whenNotMatchedInsertAll для вставок. Условие match определяется по primary key (target.id = source.id), а тип операции -- по полю op из CDC события. Один MERGE атомарен и эффективнее трёх отдельных операций (вариант C). Delta Lake не определяет тип операции автоматически (вариант D) -- нужно явно указать условия через condition.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-06-q4",
+      "type": "multiple-choice",
+      "question": "PySpark streaming pipeline записывает CDC события в Parquet с партиционированием по _processed_date и trigger каждые 30 секунд. Через месяц аналитики жалуются на медленные запросы к данным за последнюю неделю. При этом запросы к данным за один день работают быстро. Какова наиболее вероятная причина и решение?",
+      "options": [
+        { "id": "a", "text": "Слишком много мелких Parquet файлов в каждой партиции (30-секундный trigger создаёт ~2880 файлов/день). Решение: увеличить trigger interval или периодически запускать compaction" },
+        { "id": "b", "text": "Parquet не поддерживает date-based партиционирование. Решение: перейти на Delta Lake" },
+        { "id": "c", "text": "Запросы за неделю сканируют все партиции без predicate pushdown. Решение: добавить secondary index" },
+        { "id": "d", "text": "Водяные знаки (watermarks) не настроены, и Spark не может закрывать файлы. Решение: добавить withWatermark()" }
+      ],
+      "correctAnswer": "a",
+      "hint": "Подсчитайте: 30-секундный trigger = 2 файла/минуту = 120 файлов/час = 2880 файлов/день. За неделю это 20 000+ файлов. Как это влияет на производительность чтения Parquet?",
+      "explanation": "При trigger каждые 30 секунд каждый micro-batch создаёт новый Parquet файл. За день это ~2880 файлов, за неделю ~20 000. Большое количество мелких файлов (small files problem) создаёт значительный overhead на открытие/чтение файлов и metadata operations. Запрос за один день (2880 файлов) ещё приемлем, но за неделю (20 000 файлов) performance резко падает. Решения: (1) увеличить trigger interval (например, до 5 минут); (2) периодически запускать compaction (spark.read → coalesce → write); (3) использовать Delta Lake с OPTIMIZE для автоматической компакции.",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

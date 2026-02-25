@@ -1,0 +1,61 @@
+{
+  "lessonSlug": "06-module-6/07-feature-engineering",
+  "moduleId": "06-module-6",
+  "_meta": {
+    "idPrefix": "m06-07",
+    "description": "Use IDs: m06-07-q1, m06-07-q2, ... for MC/TF; m06-07-code-1 for code challenges"
+  },
+  "questions": [
+    {
+      "id": "m06-07-q1",
+      "type": "multiple-choice",
+      "question": "Почему batch-features (обновляемые раз в сутки) недостаточны для системы fraud detection?",
+      "options": [
+        { "id": "a", "text": "Batch-features не поддерживают числовые типы данных, необходимые для ML-моделей" },
+        { "id": "b", "text": "К моменту prediction features устаревают на 12-24 часа, и мошенник успеет совершить множество транзакций до обновления" },
+        { "id": "c", "text": "Batch-features не совместимы с Kafka и требуют отдельной инфраструктуры" },
+        { "id": "d", "text": "Batch-features невозможно версионировать для воспроизведения predictions" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Для fraud detection свежесть features напрямую влияет на эффективность модели. При batch-обновлении (раз в сутки) features устаревают на 12-24 часа. За это время мошенник может совершить десятки транзакций, прежде чем модель увидит изменения в поведении. Real-time CDC features обновляются при каждом событии (latency в секундах), позволяя модели реагировать на аномальную активность немедленно. Варианты A и C технически неверны, а вариант D описывает проблему feature store, не связанную со staleness.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m06-07-q2",
+      "type": "multiple-choice",
+      "question": "Какой тип ML-признака вычисляется из CDC событий с помощью PySpark window aggregation groupBy(customer_id, window(event_time, '30 days')).agg(count('*'), sum('total'))?",
+      "options": [
+        { "id": "a", "text": "Point-in-time feature -- текущее состояние записи" },
+        { "id": "b", "text": "Aggregated feature -- статистика за временное окно (rolling window)" },
+        { "id": "c", "text": "Derived feature -- комбинация других features" },
+        { "id": "d", "text": "Behavioral feature -- паттерн поведения пользователя" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Aggregated features -- это статистика, вычисленная за временное окно: count (количество заказов за 30 дней), sum (общая сумма покупок), avg (средний чек). Они вычисляются через window aggregation в PySpark (groupBy с window function). Point-in-time features (вариант A) -- это текущее значение конкретного поля (например, status клиента). Derived features (вариант C) -- комбинации уже вычисленных features (например, is_high_value = total_spend_30d > 1000). Behavioral features (вариант D) описывают паттерны (частота, давность), часто построены на основе aggregated features.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-07-q3",
+      "type": "true-false",
+      "question": "Для записи features из PySpark Structured Streaming в Redis (online feature store) можно использовать writeStream.format('redis') без дополнительного кода.",
+      "correctAnswer": false,
+      "explanation": "PySpark Structured Streaming не имеет встроенного Redis connector. Для записи features в Redis используется паттерн foreachBatch(): каждый micro-batch передаётся как DataFrame в callback-функцию, где код вручную записывает данные в Redis через redis-py клиент. Паттерн foreachBatch также позволяет реализовать dual write -- одновременную запись в Redis (online store для real-time inference) и Parquet (offline store для batch training).",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-07-q4",
+      "type": "multiple-choice",
+      "question": "ML-команда обнаружила training-serving skew: модель обучена на features, вычисленных batch-процессом (ежедневные агрегации в SQL), но при inference использует features из streaming pipeline (PySpark window aggregations). Предсказания модели деградировали. Какая архитектурная мера предотвратит эту проблему?",
+      "options": [
+        { "id": "a", "text": "Увеличить частоту batch-процесса до каждого часа" },
+        { "id": "b", "text": "Использовать feature store для обеспечения consistency: одни и те же features используются для training (offline store) и inference (online store)" },
+        { "id": "c", "text": "Переобучать модель каждый день на свежих данных" },
+        { "id": "d", "text": "Отказаться от streaming features и использовать только batch" }
+      ],
+      "correctAnswer": "b",
+      "hint": "Training-serving skew возникает, когда features для обучения и inference вычисляются разными pipeline с разной логикой. Какой архитектурный компонент гарантирует, что одинаковые features используются в обоих контекстах?",
+      "explanation": "Feature store решает проблему training-serving skew: features вычисляются одним pipeline и сохраняются как в offline store (для training), так и в online store (для inference). Feast, Tecton и подобные инструменты обеспечивают consistency, versioning и lineage. Вариант A не решает корневую проблему: batch и streaming pipeline могут вычислять features по-разному (разная логика агрегации, разные time boundaries). Вариант C маскирует проблему, но модель всё равно видит разные features при inference.",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

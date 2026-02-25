@@ -1,0 +1,61 @@
+{
+  "lessonSlug": "06-module-6/05-pyspark-structured-streaming",
+  "moduleId": "06-module-6",
+  "_meta": {
+    "idPrefix": "m06-05",
+    "description": "Use IDs: m06-05-q1, m06-05-q2, ... for MC/TF; m06-05-code-1 for code challenges"
+  },
+  "questions": [
+    {
+      "id": "m06-05-q1",
+      "type": "multiple-choice",
+      "question": "Какое ключевое преимущество PySpark Structured Streaming перед PyFlink при построении CDC pipeline в data lake?",
+      "options": [
+        { "id": "a", "text": "PySpark обеспечивает exactly-once доставку в Kafka sink" },
+        { "id": "b", "text": "PySpark использует единый DataFrame API для batch и streaming, упрощая интеграцию с data lake и ML" },
+        { "id": "c", "text": "PySpark поддерживает latency менее 100 мс для real-time обработки" },
+        { "id": "d", "text": "PySpark не требует explicit schema для парсинга JSON из Kafka" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Главное преимущество PySpark -- unified DataFrame API для batch и streaming. Один и тот же код (select, filter, groupBy) работает и для batch DataFrames, и для streaming DataFrames. Это упрощает интеграцию с data lake (Parquet, Delta Lake), ML pipeline (MLlib), и позволяет переиспользовать логику. Вариант A неверен: PySpark предоставляет at-least-once для Kafka sink (PyFlink поддерживает exactly-once). Вариант C неверен: PySpark micro-batch обеспечивает latency 1-10 секунд.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m06-05-q2",
+      "type": "multiple-choice",
+      "question": "PySpark Structured Streaming читает CDC события из Kafka. Функция from_json() возвращает null для некоторых строк. Какая наиболее вероятная причина?",
+      "options": [
+        { "id": "a", "text": "Kafka вернул пустые сообщения из-за компакции топика" },
+        { "id": "b", "text": "Определённая StructType schema не совпадает со структурой JSON в Kafka сообщении" },
+        { "id": "c", "text": "Consumer group ID конфликтует с другим приложением" },
+        { "id": "d", "text": "Параметр startingOffsets установлен в latest, пропуская старые сообщения" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "from_json() в PySpark при несовпадении schema возвращает null без ошибки -- это silent data loss. Если поле total в базе NUMERIC, но в StructType указан DoubleType вместо DecimalType, или если вложенная структура payload не соответствует определённой ROW schema, from_json() вернёт null для всей строки. В production необходимо всегда проверять data IS NOT NULL после парсинга и логировать количество отброшенных строк для мониторинга.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-05-q3",
+      "type": "true-false",
+      "question": "В PySpark Structured Streaming можно безопасно изменить параметр spark.sql.shuffle.partitions после создания checkpoint без потери данных.",
+      "correctAnswer": false,
+      "explanation": "После создания checkpoint изменение spark.sql.shuffle.partitions приводит к ошибке восстановления state. Spark сохраняет state, распределённый по определённому количеству partitions. При изменении этого параметра Spark не может корректно восстановить state из checkpoint -- job либо упадёт, либо потеряет данные. Это одно из самых критичных ограничений PySpark Structured Streaming, которое необходимо учитывать при первоначальной настройке production pipeline.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-05-q4",
+      "type": "multiple-choice",
+      "question": "Streaming pipeline использует windowed aggregation с watermark 10 минут и output mode 'append'. Бизнес жалуется, что результаты появляются с большой задержкой. Однако при переключении на output mode 'update' результаты появляются сразу, но дублируются. Почему поведение различается и какой mode подходит для записи в Parquet?",
+      "options": [
+        { "id": "a", "text": "В append mode Spark публикует результаты только после finalization окна (watermark прошёл end time), а в update mode -- при каждом обновлении. Для Parquet подходит append mode, т.к. Parquet immutable" },
+        { "id": "b", "text": "Append mode буферизирует данные для батчирования, update mode пишет поштучно. Для Parquet лучше update mode с дедупликацией" },
+        { "id": "c", "text": "Разницы в поведении нет -- проблема в неправильной настройке trigger interval" },
+        { "id": "d", "text": "Append mode требует наличия Delta Lake, без него данные задерживаются" }
+      ],
+      "correctAnswer": "a",
+      "hint": "Подумайте о том, когда Spark считает результат окна 'финальным'. В append mode публикуются только финальные (неизменяемые) результаты. В update mode публикуются промежуточные результаты. Какие гарантии нужны Parquet файлам?",
+      "explanation": "В append mode Spark публикует результаты оконной агрегации только после того, как watermark проходит конец окна -- результат гарантированно финальный и неизменяемый. Задержка = watermark threshold (10 минут) + window size. В update mode промежуточные результаты публикуются при каждом micro-batch, но могут измениться при поступлении новых событий. Для Parquet подходит append mode: Parquet файлы immutable, и обновить уже записанную строку нельзя. Update mode подходит для мутабельных sinks (Kafka, database).",
+      "bloomLevel": "analytical"
+    }
+  ]
+}
