@@ -1,0 +1,68 @@
+{
+  "lessonSlug": "08-module-8/05-multi-database-configuration",
+  "moduleId": "08-module-8",
+  "_meta": {
+    "idPrefix": "m08-05",
+    "description": "Use IDs: m08-05-q1, m08-05-q2, ... for MC/TF"
+  },
+  "questions": [
+    {
+      "id": "m08-05-q1",
+      "type": "multiple-choice",
+      "question": "В multi-database конфигурации PostgreSQL connector использует topic replacement outbox.event.postgres.${routedByValue}, а MySQL -- outbox.event.mysql.${routedByValue}. Зачем в topic naming включен тип базы данных?",
+      "options": [
+        { "id": "a", "text": "Kafka требует указания типа базы данных в имени топика для корректной сериализации" },
+        { "id": "b", "text": "Для source traceability: consumer может определить origin database по имени топика, что упрощает troubleshooting и audit trail" },
+        { "id": "c", "text": "Для разделения ACL прав доступа -- PostgreSQL и MySQL команды управляют своими топиками независимо" },
+        { "id": "d", "text": "Для автоматической маршрутизации в разные BigQuery datasets по типу базы данных" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Включение типа БД в имя топика (outbox.event.postgres.orders vs outbox.event.mysql.orders) обеспечивает traceability -- по имени топика сразу видно, из какой базы данных пришло событие. Это критично для troubleshooting (быстро определить failing connector), аудита (data lineage tracking), и мониторинга (отдельные метрики per source). Без этого при сбое consumer невозможно определить, события какой базы вызвали ошибку.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m08-05-q2",
+      "type": "multiple-choice",
+      "question": "PyFlink multi-source consumer объединяет потоки из PostgreSQL и MySQL через UNION ALL и добавляет колонку source_database. Дополнительно создается composite_key как 'PG-' || order_id или 'MY-' || order_id. Какую проблему решает composite key?",
+      "options": [
+        { "id": "a", "text": "Оптимизирует производительность JOIN-запросов в BigQuery" },
+        { "id": "b", "text": "Предотвращает конфликт primary key, если одинаковый order_id существует в обеих базах данных" },
+        { "id": "c", "text": "Необходим для корректной работы Debezium format parser в PyFlink" },
+        { "id": "d", "text": "Добавляет шифрование для compliance с GDPR requirements" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "В multi-database CDC order_id=5 в PostgreSQL и order_id=5 в MySQL -- это разные записи из разных систем. При объединении в одну BigQuery таблицу с upsert по primary key одна запись перезапишет другую. Composite key (PG-5, MY-5) гарантирует уникальность ключа в unified stream. Без этого при MERGE в BigQuery последнее событие перезапишет данные первого источника.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m08-05-q3",
+      "type": "multiple-choice",
+      "question": "MySQL connector настроен с database.server.id=184054. При попытке развернуть второй MySQL connector с тем же database.server.id коннектор fails. Почему этот параметр должен быть уникальным?",
+      "options": [
+        { "id": "a", "text": "database.server.id используется как consumer group ID в Kafka, и дублирование вызывает rebalancing loop" },
+        { "id": "b", "text": "MySQL воспринимает каждый Debezium connector как replica-сервер с уникальным server ID; дублирование server_id приводит к конфликту binlog readers и отключению одного из них" },
+        { "id": "c", "text": "database.server.id определяет порт подключения к MySQL и дублирование вызывает конфликт портов" },
+        { "id": "d", "text": "database.server.id используется как часть имени schema history topic, и дублирование вызывает DDL pollution" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "MySQL binlog replication protocol требует уникальный server_id от каждого клиента, читающего binlog. Debezium connector представляется MySQL как replica-сервер с database.server.id. Если два connector используют одинаковый ID, MySQL отключит первого reader при подключении второго (конфликт server_id). Рекомендуемый диапазон для Debezium: 184000-184999, с ведением registry для предотвращения коллизий.",
+      "hint": "Подумайте о том, как MySQL binlog replication работает на уровне протокола. MySQL сервер видит каждый Debezium connector как replica. Что происходит в MySQL кластере, если два replica имеют одинаковый server_id?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m08-05-q4",
+      "type": "multiple-choice",
+      "question": "Мониторинг multi-database CDC показывает: PostgreSQL WAL lag = 500 MB, MySQL MilliSecondsBehindSource = 2000 ms. Администратор решает сравнить эти метрики напрямую и приходит к выводу, что PostgreSQL отстает сильнее. Почему это сравнение некорректно?",
+      "options": [
+        { "id": "a", "text": "500 MB WAL lag всегда хуже 2000 ms time lag, сравнение корректно" },
+        { "id": "b", "text": "Метрики измеряют разные величины: PostgreSQL lag в байтах (volume необработанных WAL-данных), MySQL lag в миллисекундах (временная задержка). 500 MB WAL может соответствовать 100ms при высоком throughput, а 2000ms MySQL lag может содержать всего 1 KB данных при низком трафике" },
+        { "id": "c", "text": "PostgreSQL lag всегда измеряется в мегабайтах, MySQL -- в миллисекундах, но существует стандартная формула конвертации" },
+        { "id": "d", "text": "Обе метрики можно конвертировать в events/second для корректного сравнения" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "PostgreSQL и MySQL используют принципиально разные lag metrics: PostgreSQL измеряет volume (pg_wal_lsn_diff в байтах -- сколько WAL-данных не обработано), а MySQL -- time (MilliSecondsBehindSource -- насколько connector отстает по времени). 500 MB WAL при write throughput 100 MB/s означает 5-секундное отставание, а при 1 MB/s -- 8+ минут. Прямое сравнение bytes vs milliseconds бессмысленно. Для каждого типа БД нужны отдельные alert thresholds.",
+      "hint": "Что означает 500 MB WAL lag при высокой скорости записи (например, 100 MB/s)? А при низкой (1 MB/s)? Одинаковый объем может соответствовать совершенно разному временному отставанию.",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

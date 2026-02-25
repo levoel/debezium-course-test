@@ -1,0 +1,68 @@
+{
+  "lessonSlug": "08-module-8/02-architecture-deliverables",
+  "moduleId": "08-module-8",
+  "_meta": {
+    "idPrefix": "m08-02",
+    "description": "Use IDs: m08-02-q1, m08-02-q2, ... for MC/TF"
+  },
+  "questions": [
+    {
+      "id": "m08-02-q1",
+      "type": "multiple-choice",
+      "question": "В capstone проекте для outbox table установлен REPLICA IDENTITY FULL. Если пропустить эту настройку, какие CDC операции будут затронуты и почему?",
+      "options": [
+        { "id": "a", "text": "INSERT события потеряют поля payload и type, так как REPLICA IDENTITY определяет набор захватываемых колонок" },
+        { "id": "b", "text": "UPDATE и DELETE события не будут содержать полных данных строки в поле before, так как по умолчанию PostgreSQL включает только primary key в before-образ" },
+        { "id": "c", "text": "Все CDC операции будут работать корректно, REPLICA IDENTITY влияет только на производительность репликации" },
+        { "id": "d", "text": "Debezium не сможет создать replication slot без REPLICA IDENTITY FULL" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "По умолчанию PostgreSQL использует REPLICA IDENTITY DEFAULT, включая только primary key в before-образ CDC события. Для UPDATE/DELETE это означает, что поле before содержит лишь id записи. REPLICA IDENTITY FULL заставляет PostgreSQL включать все колонки в before-образ, что критично для outbox table: Outbox Event Router SMT использует данные из before для маршрутизации DELETE-событий. Без FULL Debezium не получит aggregatetype и payload для удаленных записей.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m08-02-q2",
+      "type": "multiple-choice",
+      "question": "В конфигурации Debezium connector для capstone проекта установлен snapshot.mode=when_needed. Администратор случайно изменил на snapshot.mode=always. Какое последствие проявится при каждом перезапуске коннектора?",
+      "options": [
+        { "id": "a", "text": "Коннектор выполнит полный re-snapshot всех данных из outbox table, создавая дубликаты в Kafka-топиках" },
+        { "id": "b", "text": "Коннектор пропустит initial snapshot и начнет чтение с текущей WAL-позиции" },
+        { "id": "c", "text": "Коннектор удалит replication slot и создаст новый, потеряв позицию чтения" },
+        { "id": "d", "text": "Поведение не изменится, so when_needed и always идентичны при наличии существующего оффсета" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "snapshot.mode=always принуждает коннектор выполнять полный snapshot при каждом запуске, игнорируя существующий оффсет. Для outbox table это означает повторную отправку всех записей в Kafka, создавая дубликаты. Режим when_needed выполняет snapshot только при отсутствии оффсета или невозможности продолжить с сохраненной позиции -- это безопасный выбор для production.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m08-02-q3",
+      "type": "multiple-choice",
+      "question": "Capstone проект использует Four Golden Signals для мониторинга CDC pipeline. Какая метрика соответствует сигналу Saturation для Debezium?",
+      "options": [
+        { "id": "a", "text": "MilliSecondsBehindSource -- задержка репликации в миллисекундах" },
+        { "id": "b", "text": "TotalNumberOfEventsSeen -- общее количество обработанных событий" },
+        { "id": "c", "text": "QueueRemainingCapacity -- оставшаяся емкость внутренней очереди Debezium" },
+        { "id": "d", "text": "Статус коннектора (RUNNING/FAILED) через Kafka Connect REST API" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Four Golden Signals: Latency (MilliSecondsBehindSource), Traffic (events/second throughput), Errors (connector status RUNNING/FAILED), Saturation (ресурсная нагрузка). QueueRemainingCapacity показывает, насколько заполнена внутренняя очередь Debezium -- при низком значении (< 20% от max.queue.size) наступает backpressure, и Debezium замедляет чтение WAL. Это прямой индикатор saturation -- система работает на пределе пропускной способности.",
+      "hint": "Saturation в SRE показывает, насколько загружен ресурс -- приближается ли к пределу. Какая метрика Debezium напрямую отражает уровень заполнения буфера между source connector и sink adapter?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "m08-02-q4",
+      "type": "multiple-choice",
+      "question": "В BigQuery table для CDC ingestion определен PRIMARY KEY (order_id) NOT ENFORCED. Почему ключевое слово NOT ENFORCED обязательно, и что произойдет при попытке создания таблицы без него?",
+      "options": [
+        { "id": "a", "text": "NOT ENFORCED необходим, потому что BigQuery не поддерживает принудительную уникальность -- ответственность за уникальность лежит на источнике данных. Без NOT ENFORCED DDL завершится ошибкой синтаксиса" },
+        { "id": "b", "text": "NOT ENFORCED является optional модификатором, BigQuery по умолчанию принудительно проверяет уникальность primary key" },
+        { "id": "c", "text": "NOT ENFORCED позволяет дубликаты в таблице, что полезно для at-least-once CDC, но замедляет MERGE операции" },
+        { "id": "d", "text": "NOT ENFORCED отключает автоматическое создание индекса по primary key для экономии хранилища" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "BigQuery архитектурно не поддерживает принудительную проверку уникальности (enforced uniqueness) -- это columnar хранилище, оптимизированное для аналитических запросов, а не транзакционных. PRIMARY KEY (NOT ENFORCED) используется как декларация для оптимизации MERGE и CDC ingestion: BigQuery использует ключ для определения, какие строки обновлять (upsert). Без NOT ENFORCED синтаксис невалиден.",
+      "hint": "Подумайте об архитектурных особенностях BigQuery как columnar хранилища. Чем оно отличается от PostgreSQL в контексте поддержки constraints?",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

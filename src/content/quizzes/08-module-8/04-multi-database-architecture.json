@@ -1,0 +1,61 @@
+{
+  "lessonSlug": "08-module-8/04-multi-database-architecture",
+  "moduleId": "08-module-8",
+  "_meta": {
+    "idPrefix": "m08-04",
+    "description": "Use IDs: m08-04-q1, m08-04-q2, ... for MC/TF"
+  },
+  "questions": [
+    {
+      "id": "m08-04-q1",
+      "type": "multiple-choice",
+      "question": "В multi-database CDC архитектуре MySQL connector требует параметр schema.history.internal.kafka.topic, а PostgreSQL connector -- нет. В чем причина этого различия?",
+      "options": [
+        { "id": "a", "text": "PostgreSQL хранит schema внутри каждого WAL-события, а MySQL не включает DDL-информацию в binlog, поэтому требуется отдельный топик" },
+        { "id": "b", "text": "PostgreSQL встраивает schema в каждое WAL-событие (pgoutput), и отдельное хранилище не нужно. MySQL binlog содержит данные без schema context, поэтому Debezium сохраняет DDL-историю в отдельный Kafka-топик для декодирования событий" },
+        { "id": "c", "text": "PostgreSQL connector использует Schema Registry вместо schema history topic" },
+        { "id": "d", "text": "Это техническое ограничение, которое будет устранено в будущих версиях Debezium" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "PostgreSQL pgoutput plugin включает полную schema-информацию в каждое WAL-событие, поэтому Debezium может декодировать события без внешнего хранилища schema. MySQL binlog содержит row data без schema context -- Debezium должен знать структуру таблицы для парсинга событий. Для этого он записывает DDL-изменения (CREATE TABLE, ALTER TABLE) в schema history topic и использует их при перезапуске для восстановления schema state.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m08-04-q2",
+      "type": "true-false",
+      "question": "Два MySQL коннектора могут безопасно использовать один schema.history.internal.kafka.topic, если они подключены к разным базам данных.",
+      "correctAnswer": false,
+      "explanation": "Каждый MySQL connector ОБЯЗАН иметь уникальный schema history topic. При разделении одного топика между коннекторами происходит DDL pollution -- коннектор получает DDL-изменения от другого коннектора и применяет их к своему schema state. Это приводит к schema mismatch errors и некорректному декодированию событий. Правило: один коннектор = один schema history topic, независимо от того, к каким базам данных они подключены.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m08-04-q3",
+      "type": "multiple-choice",
+      "question": "При multi-database CDC для recovery после сбоя PostgreSQL connector возобновляет работу с позиции replication slot, а MySQL connector -- с GTID offset. Какое ключевое преимущество MySQL GTID при failover на replica-сервер?",
+      "options": [
+        { "id": "a", "text": "GTID автоматически переносит replication slot на replica-сервер" },
+        { "id": "b", "text": "GTID обеспечивает глобальную идентификацию транзакций, позволяя коннектору автоматически продолжить чтение с нового primary без потери данных" },
+        { "id": "c", "text": "GTID шифрует offset, предотвращая несанкционированный доступ к позиции чтения" },
+        { "id": "d", "text": "GTID позволяет MySQL connector читать из нескольких серверов параллельно" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "GTID (Global Transaction ID) уникально идентифицирует транзакцию на уровне кластера, а не файла. При failover MySQL на replica Debezium connector автоматически находит позицию по GTID на новом primary и продолжает чтение (~30 секунд recovery). PostgreSQL failover сложнее (~5-10 минут): необходимо мигрировать replication slot на новый primary, так как slot привязан к конкретному серверу. Это ключевое операционное различие при проектировании HA multi-database CDC.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m08-04-q4",
+      "type": "multiple-choice",
+      "question": "Оба коннектора (PostgreSQL и MySQL) настроены с database.server.name='prod'. После запуска обнаружено, что события из PostgreSQL таблицы orders и MySQL таблицы orders оказываются в одном Kafka-топике. К чему это приводит и как решается?",
+      "options": [
+        { "id": "a", "text": "События корректно разделяются по ключу партиции -- проблемы нет" },
+        { "id": "b", "text": "Топики collide: prod.public.orders и prod.inventory.orders могут содержать смешанные события с разными schema, что вызывает ошибки парсинга у consumers. Решение: использовать уникальные имена -- postgres_prod и mysql_prod" },
+        { "id": "c", "text": "Kafka автоматически добавляет суффикс connector name к топику для предотвращения коллизий" },
+        { "id": "d", "text": "Проблема только в мониторинге -- невозможно отличить источник события. Данные корректны" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "database.server.name используется как prefix в именах Kafka-топиков: {server.name}.{schema}.{table}. При одинаковом prefix и совпадающих именах таблиц (orders) события из разных баз данных попадают в один топик. Consumer получает смешанные events с потенциально разными schema (PostgreSQL JSONB vs MySQL JSON, разные колонки), что приводит к parsing errors и data corruption. Стандартная конвенция: prefix с типом БД и окружением -- postgres_prod, mysql_prod.",
+      "hint": "Как формируется имя Kafka-топика из database.server.name? Если у двух коннекторов одинаковый server.name и таблицы с одинаковыми именами -- что произойдет с topic routing?",
+      "bloomLevel": "analytical"
+    }
+  ]
+}
