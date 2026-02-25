@@ -62,6 +62,26 @@
       "explanation": "Пробелы в данных Prometheus при работающем коннекторе чаще всего вызваны недоступностью scrape endpoint. Типичные причины: (1) перезапуск Kafka Connect worker (rolling restart, OOM kill) -- порт 9404 временно недоступен; (2) network timeout между Prometheus и Connect (firewall rules, DNS resolution); (3) JMX Exporter overload при большом количестве MBeans. Prometheus логирует failed scrapes в Status > Targets. Debezium продолжает экспортировать JMX метрики даже при отсутствии транзакций (вариант A неверен) -- значения просто не меняются.",
       "hint": "Подумайте о pull-модели Prometheus: если target недоступен в момент scrape, данные за этот интервал теряются. Где в архитектуре (Connect worker -> JMX Exporter -> Prometheus) может происходить временный разрыв?",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m04-02-code-1",
+      "type": "code-challenge",
+      "question": "Напишите функцию, которая возвращает PromQL-запрос для вычисления скорости обработки CDC-событий Debezium (events per second) за последние 5 минут. Используйте метрику debezium_metrics_TotalNumberOfEventsSeen.",
+      "language": "javascript",
+      "starterCode": "function solve() {\n  // Верните PromQL-запрос как строку\n  // Метрика: debezium_metrics_TotalNumberOfEventsSeen\n  // Функция: rate() с окном 5 минут\n  return '';\n}",
+      "solutionCode": "function solve() {\n  return 'rate(debezium_metrics_TotalNumberOfEventsSeen[5m])';\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "PromQL запрос с rate() и 5-минутным окном",
+          "input": "",
+          "expectedOutput": "rate(debezium_metrics_TotalNumberOfEventsSeen[5m])",
+          "hidden": false
+        }
+      ],
+      "hint": "Функция rate() в PromQL вычисляет среднюю скорость изменения counter-метрики за указанный временной интервал. Синтаксис: rate(metric_name[duration]).",
+      "explanation": "Функция rate() вычисляет per-second среднюю скорость увеличения counter-метрики за указанный временной интервал. TotalNumberOfEventsSeen -- это counter (монотонно растущее значение), поэтому rate() корректно обрабатывает сбросы счётчика при перезапусках. Окно [5m] -- стандартный интервал для CDC мониторинга: достаточно большой для сглаживания кратковременных всплесков, но достаточно маленький для обнаружения аномалий. В Grafana этот запрос используется для панели Events/sec.",
+      "bloomLevel": "applied"
     }
   ]
 }

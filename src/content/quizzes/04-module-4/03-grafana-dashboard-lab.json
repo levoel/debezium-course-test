@@ -34,6 +34,26 @@
       "correctAnswer": "c",
       "explanation": "MilliSecondsBehindSource = 150ms означает, что Debezium коннектор успешно читает WAL и записывает события в Kafka практически в реальном времени. Растущий consumer lag указывает, что проблема находится после Kafka -- downstream consumer не успевает обрабатывать поступающие события. Это типичный сценарий, когда CDC pipeline работает корректно, но потребитель (например, сервис синхронизации данных или ETL-процесс) стал bottleneck. Решение -- масштабировать consumers (увеличить количество instances в consumer group) или оптимизировать обработку.",
       "bloomLevel": "applied"
+    },
+    {
+      "id": "m04-03-code-1",
+      "type": "code-challenge",
+      "question": "Напишите функцию, которая возвращает PromQL-запрос для обнаружения задержки репликации CDC более 30 секунд. Метрика debezium_metrics_MilliSecondsBehindSource измеряется в миллисекундах -- конвертируйте порог в миллисекунды.",
+      "language": "javascript",
+      "starterCode": "function solve() {\n  // Верните PromQL-запрос как строку\n  // Метрика: debezium_metrics_MilliSecondsBehindSource\n  // Условие: значение > 30 секунд (в миллисекундах)\n  return '';\n}",
+      "solutionCode": "function solve() {\n  return 'debezium_metrics_MilliSecondsBehindSource > 30000';\n}",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "PromQL запрос с порогом 30 секунд (30000 мс)",
+          "input": "",
+          "expectedOutput": "debezium_metrics_MilliSecondsBehindSource > 30000",
+          "hidden": false
+        }
+      ],
+      "hint": "Метрика измеряется в миллисекундах. 30 секунд = 30000 миллисекунд. В PromQL оператор > фильтрует time series, оставляя только те, где значение превышает порог.",
+      "explanation": "PromQL поддерживает операторы сравнения (>, <, >=, <=, ==, !=) для фильтрации time series по значению. Запрос debezium_metrics_MilliSecondsBehindSource > 30000 вернёт только те time series, где текущее значение lag превышает 30 секунд (30000 мс). В Grafana этот запрос используется для alerting rules: когда результат непустой (есть коннекторы с lag > 30s), срабатывает алерт. Порог 30 секунд -- типичный SLO для CDC pipeline в production.",
+      "bloomLevel": "applied"
     }
   ]
 }
