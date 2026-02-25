@@ -116,6 +116,25 @@
       "explanation": "Конфигурация PostgreSQL коннектора Debezium включает обязательные группы свойств: (1) connector.class для PostgreSQL, (2) database connection (hostname, port, user, password, dbname), (3) topic.prefix -- логический идентификатор для именования Kafka topics, (4) table.include.list -- фильтрация таблиц (через запятую, формат schema.table), (5) PostgreSQL-специфичные: plugin.name='pgoutput', slot.name для слота репликации (хранит позицию в WAL), publication.name для серверной фильтрации, (6) snapshot.mode для стратегии первого запуска. В отличие от MySQL, PostgreSQL использует server-side tracking через слоты репликации.",
       "hint": "Обязательные PostgreSQL-специфичные свойства: slot.name (слот репликации для отслеживания позиции в WAL), publication.name (серверная фильтрация таблиц), plugin.name='pgoutput' (встроенный плагин). Также нужны database.dbname (имя базы данных) и topic.prefix (логический идентификатор для Kafka topics).",
       "bloomLevel": "applied"
+    },
+    {
+      "id": "m02-01-code-3",
+      "type": "code-challenge",
+      "question": "Напишите SQL-запрос для анализа CDC-событий PostgreSQL: подсчитайте количество INSERT операций (op='c') по каждой таблице, отсортировав по убыванию количества.",
+      "language": "sql",
+      "starterCode": "-- Таблица cdc_events содержит CDC-события PostgreSQL\n-- Колонки: id, op, table_name, before_data, after_data, ts_ms\n-- op: 'c'=INSERT, 'u'=UPDATE, 'd'=DELETE, 'r'=snapshot read\nSELECT ",
+      "solutionCode": "SELECT table_name, COUNT(*) as cnt\nFROM cdc_events\nWHERE op = 'c'\nGROUP BY table_name\nORDER BY cnt DESC;",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Подсчет INSERT операций по таблицам",
+          "input": "CREATE TABLE cdc_events (id INTEGER, op TEXT, table_name TEXT, before_data TEXT, after_data TEXT, ts_ms INTEGER); INSERT INTO cdc_events VALUES (1,'c','orders','{}','{\"id\":1}',1000); INSERT INTO cdc_events VALUES (2,'c','orders','{}','{\"id\":2}',1001); INSERT INTO cdc_events VALUES (3,'u','orders','{\"id\":1}','{\"id\":1}',1002); INSERT INTO cdc_events VALUES (4,'c','customers','{}','{\"id\":1}',1003); INSERT INTO cdc_events VALUES (5,'d','orders','{\"id\":2}','{}',1004); INSERT INTO cdc_events VALUES (6,'c','orders','{}','{\"id\":3}',1005);",
+          "expectedOutput": "orders|3\ncustomers|1",
+          "hidden": false
+        }
+      ],
+      "explanation": "CDC-события с op='c' соответствуют INSERT-операциям в PostgreSQL (create). Группировка по table_name с COUNT(*) и фильтрацией WHERE op='c' дает распределение новых записей по таблицам. Сортировка ORDER BY cnt DESC показывает наиболее активные таблицы первыми — полезно для мониторинга нагрузки CDC pipeline.",
+      "bloomLevel": "applied"
     }
   ]
 }

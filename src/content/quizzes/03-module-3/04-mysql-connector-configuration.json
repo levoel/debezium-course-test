@@ -151,6 +151,25 @@
       "explanation": "CDC-события Debezium MySQL коннектора содержат payload с полем op (c=create/INSERT, u=update, d=delete, r=read/snapshot), вложенный объект source с метаданными (db, table, server_id, gtid), и поля before/after с данными строки. При DELETE after равен null, поэтому для получения полей необходимо использовать before. При CREATE before равен null. Парсинг структуры CDC-события -- базовая операция при построении consumer-приложений.",
       "hint": "Структура события: payload.op содержит тип операции, payload.source.table и payload.source.db -- метаданные таблицы. Данные строки в payload.after (для c/u/r) или payload.before (для d). Используйте Object.keys() для получения имен полей и .sort() для сортировки.",
       "bloomLevel": "applied"
+    },
+    {
+      "id": "m03-04-code-4",
+      "type": "code-challenge",
+      "question": "Напишите SQL-запрос для анализа MySQL CDC-событий: для каждой комбинации database_name и table_name подсчитайте количество операций каждого типа (c, u, d). Отсортируйте по database_name, затем по table_name.",
+      "language": "sql",
+      "starterCode": "-- Таблица mysql_cdc_events содержит CDC-события MySQL коннектора\n-- Колонки: id, op, database_name, table_name, server_id, gtid, ts_ms\n-- op: 'c'=INSERT, 'u'=UPDATE, 'd'=DELETE, 'r'=snapshot\n-- Выведите: database_name, table_name, inserts, updates, deletes\nSELECT ",
+      "solutionCode": "SELECT database_name, table_name,\n  SUM(CASE WHEN op = 'c' THEN 1 ELSE 0 END) as inserts,\n  SUM(CASE WHEN op = 'u' THEN 1 ELSE 0 END) as updates,\n  SUM(CASE WHEN op = 'd' THEN 1 ELSE 0 END) as deletes\nFROM mysql_cdc_events\nWHERE op IN ('c','u','d')\nGROUP BY database_name, table_name\nORDER BY database_name, table_name;",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Подсчет операций по типам для каждой таблицы MySQL",
+          "input": "CREATE TABLE mysql_cdc_events (id INTEGER, op TEXT, database_name TEXT, table_name TEXT, server_id INTEGER, gtid TEXT, ts_ms INTEGER); INSERT INTO mysql_cdc_events VALUES (1,'c','inventory','orders',184054,'a1:1',1000); INSERT INTO mysql_cdc_events VALUES (2,'c','inventory','orders',184054,'a1:2',1001); INSERT INTO mysql_cdc_events VALUES (3,'u','inventory','orders',184054,'a1:3',1002); INSERT INTO mysql_cdc_events VALUES (4,'c','inventory','customers',184054,'a1:4',1003); INSERT INTO mysql_cdc_events VALUES (5,'d','inventory','orders',184054,'a1:5',1004); INSERT INTO mysql_cdc_events VALUES (6,'c','shop','products',184054,'a1:6',1005); INSERT INTO mysql_cdc_events VALUES (7,'u','shop','products',184054,'a1:7',1006); INSERT INTO mysql_cdc_events VALUES (8,'r','inventory','orders',184054,'a1:8',500);",
+          "expectedOutput": "inventory|customers|1|0|0\ninventory|orders|2|1|1\nshop|products|1|1|0",
+          "hidden": false
+        }
+      ],
+      "explanation": "MySQL CDC-события содержат database_name и table_name в поле source (в отличие от PostgreSQL, где используется schema). Анализ операций по типам (INSERT/UPDATE/DELETE) для каждой таблицы дает полную картину активности CDC pipeline. Условие WHERE op IN ('c','u','d') исключает snapshot-события (op='r'), которые не отражают реальные изменения. Группировка по database_name и table_name соответствует паттерну именования Kafka topics в MySQL Debezium: {server.name}.{database}.{table}.",
+      "bloomLevel": "applied"
     }
   ]
 }

@@ -96,6 +96,25 @@
       "explanation": "CDC-события PostgreSQL коннектора через pgoutput содержат payload с op (c=create, u=update, d=delete, r=read/snapshot), source с метаданными (schema, table, lsn, txId), и before/after с данными строки. PostgreSQL CDC-события включают schema (например, 'public') и LSN (Log Sequence Number) для точного позиционирования в WAL. При UPDATE с REPLICA IDENTITY FULL оба поля (before и after) заполнены, что позволяет вычислить конкретные измененные поля сравнением значений. При REPLICA IDENTITY DEFAULT в before будет только Primary Key.",
       "hint": "Для UPDATE сравните значения каждого поля в before и after через JSON.stringify() для корректного сравнения. Для CREATE используйте Object.keys(after), для DELETE -- Object.keys(before). PostgreSQL CDC-события содержат source.schema (имя схемы) -- уникальная особенность PostgreSQL коннектора.",
       "bloomLevel": "applied"
+    },
+    {
+      "id": "m02-06-code-2",
+      "type": "code-challenge",
+      "question": "Напишите SQL-запрос для анализа snapshot-событий: определите, сколько записей было получено через snapshot (op='r') и сколько через streaming (op IN ('c','u','d')) для каждой таблицы.",
+      "language": "sql",
+      "starterCode": "-- Таблица cdc_events содержит CDC-события\n-- Колонки: id, op, table_name, ts_ms\n-- op: 'r'=snapshot read, 'c'=INSERT, 'u'=UPDATE, 'd'=DELETE\n-- Выведите: table_name, snapshot_count, streaming_count\nSELECT ",
+      "solutionCode": "SELECT table_name,\n  SUM(CASE WHEN op = 'r' THEN 1 ELSE 0 END) as snapshot_count,\n  SUM(CASE WHEN op IN ('c','u','d') THEN 1 ELSE 0 END) as streaming_count\nFROM cdc_events\nGROUP BY table_name\nORDER BY table_name;",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Разделение snapshot и streaming событий по таблицам",
+          "input": "CREATE TABLE cdc_events (id INTEGER, op TEXT, table_name TEXT, ts_ms INTEGER); INSERT INTO cdc_events VALUES (1,'r','orders',100); INSERT INTO cdc_events VALUES (2,'r','orders',101); INSERT INTO cdc_events VALUES (3,'r','orders',102); INSERT INTO cdc_events VALUES (4,'r','customers',103); INSERT INTO cdc_events VALUES (5,'r','customers',104); INSERT INTO cdc_events VALUES (6,'c','orders',200); INSERT INTO cdc_events VALUES (7,'u','orders',201); INSERT INTO cdc_events VALUES (8,'c','customers',202);",
+          "expectedOutput": "customers|2|1\norders|3|2",
+          "hidden": false
+        }
+      ],
+      "explanation": "При первом запуске Debezium выполняет snapshot — читает все существующие записи с op='r'. Затем переходит в streaming режим, где новые изменения имеют op='c' (INSERT), 'u' (UPDATE), 'd' (DELETE). Использование CASE WHEN внутри SUM позволяет подсчитать оба типа событий в одном запросе. Это полезно для мониторинга: после snapshot соотношение snapshot/streaming показывает, какая доля данных была получена из существующих записей.",
+      "bloomLevel": "applied"
     }
   ]
 }
