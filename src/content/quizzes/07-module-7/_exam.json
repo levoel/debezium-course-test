@@ -1,0 +1,158 @@
+{
+  "lessonSlug": "07-module-7/_exam",
+  "moduleId": "07-module-7",
+  "_meta": {
+    "idPrefix": "exam-m07",
+    "description": "Use IDs: exam-m07-q1, exam-m07-q2, ... (10 analytical questions for Cloud-Native GCP CDC)"
+  },
+  "questions": [
+    {
+      "id": "exam-m07-q1",
+      "type": "multiple-choice",
+      "question": "Компания разворачивает CDC pipeline: Cloud SQL PostgreSQL → Debezium Server → Pub/Sub → Dataflow → BigQuery. Debezium Server запущен на GKE с Workload Identity. После развертывания Debezium Server логирует ошибку: 'io.grpc.StatusRuntimeException: PERMISSION_DENIED: User not authorized to perform this action'. Какая наиболее вероятная причина и правильная диагностика?",
+      "options": [
+        { "id": "a", "text": "GCP Service Account не имеет роли roles/pubsub.publisher. Диагностика: проверить IAM bindings через gcloud projects get-iam-policy, убедиться что SA debezium-server-sa имеет роль pubsub.publisher" },
+        { "id": "b", "text": "Kubernetes Service Account не имеет аннотации iam.gke.io/gcp-service-account, поэтому Workload Identity не связывает K8s SA с GCP SA. Диагностика: kubectl describe sa -n cdc debezium-server, проверить наличие аннотации" },
+        { "id": "c", "text": "Workload Identity binding не создан — K8s SA существует с аннотацией, GCP SA имеет нужные роли, но отсутствует gcloud iam service-accounts add-iam-policy-binding с ролью roles/iam.workloadIdentityUser. Диагностика: проверить IAM policy на GCP SA, искать member формата serviceAccount:PROJECT.svc.id.goog[NAMESPACE/SA_NAME]" },
+        { "id": "d", "text": "Pub/Sub топики не созданы — Debezium пытается опубликовать событие в несуществующий топик и получает PERMISSION_DENIED" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Этот сценарий объединяет концепции из уроков 02 (Debezium Server Pub/Sub sink), 03 (IAM и Workload Identity) и 06 (troubleshooting). Workload Identity требует трёх компонентов: (1) K8s SA с аннотацией iam.gke.io/gcp-service-account, (2) GCP SA с нужными ролями (pubsub.publisher), (3) Workload Identity binding через roles/iam.workloadIdentityUser с member формата PROJECT.svc.id.goog[namespace/sa-name]. Если binding отсутствует, pod не получает GCP токен и любой вызов GCP API возвращает PERMISSION_DENIED. Варианты A и B — тоже возможные причины, но вопрос спрашивает о наиболее вероятной при корректной настройке SA. Binding — наиболее часто пропускаемый шаг, так как он выполняется отдельной командой gcloud.",
+      "hint": "Workload Identity связывает три сущности: K8s SA, GCP SA и binding между ними. Какой из трёх шагов чаще всего пропускается при настройке? Какой формат member используется в binding?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m07-q2",
+      "type": "multiple-choice",
+      "question": "CDC pipeline работает: Cloud SQL → Debezium Server → Pub/Sub → Dataflow → BigQuery. Мониторинг показывает: (1) Pub/Sub oldest_unacked_message_age = 0 секунд, (2) Dataflow system_lag = 45 секунд, (3) BigQuery replica таблица не обновляется 10 минут. Где находится проблема?",
+      "options": [
+        { "id": "a", "text": "Pub/Sub не получает события от Debezium — нужно проверить Debezium Server логи и Cloud SQL replication slot" },
+        { "id": "b", "text": "Dataflow job обрабатывает события из Pub/Sub (oldest_unacked = 0), но MERGE операция в BigQuery не выполняется. Проблема в updateFrequencySecs или BigQuery quota: Dataflow читает и ACK-ает сообщения, но MERGE в replica table заблокирован (quota exceeded, schema conflict или permission denied на BigQuery)" },
+        { "id": "c", "text": "Cloud Run конфликтует с Dataflow за подписку — два consumer читают одну subscription" },
+        { "id": "d", "text": "Debezium Server потерял offset файл — нужно перезапустить snapshot" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 02 (Pub/Sub sink), 04 (Dataflow MERGE паттерн) и 06 (метрики мониторинга). oldest_unacked_message_age = 0 означает, что Pub/Sub subscription пуста — Dataflow успешно читает и ACK-ает все сообщения. system_lag = 45 секунд — умеренная задержка обработки, но в пределах нормы. Однако replica таблица не обновляется 10 минут — это значит, что MERGE операция (которая выполняется каждые updateFrequencySecs) блокируется. Changelog table может заполняться, но MERGE в replica не проходит из-за BigQuery quota limits, schema incompatibility или отсутствия прав bigquery.dataEditor. Вариант A ошибочен — Pub/Sub получает события (иначе oldest_unacked не был бы 0).",
+      "hint": "Dataflow CDC template использует двухтабличный паттерн: changelog (staging) и replica. Если Pub/Sub subscription пуста (oldest_unacked = 0), значит события проходят через Dataflow. Но BigQuery не обновляется — какой шаг между чтением из Pub/Sub и обновлением replica может блокироваться?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m07-q3",
+      "type": "multiple-choice",
+      "question": "Архитектор проектирует CDC pipeline для e-commerce платформы на GCP. Требования: (1) репликация заказов в BigQuery для аналитики, (2) real-time уведомления в Slack при создании заказов на сумму > $1000, (3) обновление поискового индекса при изменении товаров. Какая архитектура правильно комбинирует Dataflow и Cloud Run?",
+      "options": [
+        { "id": "a", "text": "Один Dataflow job для всех трёх задач: чтение из Pub/Sub, фильтрация дорогих заказов, отправка в Slack, обновление Elasticsearch, запись в BigQuery" },
+        { "id": "b", "text": "Dataflow для BigQuery репликации (batch MERGE каждые 60 сек). Cloud Run с двумя Eventarc триггерами: (1) cdc.public.orders → order-notifier для Slack уведомлений с фильтрацией по сумме, (2) cdc.public.products → product-indexer для обновления Elasticsearch. Каждый consumer имеет свою Pub/Sub subscription для независимого масштабирования" },
+        { "id": "c", "text": "Cloud Run для всех трёх задач — один сервис с роутингом по таблице и операции" },
+        { "id": "d", "text": "Dataflow для BigQuery + Cloud Run для уведомлений, но оба читают из одной subscription (shared consumption)" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 04 (Dataflow для BigQuery) и 05 (Cloud Run для event-driven). Правильная архитектура разделяет batch-ориентированные задачи (BigQuery MERGE) и per-event задачи (Slack уведомления, Elasticsearch обновления). Dataflow оптимален для batch-MERGE в BigQuery (агрегация, updateFrequencySecs). Cloud Run оптимален для per-event бизнес-логики с низкой latency. Отдельные Eventarc триггеры и subscriptions обеспечивают независимое масштабирование и изоляцию ошибок. Вариант A ошибочен: Dataflow не оптимален для HTTP-вызовов к внешним API (Slack, Elasticsearch). Вариант D опасен: shared subscription приводит к конкуренции за сообщения.",
+      "hint": "Вспомните из уроков 04 и 05: какой паттерн обработки оптимален для Dataflow (batch/stream aggregation) и для Cloud Run (per-event business logic)? Почему shared subscription создаёт проблемы?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m07-q4",
+      "type": "multiple-choice",
+      "question": "Debezium Server работает на GKE и публикует CDC события в Pub/Sub. Offset хранится в файле /debezium/data/offsets.dat на PersistentVolumeClaim. Pod перезапускается (OOMKilled), но после рестарта Debezium не потерял позицию. Через неделю PVC удалён по ошибке. Какие последствия и как восстановить pipeline?",
+      "options": [
+        { "id": "a", "text": "Последствий нет — Debezium хранит позицию в replication slot на стороне PostgreSQL. Достаточно перезапустить pod" },
+        { "id": "b", "text": "Debezium потеряет offset и начнёт с текущей позиции WAL (snapshot.mode=schema_only). Все события между потерей offset и рестартом будут пропущены. Восстановление: (1) удалить replication slot, (2) пересоздать pod с новым PVC, (3) запустить с snapshot.mode=initial для полного re-snapshot, (4) Dataflow MERGE обработает дубликаты идемпотентно" },
+        { "id": "c", "text": "Debezium автоматически выполнит snapshot при отсутствии offset и восстановит все данные без потерь" },
+        { "id": "d", "text": "Потеря PVC приведет к permanent data loss — необходимо восстановить PVC из бэкапа" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 02 (offset storage strategies), 01 (replication slots) и 04 (Dataflow MERGE идемпотентность). Offset файл хранит позицию чтения WAL — потеря означает, что Debezium не знает, где остановился. При рестарте с schema_only Debezium начнёт с текущей позиции WAL (пропуская события между потерей и рестартом). Для полного восстановления нужен re-snapshot с snapshot.mode=initial. Старый replication slot удерживает WAL, поэтому его нужно удалить перед пересозданием. Dataflow MERGE по primary key идемпотентен — дубликаты от snapshot не создадут проблем в BigQuery replica. Вариант A ошибочен: replication slot хранит позицию checkpoint, но Debezium offset содержит дополнительную информацию (LSN + table states).",
+      "hint": "Offset файл и replication slot хранят разную информацию. Slot удерживает WAL, offset хранит позицию чтения Debezium. Что происходит при несоответствии? Какой snapshot.mode нужен для полного восстановления?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m07-q5",
+      "type": "multiple-choice",
+      "question": "DBA выполняет ALTER TABLE orders ADD COLUMN priority VARCHAR(10) на Cloud SQL с активным CDC pipeline (Debezium Server → Pub/Sub → Dataflow → BigQuery). Debezium использует JSON converter (не Avro). Какой каскад событий произойдёт через весь pipeline?",
+      "options": [
+        { "id": "a", "text": "Debezium обнаружит новую колонку и добавит поле priority в JSON события. Dataflow template автоматически добавит колонку priority в BigQuery changelog и replica таблицы. Старые записи будут иметь priority = NULL" },
+        { "id": "b", "text": "Debezium не обнаружит новую колонку без перезапуска — необходимо рестартнуть Debezium Server" },
+        { "id": "c", "text": "Dataflow завершится ошибкой, потому что JSON schema не соответствует BigQuery schema" },
+        { "id": "d", "text": "BigQuery откажет в записи, потому что новая колонка не существует в target table" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот сценарий объединяет концепции из уроков 01 (Cloud SQL CDC), 02 (Debezium Server) и 04 (Dataflow schema evolution). При JSON converter Debezium автоматически обнаруживает schema changes через logical decoding — ALTER TABLE генерирует DDL event, и следующие DML события уже содержат новое поле. Dataflow CDC template поддерживает автоматическую schema evolution: при обнаружении нового поля в JSON template добавляет колонку в BigQuery (ALTER TABLE). Старые записи в changelog и replica сохраняют NULL для нового поля. Вариант B ошибочен: Debezium отслеживает schema changes через logical decoding без перезапуска. Вариант C ошибочен: Dataflow template спроектирован для обработки schema evolution.",
+      "hint": "Вспомните из урока 04: как Dataflow CDC template обрабатывает schema evolution. Из урока 02: как Debezium обнаруживает изменения schema. JSON converter, в отличие от Avro, не требует Schema Registry для schema evolution.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m07-q6",
+      "type": "multiple-choice",
+      "question": "Cloud Run сервис обрабатывает CDC события из Pub/Sub через Eventarc. Логи показывают, что одно и то же событие обработано 3 раза (три записи 'Sending order notification' с одинаковым order_id). Какая причина дублирования и как реализовать идемпотентность?",
+      "options": [
+        { "id": "a", "text": "Debezium Server отправил событие три раза в Pub/Sub — нужно настроить exactly-once на стороне Debezium" },
+        { "id": "b", "text": "Pub/Sub гарантирует at-least-once delivery, и при retry (timeout или временная ошибка Cloud Run) сообщение доставляется повторно. Идемпотентность: использовать Pub/Sub messageId для дедупликации — проверять в Redis/Firestore с TTL, и пропускать обработку если messageId уже обработан" },
+        { "id": "c", "text": "Eventarc создал три подписки на один топик — нужно удалить лишние триггеры" },
+        { "id": "d", "text": "Cloud Run масштабировался до 3 инстансов, и каждый обработал одно сообщение — нужно установить max-instances=1" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 05 (Cloud Run error handling, идемпотентность) и 06 (мониторинг). Pub/Sub обеспечивает at-least-once delivery: если Cloud Run не вернул 2xx в ack-deadline, Pub/Sub повторит доставку. Это нормальное поведение, и обработчик должен быть идемпотентным. Решение: проверять Pub/Sub messageId в быстром хранилище (Redis с TTL 7 дней или Firestore) перед обработкой. Если messageId найден — пропустить, вернуть 204. Вариант A ошибочен: Debezium не отправляет дубликаты при нормальной работе. Вариант D ошибочен: max-instances=1 не решает проблему, так как один инстанс тоже получит retry.",
+      "hint": "Вспомните из урока 05: какой уровень гарантии доставки обеспечивает Pub/Sub? Какой HTTP код Cloud Run должен вернуть, чтобы Pub/Sub не повторял доставку? Как использовать messageId для дедупликации?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m07-q7",
+      "type": "multiple-choice",
+      "question": "Для CDC pipeline на GCP необходимо настроить мониторинг с SLO: end-to-end latency от коммита в Cloud SQL до появления в BigQuery replica < 120 секунд. Какой набор метрик необходим для отслеживания этого SLO и где находится каждый сегмент задержки?",
+      "options": [
+        { "id": "a", "text": "Достаточно одной метрики Dataflow system_lag — она показывает полную end-to-end задержку" },
+        { "id": "b", "text": "Три сегмента: (1) Debezium MilliSecondsBehindSource для Cloud SQL → Pub/Sub, (2) Pub/Sub oldest_unacked_message_age для Pub/Sub → consumer, (3) Dataflow system_lag для processing delay. Плюс updateFrequencySecs задержка MERGE. Сумма всех сегментов ≤ 120 секунд = SLO met" },
+        { "id": "c", "text": "Только Cloud SQL replication slot lag_bytes — если slot не отстаёт, end-to-end latency в пределах нормы" },
+        { "id": "d", "text": "BigQuery _metadata_timestamp минус source.ts_ms в changelog table — прямое измерение end-to-end latency" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из всех уроков модуля для построения полной картины observability. End-to-end latency CDC pipeline складывается из нескольких сегментов: (1) Debezium reading delay (MilliSecondsBehindSource) — время от коммита в PostgreSQL до публикации в Pub/Sub, (2) Pub/Sub delivery delay (oldest_unacked_message_age) — время ожидания в подписке, (3) Dataflow processing delay (system_lag) — время обработки события, (4) MERGE delay (updateFrequencySecs) — период между MERGE операциями. Для SLO < 120 секунд: сумма всех сегментов должна быть < 120. Вариант D частично верен: прямое измерение timestamp разницы даёт фактическую latency, но не показывает, ГДЕ задержка — критично для troubleshooting.",
+      "hint": "CDC pipeline — это цепочка компонентов. Каждый добавляет свою задержку. Для SLO monitoring нужно знать не только общую latency, но и contribution каждого сегмента для диагностики. Какие метрики покрывают каждый сегмент?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m07-q8",
+      "type": "true-false",
+      "question": "При использовании Debezium Server с Pub/Sub sink и offset storage в файле (offsets.dat) на Kubernetes PersistentVolumeClaim, можно безопасно масштабировать Deployment до replicas: 2 для обеспечения высокой доступности.",
+      "options": [
+        { "id": "a", "text": "Верно — PVC с accessMode ReadWriteOnce поддерживает несколько pod-ов на одном узле" },
+        { "id": "b", "text": "Неверно — file-based offset storage поддерживает только один pod (replicas: 1), так как два pod-а с одним replication slot и одним offset файлом создадут конфликт позиций чтения и дубликаты событий" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 02 (offset storage strategies) и 01 (replication slots). File-based offset storage — single-instance решение. PostgreSQL replication slot может иметь только одного активного consumer. Два pod-а с одним slot = второй pod получит ошибку 'replication slot is active'. Даже если создать два slot-а, два offset файла на shared PVC создадут race condition. Для HA нужен Redis offset storage, позволяющий быстрое переключение между pod-ами.",
+      "hint": "Вспомните из урока 02: file-based storage рекомендуется для single instance, Redis — для HA. Что произойдёт, если два pod-а попытаются использовать один replication slot?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m07-q9",
+      "type": "multiple-choice",
+      "question": "Команда безопасности аудитирует CDC pipeline и находит: Debezium Server запущен на GKE с GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-key.json (service account key file). Dataflow worker SA имеет роль roles/editor. Cloud Run сервис использует default compute service account. Какие три нарушения безопасности присутствуют и как их исправить?",
+      "options": [
+        { "id": "a", "text": "Только одно нарушение: roles/editor слишком широкая роль для Dataflow. Замена на roles/dataflow.worker + roles/pubsub.subscriber + roles/bigquery.dataEditor" },
+        { "id": "b", "text": "Три нарушения: (1) key file вместо Workload Identity — перейти на K8s SA с аннотацией iam.gke.io/gcp-service-account, (2) roles/editor на Dataflow SA — заменить на минимальные roles/dataflow.worker + roles/pubsub.subscriber + roles/bigquery.dataEditor + roles/storage.objectAdmin, (3) default compute SA для Cloud Run — создать dedicated SA с только roles/pubsub.subscriber и roles/logging.logWriter" },
+        { "id": "c", "text": "Два нарушения: key file и roles/editor. Default compute SA безопасен для Cloud Run" },
+        { "id": "d", "text": "Конфигурация приемлема для development среды — нарушения только для production" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из урока 03 (IAM, Workload Identity, anti-patterns). Три нарушения: (1) Service account key file — долгоживущий credential, который может утечь в git или Docker layers. Workload Identity автоматически ротирует токены каждый час. (2) roles/editor — предоставляет почти полный доступ к проекту, нарушает principle of least privilege. (3) Default compute SA — имеет роль roles/editor по умолчанию в большинстве проектов GCP, что даёт Cloud Run сервису избыточные права. Все три — anti-patterns из урока 03. Вариант D ошибочен: security best practices применяются во ВСЕХ средах.",
+      "hint": "Вспомните из урока 03 три anti-patterns: (1) key files vs Workload Identity, (2) широкие роли vs principle of least privilege, (3) shared/default SA vs dedicated SA. Какой risk несёт каждый anti-pattern?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m07-q10",
+      "type": "multiple-choice",
+      "question": "CDC pipeline в production: мониторинг показывает, что Cloud SQL disk utilization выросла с 40% до 78% за последний час. Debezium Server pod показывает статус Running, но MilliSecondsBehindSource = 180,000 (3 минуты). Pub/Sub oldest_unacked_message_age = 0. Какой runbook-сценарий применить?",
+      "options": [
+        { "id": "a", "text": "Disk растёт из-за данных — нужно увеличить disk size через gcloud sql instances patch" },
+        { "id": "b", "text": "WAL bloat из-за отставания replication slot. Debezium работает (Running), но читает WAL медленнее генерации (180s lag). Pub/Sub oldest_unacked = 0 подтверждает, что Debezium публикует события (sink работает). Runbook: (1) проверить pg_replication_slots — lag_bytes покажет объём удерживаемого WAL, (2) проверить Cloud SQL CPU — возможно, нужен scale-up, (3) если lag продолжает расти — рассмотреть увеличение max.batch.size или разделение таблиц, (4) установить max_slot_wal_keep_size как safety net" },
+        { "id": "c", "text": "Debezium завис — перезапустить pod через kubectl rollout restart" },
+        { "id": "d", "text": "Dataflow job потребляет слишком много ресурсов BigQuery, что косвенно нагружает Cloud SQL" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 01 (replication slot monitoring, WAL bloat), 02 (Debezium performance), 04 (pipeline health) и 06 (runbooks). Рост disk utilization на 38% за час при работающем Debezium с 3-минутным lag — классический WAL bloat: slot удерживает WAL файлы, которые Debezium ещё не прочитал. Pub/Sub oldest_unacked = 0 подтверждает, что sink работает — bottleneck в скорости чтения WAL, а не в публикации. Runbook включает: диагностику через pg_replication_slots, проверку ресурсов Cloud SQL, оптимизацию batch size и установку safety net через max_slot_wal_keep_size. Вариант C ошибочен: перезапуск при работающем Debezium потеряет текущий прогресс.",
+      "hint": "Обратите внимание на комбинацию: disk растёт + Debezium Running + 3 мин lag + Pub/Sub пуст. Если Debezium публикует (Pub/Sub пуст), но отстаёт (180s lag), и disk растёт — что удерживает WAL файлы? Как связан lag с WAL retention?",
+      "bloomLevel": "analytical"
+    }
+  ]
+}
