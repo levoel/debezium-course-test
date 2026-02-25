@@ -34,6 +34,24 @@
       "correctAnswer": "c",
       "explanation": "Многие разработчики имеют локально установленный PostgreSQL, который занимает стандартный порт 5432. Использование порта 5433 для лабораторного контейнера позволяет обоим PostgreSQL-сервисам работать одновременно без конфликтов. При этом внутри Docker-сети контейнер PostgreSQL по-прежнему слушает на стандартном порту 5432, и коннектор Debezium обращается именно к нему (database.port: 5432), а порт 5433 используется только для доступа с хост-машины.",
       "bloomLevel": "applied"
+    },
+    {
+      "id": "m01-03-code-1",
+      "type": "code-challenge",
+      "question": "Напишите Docker Compose сервис для Debezium Connect. Укажите образ (quay.io/debezium/connect:2.5), порт REST API (8083) и минимальные переменные окружения (BOOTSTRAP_SERVERS, GROUP_ID).",
+      "language": "yaml",
+      "starterCode": "version: '3'\nservices:\n  connect:\n    image: # укажите образ Debezium Connect\n    ports:\n      # проброс порта 8083\n    environment:\n      # BOOTSTRAP_SERVERS и GROUP_ID\n",
+      "solutionCode": "version: '3'\nservices:\n  connect:\n    image: quay.io/debezium/connect:2.5\n    ports:\n      - '8083:8083'\n    environment:\n      BOOTSTRAP_SERVERS: kafka:9092\n      GROUP_ID: 1\n",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Docker Compose с сервисом Debezium Connect",
+          "expectedOutput": "{\"version\":\"3\",\"services\":{\"connect\":{\"image\":\"quay.io/debezium/connect:2.5\",\"ports\":[\"8083:8083\"],\"environment\":{\"BOOTSTRAP_SERVERS\":\"kafka:9092\",\"GROUP_ID\":1}}}}",
+          "hidden": false
+        }
+      ],
+      "explanation": "Docker Compose сервис Debezium Connect требует: (1) образ из quay.io/debezium/connect с указанием версии, (2) порт 8083 для REST API управления коннекторами (создание, удаление, мониторинг), (3) BOOTSTRAP_SERVERS для подключения к Kafka кластеру, (4) GROUP_ID для идентификации worker-группы в Kafka Connect кластере. REST API на порту 8083 — основной интерфейс для управления коннекторами.",
+      "bloomLevel": "applied"
     }
   ]
 }

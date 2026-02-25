@@ -56,6 +56,24 @@
       "explanation": "Cloud Run не поддерживает persistent volumes. При file-based offset storage (offsets.dat) перезапуск контейнера уничтожает файл оффсета, и Debezium Server теряет позицию чтения WAL. Это приводит к повторной обработке событий с начала или с текущей позиции (дубликаты или потеря данных). Для Cloud Run необходим Redis offset storage: debezium.source.offset.storage=io.debezium.storage.redis.offset.RedisOffsetBackingStore.",
       "hint": "Подумайте, что происходит с файлами внутри контейнера Cloud Run при его перезапуске. Ephemeral storage означает, что все данные в файловой системе контейнера теряются.",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m07-02-code-1",
+      "type": "code-challenge",
+      "question": "Напишите YAML-конфигурацию Debezium Server для Kafka-less CDC pipeline. Настройте source (PostgreSQL connector), sink (Google Cloud Pub/Sub) и offset storage (file). Укажите: тип source connector, hostname, port, user, password, dbname, topic.prefix, sink type (pubsub), project.id и offset storage.",
+      "language": "yaml",
+      "starterCode": "debezium:\n  source:\n    connector:\n      class: # PostgreSQL connector class\n    # database connection properties\n  sink:\n    type: # sink type for Pub/Sub\n    # Pub/Sub properties\n  offset:\n    storage: # offset storage type\n",
+      "solutionCode": "debezium:\n  source:\n    connector:\n      class: io.debezium.connector.postgresql.PostgresConnector\n    database:\n      hostname: postgres\n      port: 5432\n      user: postgres\n      password: postgres\n      dbname: inventory\n    topic:\n      prefix: cdc-events\n  sink:\n    type: pubsub\n    pubsub:\n      project:\n        id: my-gcp-project\n  offset:\n    storage: file\n",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Debezium Server конфигурация с Pub/Sub sink",
+          "expectedOutput": "{\"debezium\":{\"source\":{\"connector\":{\"class\":\"io.debezium.connector.postgresql.PostgresConnector\"},\"database\":{\"hostname\":\"postgres\",\"port\":5432,\"user\":\"postgres\",\"password\":\"postgres\",\"dbname\":\"inventory\"},\"topic\":{\"prefix\":\"cdc-events\"}},\"sink\":{\"type\":\"pubsub\",\"pubsub\":{\"project\":{\"id\":\"my-gcp-project\"}}},\"offset\":{\"storage\":\"file\"}}}",
+          "hidden": false
+        }
+      ],
+      "explanation": "Debezium Server — standalone Quarkus-приложение для Kafka-less CDC. Конфигурация включает три секции: (1) source — PostgreSQL connector с параметрами подключения и topic.prefix для именования Pub/Sub topics, (2) sink — тип pubsub с указанием GCP project ID, (3) offset storage — хранилище позиции чтения WAL (file для локального, redis для Cloud Run). В отличие от Kafka Connect, Debezium Server объединяет source connector и sink adapter в одном процессе, минуя Kafka.",
+      "bloomLevel": "applied"
     }
   ]
 }
