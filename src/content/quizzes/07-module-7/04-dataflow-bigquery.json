@@ -1,0 +1,67 @@
+{
+  "lessonSlug": "07-module-7/04-dataflow-bigquery",
+  "moduleId": "07-module-7",
+  "_meta": {
+    "idPrefix": "m07-04",
+    "description": "Use IDs: m07-04-q1, m07-04-q2, ... for MC/TF"
+  },
+  "questions": [
+    {
+      "id": "m07-04-q1",
+      "type": "multiple-choice",
+      "question": "Managed Dataflow CDC template создает два типа таблиц в BigQuery. Какова роль каждого типа?",
+      "options": [
+        { "id": "a", "text": "Changelog table хранит текущее состояние, replica table -- историю всех операций" },
+        { "id": "b", "text": "Changelog table хранит полную историю CDC операций (INSERT/UPDATE/DELETE), replica table -- текущее состояние после применения MERGE операций" },
+        { "id": "c", "text": "Changelog table используется для schema evolution, replica table -- для хранения данных" },
+        { "id": "d", "text": "Оба типа содержат одинаковые данные, но changelog индексирован по времени, а replica -- по primary key" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Dataflow CDC template использует двухтабличный паттерн: changelog (staging) хранит все raw CDC события с полной историей операций (для аудита и time-travel queries), а replica table содержит текущее состояние данных, обновляемое через периодические MERGE операции (upsert/delete). Частота MERGE определяется параметром updateFrequencySecs.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m07-04-q2",
+      "type": "multiple-choice",
+      "question": "Для Dataflow CDC job установлен useStorageWriteApiAtLeastOnce=true вместо exactly-once режима. Почему для большинства CDC use cases at-least-once достаточно?",
+      "options": [
+        { "id": "a", "text": "At-least-once быстрее, потому что не использует BigQuery Storage Write API" },
+        { "id": "b", "text": "MERGE операции в replica table идемпотентны (upsert по primary key), поэтому дубликаты в changelog не влияют на корректность финального результата" },
+        { "id": "c", "text": "Pub/Sub гарантирует exactly-once доставку, компенсируя at-least-once в Dataflow" },
+        { "id": "d", "text": "BigQuery автоматически дедуплицирует записи по _metadata_timestamp" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "MERGE операции в replica table работают как upsert по primary key -- INSERT если записи нет, UPDATE если есть. Если одно и то же CDC событие применяется дважды (дубликат), результат MERGE идентичен -- финальное состояние replica table корректно. At-least-once режим стоит примерно в 2 раза дешевле exactly-once. Дубликаты в changelog table не критичны, так как это staging-данные для аудита.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-04-q3",
+      "type": "multiple-choice",
+      "question": "В source PostgreSQL выполнена команда ALTER TABLE orders ADD COLUMN discount_percent DECIMAL(5,2). Как managed Dataflow CDC template обработает это изменение?",
+      "options": [
+        { "id": "a", "text": "Template остановит job с ошибкой schema mismatch и потребует ручное пересоздание таблиц в BigQuery" },
+        { "id": "b", "text": "Template автоматически добавит новую колонку в changelog и replica таблицы BigQuery, старые записи получат NULL в новой колонке" },
+        { "id": "c", "text": "Template проигнорирует новую колонку и продолжит работу с прежней схемой" },
+        { "id": "d", "text": "Template создаст новые версии таблиц (orders_v2) и перенаправит поток данных" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Managed Dataflow CDC template поддерживает автоматическую schema evolution для добавления колонок. При обнаружении новой колонки в Debezium event template выполняет ALTER TABLE ADD COLUMN в BigQuery для changelog и replica таблиц. Старые записи (до добавления колонки) будут иметь NULL в новой колонке. Однако template не поддерживает изменение типа колонки или переименование -- эти операции требуют ручного вмешательства.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-04-q4",
+      "type": "multiple-choice",
+      "question": "System lag метрика Dataflow job показывает стабильные 120 секунд при updateFrequencySecs=60. Рост количества workers не помогает. В чем наиболее вероятная причина?",
+      "options": [
+        { "id": "a", "text": "Dataflow workers не имеют роли roles/bigquery.dataEditor и не могут выполнить MERGE операции" },
+        { "id": "b", "text": "BigQuery Storage Write API quota exceeded -- Dataflow throttled при записи, что увеличивает system lag вдвое от updateFrequencySecs" },
+        { "id": "c", "text": "Pub/Sub subscription настроен с acknowledge deadline < 60 секунд, и сообщения повторно доставляются" },
+        { "id": "d", "text": "Dataflow job запущен в другом регионе, чем BigQuery dataset, что увеличивает latency передачи данных" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "System lag примерно вдвое превышающий updateFrequencySecs указывает на throttling при записи в BigQuery. BigQuery Storage Write API имеет квоты на количество операций в секунду. Когда квота превышена, Dataflow вынужден ждать, и каждый цикл MERGE (60 секунд) накапливает задержку. Увеличение workers не помогает, потому что узкое место -- на стороне BigQuery, а не Dataflow. Решение: увеличить BigQuery quota или снизить частоту MERGE (увеличить updateFrequencySecs).",
+      "hint": "Обратите внимание на соотношение: lag (120с) ровно в 2 раза больше updateFrequencySecs (60с). Это говорит о том, что каждый MERGE цикл задерживается на дополнительный цикл. Где может быть bottleneck, если увеличение workers Dataflow не помогает?",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

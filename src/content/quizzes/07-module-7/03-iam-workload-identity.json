@@ -1,0 +1,61 @@
+{
+  "lessonSlug": "07-module-7/03-iam-workload-identity",
+  "moduleId": "07-module-7",
+  "_meta": {
+    "idPrefix": "m07-03",
+    "description": "Use IDs: m07-03-q1, m07-03-q2, ... for MC/TF"
+  },
+  "questions": [
+    {
+      "id": "m07-03-q1",
+      "type": "multiple-choice",
+      "question": "Какую IAM роль необходимо назначить GCP Service Account для Debezium Server, чтобы он мог публиковать CDC события в Pub/Sub?",
+      "options": [
+        { "id": "a", "text": "roles/pubsub.subscriber" },
+        { "id": "b", "text": "roles/pubsub.publisher" },
+        { "id": "c", "text": "roles/pubsub.admin" },
+        { "id": "d", "text": "roles/editor" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Принцип наименьших привилегий (least privilege) требует назначения минимально необходимой роли. Debezium Server только публикует события, поэтому достаточно roles/pubsub.publisher. Роль roles/pubsub.admin избыточна (дает права на создание/удаление топиков), а roles/editor дает доступ ко всем ресурсам проекта, что создает серьезный риск безопасности при компрометации Service Account.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m07-03-q2",
+      "type": "multiple-choice",
+      "question": "Workload Identity в GKE связывает Kubernetes Service Account с GCP Service Account через аннотацию. Какой формат member используется при создании IAM binding для этой связи?",
+      "options": [
+        { "id": "a", "text": "serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/K8S_SA_NAME]" },
+        { "id": "b", "text": "user:K8S_SA_NAME@PROJECT_ID.iam.gserviceaccount.com" },
+        { "id": "c", "text": "group:NAMESPACE.K8S_SA_NAME@PROJECT_ID.svc.id.goog" },
+        { "id": "d", "text": "serviceAccount:K8S_SA_NAME@NAMESPACE.PROJECT_ID.iam.gserviceaccount.com" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Формат member для Workload Identity binding: serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/K8S_SA_NAME], где PROJECT_ID -- GCP project, NAMESPACE -- Kubernetes namespace (например, cdc), K8S_SA_NAME -- имя K8s ServiceAccount (например, debezium-server). Этот binding позволяет pod'ам с указанным K8s SA автоматически получать GCP токены без key files.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-03-q3",
+      "type": "true-false",
+      "question": "При использовании Workload Identity в GKE необходимо монтировать файл service account key (GOOGLE_APPLICATION_CREDENTIALS) в pod Debezium Server.",
+      "correctAnswer": false,
+      "explanation": "Workload Identity устраняет необходимость в service account key files. GKE Metadata Server автоматически предоставляет GCP токены pod'ам через связь K8s SA и GCP SA. Токены ротируются каждый час без ручного вмешательства. Использование key files -- это anti-pattern: ключи долгоживущие (до 10 лет), могут утечь в git или Docker image layers, и требуют ручной ротации.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-03-q4",
+      "type": "multiple-choice",
+      "question": "После настройки Workload Identity pod Debezium Server получает ошибку 'Permission denied: pubsub.topics.publish'. K8s ServiceAccount имеет аннотацию iam.gke.io/gcp-service-account, GCP SA создан с roles/pubsub.publisher. Какая наиболее вероятная причина ошибки?",
+      "options": [
+        { "id": "a", "text": "Не создан IAM binding между K8s SA и GCP SA (roles/iam.workloadIdentityUser не назначена)" },
+        { "id": "b", "text": "Pub/Sub топик находится в другом GCP проекте, и roles/pubsub.publisher назначена не на тот проект" },
+        { "id": "c", "text": "Pod использует default K8s Service Account вместо аннотированного SA, потому что serviceAccountName не указан в Deployment" },
+        { "id": "d", "text": "Все перечисленные варианты могут быть причиной данной ошибки" }
+      ],
+      "correctAnswer": "d",
+      "explanation": "Все три варианта -- реальные причины ошибки Permission denied при Workload Identity: (A) без binding через roles/iam.workloadIdentityUser K8s SA не может олицетворять GCP SA; (B) IAM роли назначаются на уровне проекта, и cross-project доступ требует отдельного binding; (C) если serviceAccountName не указан в spec Deployment, pod использует default SA без нужной аннотации. Диагностика: kubectl exec в pod и выполнить gcloud auth list для проверки активного GCP account.",
+      "hint": "Workload Identity требует корректной настройки на трех уровнях: K8s ServiceAccount (аннотация), IAM binding (roles/iam.workloadIdentityUser), и Deployment (serviceAccountName). Какой из уровней мог быть пропущен?",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

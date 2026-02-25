@@ -1,0 +1,61 @@
+{
+  "lessonSlug": "07-module-7/06-cloud-monitoring",
+  "moduleId": "07-module-7",
+  "_meta": {
+    "idPrefix": "m07-06",
+    "description": "Use IDs: m07-06-q1, m07-06-q2, ... for MC/TF"
+  },
+  "questions": [
+    {
+      "id": "m07-06-q1",
+      "type": "multiple-choice",
+      "question": "Для мониторинга replication slot lag в Cloud SQL PostgreSQL нельзя использовать стандартные Cloud Monitoring метрики. Какое решение применяется для экспорта этой метрики?",
+      "options": [
+        { "id": "a", "text": "Включить встроенную Cloud SQL Insights метрику replication_lag_bytes через Console" },
+        { "id": "b", "text": "Создать Cloud Function, которая периодически запрашивает pg_replication_slots и публикует custom metric через Cloud Monitoring API" },
+        { "id": "c", "text": "Настроить Debezium Server для экспорта метрики напрямую в Cloud Monitoring" },
+        { "id": "d", "text": "Использовать Cloud SQL Proxy для автоматического сбора метрик replication slots" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Cloud SQL не экспортирует метрики replication slots по умолчанию. Решение -- создать Cloud Function (или Cloud Scheduler + Cloud Function), которая периодически выполняет SQL-запрос pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) и публикует результат как custom metric (custom.googleapis.com/cloudsql/replication_lag_bytes) через Cloud Monitoring API. Это позволяет включить метрику в dashboard и настроить алерты.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-06-q2",
+      "type": "multiple-choice",
+      "question": "Какая метрика Pub/Sub является наиболее важным индикатором того, что consumers (Dataflow, Cloud Run) не успевают обрабатывать CDC события?",
+      "options": [
+        { "id": "a", "text": "pubsub.googleapis.com/topic/send_message_operation_count -- количество отправленных сообщений" },
+        { "id": "b", "text": "pubsub.googleapis.com/subscription/oldest_unacked_message_age -- возраст старейшего необработанного сообщения" },
+        { "id": "c", "text": "pubsub.googleapis.com/subscription/pull_request_count -- количество pull-запросов" },
+        { "id": "d", "text": "pubsub.googleapis.com/topic/byte_cost -- стоимость в байтах опубликованных сообщений" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "oldest_unacked_message_age показывает, сколько секунд самое старое необработанное сообщение ожидает в subscription. Рост этой метрики означает, что consumers не успевают обрабатывать поток событий (backlog растет). Для CDC pipeline рекомендуется алерт при значении > 5 минут. send_message_operation_count (вариант A) показывает volume публикаций, но не проблемы на стороне consumers.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-06-q3",
+      "type": "true-false",
+      "question": "При настройке alert policy в Cloud Monitoring параметр notificationRateLimit.period=3600s предотвращает отправку более одного уведомления в час для данного алерта, что помогает избежать alert storm.",
+      "correctAnswer": true,
+      "explanation": "notificationRateLimit.period ограничивает частоту отправки уведомлений. При значении 3600s (1 час) алерт может сработать многократно, но уведомление будет отправлено максимум раз в час. Это предотвращает alert storm -- ситуацию, когда on-call инженер получает десятки одинаковых уведомлений при flapping метрики. Параметр autoClose дополняет это поведение: автоматически закрывает инцидент, если метрика нормализовалась.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m07-06-q4",
+      "type": "multiple-choice",
+      "question": "На CDC pipeline dashboard видно: Cloud SQL disk utilization 85%, Debezium MilliSecondsBehindSource растет, Pub/Sub backlog стабилен, Cloud Run error rate 0%. Какой компонент является root cause проблемы и какое первое действие по runbook?",
+      "options": [
+        { "id": "a", "text": "Root cause: Cloud Run не обрабатывает события. Действие: увеличить max-instances Cloud Run" },
+        { "id": "b", "text": "Root cause: Dataflow job остановлен. Действие: перезапустить Dataflow job" },
+        { "id": "c", "text": "Root cause: Debezium не продвигает replication slot, WAL накапливается. Действие: проверить pg_replication_slots на наличие неактивных слотов и логи Debezium Server" },
+        { "id": "d", "text": "Root cause: Pub/Sub throttling. Действие: увеличить квоту Pub/Sub publish operations" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Симптомы указывают на проблему между Cloud SQL и Debezium: disk utilization растет (WAL bloat), Debezium lag увеличивается, но downstream (Pub/Sub backlog стабилен, Cloud Run без ошибок) работает нормально. Это означает, что Debezium не продвигает replication slot -- WAL файлы накапливаются и заполняют диск. Первое действие по runbook: проверить pg_replication_slots (slot active?) и логи Debezium (ошибки подключения, OOM, Pub/Sub publish errors).",
+      "hint": "Проанализируйте цепочку компонентов: Cloud SQL -> Debezium -> Pub/Sub -> Cloud Run. Какой компонент находится между растущим disk utilization и стабильным Pub/Sub backlog? Именно он является узким местом.",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "lessonSlug": "07-module-7/01-cloud-sql-setup",
+  "moduleId": "07-module-7",
+  "_meta": {
+    "idPrefix": "m07-01",
+    "description": "Use IDs: m07-01-q1, m07-01-q2, ... for MC/TF"
+  },
+  "questions": [
+    {
+      "id": "m07-01-q1",
+      "type": "multiple-choice",
+      "question": "Каким способом включается logical decoding в Cloud SQL PostgreSQL, в отличие от самостоятельно развернутого PostgreSQL?",
+      "options": [
+        { "id": "a", "text": "Редактированием файла postgresql.conf и перезагрузкой сервера" },
+        { "id": "b", "text": "Установкой database flag cloudsql.logical_decoding=on через gcloud CLI или Console" },
+        { "id": "c", "text": "Выполнением ALTER SYSTEM SET wal_level = logical через SQL-клиент" },
+        { "id": "d", "text": "Активацией через Kubernetes ConfigMap при деплое Cloud SQL proxy" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Cloud SQL не предоставляет прямого доступа к postgresql.conf, поэтому конфигурация выполняется через database flags. Флаг cloudsql.logical_decoding=on является аналогом wal_level=logical для управляемой базы данных. После применения флага требуется перезагрузка инстанса. Вариант A невозможен, так как Cloud SQL не дает доступа к файловой системе инстанса.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m07-01-q2",
+      "type": "multiple-choice",
+      "question": "При создании replication user для Debezium в Cloud SQL используется IN ROLE cloudsqlsuperuser вместо стандартного SUPERUSER. Если назначить пользователю только REPLICATION без cloudsqlsuperuser, что произойдет при попытке Debezium выполнить initial snapshot?",
+      "options": [
+        { "id": "a", "text": "Snapshot выполнится успешно, так как REPLICATION привилегии достаточно для чтения WAL и таблиц" },
+        { "id": "b", "text": "Snapshot выполнится, но Debezium не сможет создать replication slot" },
+        { "id": "c", "text": "Snapshot завершится ошибкой доступа, так как без cloudsqlsuperuser пользователь не имеет необходимых прав для выполнения операций на уровне Cloud SQL" },
+        { "id": "d", "text": "Snapshot завершится успешно, но дальнейшее чтение CDC событий будет невозможно" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "В Cloud SQL нет настоящего SUPERUSER -- роль cloudsqlsuperuser является его управляемым аналогом и предоставляет необходимые привилегии для операций CDC. Без включения в эту роль пользователь с REPLICATION может столкнуться с ограничениями доступа, специфичными для Cloud SQL. Рекомендованная команда: CREATE USER debezium_user WITH REPLICATION IN ROLE cloudsqlsuperuser LOGIN PASSWORD '...'.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-01-q3",
+      "type": "multiple-choice",
+      "question": "Администратор настроил CDC на Cloud SQL, но забыл создать publication. Debezium подключается к базе данных с plugin.name=pgoutput и publication.autocreate.mode=filtered. Какое поведение ожидается?",
+      "options": [
+        { "id": "a", "text": "Debezium автоматически создаст publication для таблиц из table.include.list, так как режим filtered разрешает автоматическое создание" },
+        { "id": "b", "text": "Debezium завершится ошибкой, потому что pgoutput всегда требует заранее созданную publication" },
+        { "id": "c", "text": "Debezium будет читать все таблицы из всех схем, игнорируя table.include.list" },
+        { "id": "d", "text": "Debezium создаст publication FOR ALL TABLES, захватывая служебные таблицы и метаданные" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Режим publication.autocreate.mode=filtered позволяет Debezium автоматически создать publication только для таблиц, указанных в table.include.list. Это рекомендуемый подход для production, так как он не захватывает служебные таблицы. Ручное создание publication дает больше контроля, но autocreate=filtered является безопасной альтернативой. Вариант D описывает режим all_tables, который менее безопасен.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-01-q4",
+      "type": "multiple-choice",
+      "question": "Мониторинг показывает, что lag_bytes для replication slot debezium_slot постоянно растет, хотя Debezium Server работает. Какова наиболее вероятная причина и правильная последовательность диагностики?",
+      "options": [
+        { "id": "a", "text": "Debezium не успевает публиковать события в Pub/Sub -- проверить пропускную способность сети, увеличить max.batch.size и ресурсы Cloud SQL инстанса" },
+        { "id": "b", "text": "Publication не включает нужные таблицы -- проверить pg_publication_tables и пересоздать publication" },
+        { "id": "c", "text": "Флаг max_slot_wal_keep_size слишком мал -- увеличить значение и перезагрузить инстанс" },
+        { "id": "d", "text": "Heartbeat не настроен -- добавить heartbeat.interval.ms для продвижения slot position" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Если Debezium работает, но lag растет, проблема в производительности: Debezium читает WAL медленнее, чем база данных генерирует изменения. Правильная диагностика: (1) проверить, работает ли Debezium Server, (2) оценить пропускную способность до Pub/Sub, (3) увеличить ресурсы (CPU, memory) Cloud SQL instance. Вариант D относится к другой проблеме -- heartbeat нужен, когда таблицы не изменяются, и слот не продвигается при нулевом трафике.",
+      "hint": "Обратите внимание на ключевое условие: Debezium работает, но lag растет. Это значит, что данные генерируются быстрее, чем обрабатываются. Где находится узкое место?",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "lessonSlug": "07-module-7/02-debezium-server-pubsub",
+  "moduleId": "07-module-7",
+  "_meta": {
+    "idPrefix": "m07-02",
+    "description": "Use IDs: m07-02-q1, m07-02-q2, ... for MC/TF"
+  },
+  "questions": [
+    {
+      "id": "m07-02-q1",
+      "type": "multiple-choice",
+      "question": "Чем принципиально отличается Debezium Server от Debezium Connector, работающего в Kafka Connect?",
+      "options": [
+        { "id": "a", "text": "Debezium Server использует другой source connector для чтения WAL" },
+        { "id": "b", "text": "Debezium Server -- standalone Quarkus-приложение, которое публикует CDC события напрямую в sink (Pub/Sub, Kinesis), минуя Kafka" },
+        { "id": "c", "text": "Debezium Server поддерживает multi-sink архитектуру и может отправлять события в несколько систем одновременно" },
+        { "id": "d", "text": "Debezium Server использует gRPC вместо HTTP для передачи событий" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Debezium Server -- это standalone приложение на базе Quarkus, объединяющее source connector и sink adapter в одном контейнере. В отличие от Kafka Connect, где Debezium является плагином и требует Kafka кластер, Debezium Server публикует события напрямую в выбранный sink (Pub/Sub, Kinesis, HTTP, Redis). Это Kafka-less архитектура, упрощающая инфраструктуру. Вариант C неверен -- Debezium Server поддерживает только один sink.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m07-02-q2",
+      "type": "multiple-choice",
+      "question": "В конфигурации Debezium Server для Pub/Sub установлен debezium.sink.pubsub.ordering.enabled=true. Какую проблему решает этот параметр и что произойдет, если его отключить?",
+      "options": [
+        { "id": "a", "text": "Параметр включает компрессию сообщений для снижения latency; при отключении увеличится трафик, но порядок событий не изменится" },
+        { "id": "b", "text": "Параметр гарантирует обработку событий одной таблицы в порядке записи в WAL; при отключении UPDATE может прийти раньше INSERT для той же записи" },
+        { "id": "c", "text": "Параметр включает FIFO-очередь в Pub/Sub; при отключении все сообщения доставляются параллельно без потери данных" },
+        { "id": "d", "text": "Параметр сортирует события по timestamp перед публикацией; при отключении события публикуются в произвольном порядке" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Для CDC критически важен порядок событий: UPDATE должен прийти после INSERT для одной и той же записи. ordering.enabled=true гарантирует, что Pub/Sub обрабатывает события одной таблицы в правильной последовательности. При отключении консьюмер может получить UPDATE раньше INSERT, что приведет к ошибкам при применении изменений (например, UPDATE для несуществующей записи в BigQuery).",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-02-q3",
+      "type": "true-false",
+      "question": "Debezium Server автоматически создает Pub/Sub топики при публикации первого события для каждой таблицы.",
+      "correctAnswer": false,
+      "explanation": "Pub/Sub топики должны быть созданы заранее. Debezium Server не создает топики автоматически -- при попытке публикации в несуществующий топик возникнет ошибка. Топики создаются через gcloud pubsub topics create по паттерну {topic.prefix}.{schema}.{table}.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-02-q4",
+      "type": "multiple-choice",
+      "question": "Debezium Server развернут в Cloud Run. После перезапуска контейнера обнаружены дубликаты событий в Pub/Sub. Какая конфигурационная ошибка наиболее вероятна?",
+      "options": [
+        { "id": "a", "text": "Не указан debezium.sink.pubsub.project.id, и события уходили в default проект" },
+        { "id": "b", "text": "Offset storage использует file-based стратегию, но Cloud Run не поддерживает persistent volumes -- offset потерян при перезапуске" },
+        { "id": "c", "text": "Параметр heartbeat.interval.ms не установлен, и Debezium начал повторное чтение с начала WAL" },
+        { "id": "d", "text": "Pub/Sub subscription настроен с at-most-once доставкой вместо at-least-once" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Cloud Run не поддерживает persistent volumes. При file-based offset storage (offsets.dat) перезапуск контейнера уничтожает файл оффсета, и Debezium Server теряет позицию чтения WAL. Это приводит к повторной обработке событий с начала или с текущей позиции (дубликаты или потеря данных). Для Cloud Run необходим Redis offset storage: debezium.source.offset.storage=io.debezium.storage.redis.offset.RedisOffsetBackingStore.",
+      "hint": "Подумайте, что происходит с файлами внутри контейнера Cloud Run при его перезапуске. Ephemeral storage означает, что все данные в файловой системе контейнера теряются.",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

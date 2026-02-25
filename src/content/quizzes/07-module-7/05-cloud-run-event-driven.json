@@ -1,0 +1,61 @@
+{
+  "lessonSlug": "07-module-7/05-cloud-run-event-driven",
+  "moduleId": "07-module-7",
+  "_meta": {
+    "idPrefix": "m07-05",
+    "description": "Use IDs: m07-05-q1, m07-05-q2, ... for MC/TF"
+  },
+  "questions": [
+    {
+      "id": "m07-05-q1",
+      "type": "multiple-choice",
+      "question": "Cloud Run обработчик CDC событий возвращает HTTP 204 при успешной обработке и HTTP 500 при ошибке. Что произойдет с Pub/Sub сообщением в каждом случае?",
+      "options": [
+        { "id": "a", "text": "204 -- сообщение удалено, 500 -- сообщение переотправлено немедленно без задержки" },
+        { "id": "b", "text": "204 -- сообщение подтверждено (ACK), Pub/Sub не повторит; 500 -- Pub/Sub повторит доставку с exponential backoff" },
+        { "id": "c", "text": "204 -- сообщение помечено как прочитанное, 500 -- сообщение отправлено в Dead Letter Queue" },
+        { "id": "d", "text": "Оба кода считаются успешными, Pub/Sub анализирует только коды 4xx как ошибки" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Pub/Sub интерпретирует HTTP коды ответа Cloud Run: 2xx означает успех (ACK сообщения, Pub/Sub больше не повторяет), 5xx -- временная ошибка (retry с exponential backoff: 10s, 20s, 40s...), 4xx -- невалидное сообщение (отправляется в Dead Letter Queue при настроенном DLQ). Это позволяет обработчику сигнализировать характер ошибки: временная (500) или постоянная (400).",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-05-q2",
+      "type": "multiple-choice",
+      "question": "CDC события приходят в Cloud Run обработчик через Eventarc в формате Pub/Sub envelope. В каком формате закодировано поле data, содержащее Debezium событие?",
+      "options": [
+        { "id": "a", "text": "Plain JSON -- Debezium событие в чистом виде без дополнительной кодировки" },
+        { "id": "b", "text": "Base64 -- Debezium событие закодировано в base64, требует декодирования: base64.b64decode(data).decode('utf-8')" },
+        { "id": "c", "text": "Protocol Buffers -- сериализованное бинарное представление Debezium schema" },
+        { "id": "d", "text": "Avro -- Debezium событие сериализовано с использованием Avro schema из Schema Registry" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Pub/Sub передает данные в поле message.data в формате base64. Для получения Debezium события необходимо: (1) извлечь envelope.message.data, (2) декодировать base64 в строку, (3) распарсить JSON. В Python: data = base64.b64decode(pubsub_message['data']).decode('utf-8'), затем event = json.loads(data). Это стандартное поведение Pub/Sub для всех типов сообщений.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m07-05-q3",
+      "type": "true-false",
+      "question": "Для Cloud Run CDC обработчика с min-instances=0 первый запрос после периода бездействия обрабатывается без задержки, аналогично warm instance.",
+      "correctAnswer": false,
+      "explanation": "При min-instances=0 (scale to zero) Cloud Run удаляет все контейнеры после периода бездействия. Первый запрос вызывает cold start -- запуск нового контейнера, что занимает 1-3 секунды. Для CDC событий от high-traffic таблиц рекомендуется min-instances=1, чтобы держать один контейнер постоянно готовым. Для low-traffic таблиц cold start обычно приемлем.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m07-05-q4",
+      "type": "multiple-choice",
+      "question": "CDC обработчик на Cloud Run обрабатывает события заказов. Логи показывают дублирование обработки: один и тот же заказ обновляется дважды. Pub/Sub настроен с at-least-once доставкой. Какой паттерн корректно решает проблему дубликатов?",
+      "options": [
+        { "id": "a", "text": "Переключить Pub/Sub на exactly-once доставку через настройку subscription" },
+        { "id": "b", "text": "Использовать messageId из Pub/Sub для дедупликации: проверять в Redis/Firestore, обрабатывалось ли сообщение ранее" },
+        { "id": "c", "text": "Увеличить ack-deadline до максимального значения, чтобы Pub/Sub не переотправлял сообщения" },
+        { "id": "d", "text": "Добавить блокировку на уровне Cloud Run concurrency=1, чтобы обрабатывать только одно сообщение за раз" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Pub/Sub гарантирует at-least-once доставку, что означает возможность дублирования. Стандартный паттерн идемпотентности: использовать уникальный messageId для дедупликации через внешнее хранилище (Redis с TTL или Firestore). При получении сообщения: проверить, есть ли messageId в хранилище; если да -- вернуть 204 без обработки; если нет -- обработать и сохранить messageId. Вариант C не решает проблему, а только снижает вероятность retry.",
+      "hint": "Pub/Sub использует at-least-once семантику. Какой уникальный идентификатор в каждом Pub/Sub сообщении позволяет отличить новое сообщение от повторной доставки?",
+      "bloomLevel": "analytical"
+    }
+  ]
+}
