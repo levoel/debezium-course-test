@@ -1,0 +1,153 @@
+{
+  "lessonSlug": "08-module-8/_exam",
+  "moduleId": "08-module-8",
+  "_meta": {
+    "idPrefix": "exam-m08",
+    "description": "Use IDs: exam-m08-1, exam-m08-2, ... (10 capstone synthesis questions spanning all modules)"
+  },
+  "questions": [
+    {
+      "id": "exam-m08-1",
+      "type": "multiple-choice",
+      "question": "Вы проектируете production CDC pipeline для e-commerce платформы: Aurora PostgreSQL (заказы) + Aurora MySQL (складские остатки) → Debezium → Kafka → PyFlink → BigQuery. Обе базы используют Outbox Pattern. При развертывании коннекторов вы обнаруживаете, что MySQL connector fails при перезапуске с ошибкой 'schema mismatch'. Вы проверяете и видите, что оба MySQL коннектора (orders и inventory) используют один schema.history.internal.kafka.topic. Какова корневая причина и полный план исправления?",
+      "options": [
+        { "id": "a", "text": "Корневая причина: DDL pollution -- DDL-события от одного коннектора 'загрязняют' schema history другого. Исправление: (1) остановить оба MySQL коннектора, (2) создать уникальные schema history topics (schema-changes.mysql-orders, schema-changes.mysql-inventory), (3) обновить конфигурации, (4) удалить старый общий topic, (5) перезапустить коннекторы с snapshot.mode=initial для пересоздания schema history" },
+        { "id": "b", "text": "Корневая причина: MySQL binlog содержит DDL для всех баз данных. Исправление: настроить database.include.list для фильтрации DDL" },
+        { "id": "c", "text": "Корневая причина: конфликт database.server.id между MySQL коннекторами. Исправление: назначить уникальные ID из диапазона 184000-184999" },
+        { "id": "d", "text": "Корневая причина: Aurora MySQL не поддерживает несколько Debezium коннекторов одновременно. Исправление: объединить в один коннектор" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот сценарий объединяет концепции из Module 03 (MySQL binlog, schema history topic), Module 04 (connector recovery) и Module 08 (multi-database deployment). Когда два MySQL коннектора используют один schema.history.internal.kafka.topic, DDL-изменения от одного коннектора записываются в общий топик. При перезапуске второй коннектор читает DDL-историю, включая DDL от первого коннектора, и применяет их к своему schema state -- результат: schema mismatch. Вариант C описывает реальную проблему (server.id collision), но другой симптом -- 'Server ID already in use'. Вариант B частично верен (database.include.list фильтрует DML), но не предотвращает DDL pollution в schema history.",
+      "hint": "Подумайте о жизненном цикле schema history topic: что записывается при ALTER TABLE? Что происходит при restart, когда коннектор перечитывает историю? Если DDL от другой базы включена в историю -- как connector интерпретирует эти DDL?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m08-2",
+      "type": "multiple-choice",
+      "question": "Production CDC pipeline Aurora PostgreSQL → Debezium → Kafka → PyFlink → BigQuery работает 3 месяца. DBA выполняет ALTER TABLE orders ADD COLUMN priority VARCHAR(10) NOT NULL. Debezium использует JSON converter (без Schema Registry). PyFlink настроен с format='debezium-json'. Какой каскад событий произойдет и что сломается?",
+      "options": [
+        { "id": "a", "text": "Ничего не сломается: JSON converter гибко обрабатывает новые поля, PyFlink debezium-json формат игнорирует неизвестные поля" },
+        { "id": "b", "text": "Debezium добавит поле priority в events. PyFlink Table API с фиксированной DDL (без поля priority) проигнорирует новое поле -- downstream BigQuery не получит priority, но pipeline не сломается. Проблема: NOT NULL без DEFAULT может создать issues при snapshot старых записей" },
+        { "id": "c", "text": "Debezium перейдет в FAILED state из-за NOT NULL constraint -- коннектор не может сгенерировать schema без default value" },
+        { "id": "d", "text": "PyFlink немедленно упадет с parsing error, потому что debezium-json формат не поддерживает schema evolution" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет Module 02 (PostgreSQL WAL и schema changes), Module 05 (schema evolution без Schema Registry), Module 06 (PyFlink Table API с фиксированной DDL) и Module 08 (production operations). С JSON converter (без Schema Registry) Debezium просто добавит новое поле в JSON events -- нет schema compatibility checks. PyFlink Table API определяет schema статически в CREATE TABLE DDL; неизвестные поля в JSON молча игнорируются. BigQuery не получит priority, но pipeline продолжит работу. Ключевая тонкость: NOT NULL без DEFAULT -- при будущем resnapshot (если потребуется) старые записи, созданные до ALTER, будут содержать NULL для priority, что PostgreSQL обычно обрабатывает через DEFAULT.",
+      "hint": "Проследите путь события через каждый компонент: (1) PostgreSQL WAL с новой колонкой, (2) Debezium JSON converter без Schema Registry, (3) PyFlink с фиксированным CREATE TABLE DDL. Какой компонент 'знает' о новом поле? Какой -- нет?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m08-3",
+      "type": "multiple-choice",
+      "question": "E-commerce pipeline обрабатывает 30,000 events/sec. PyFlink consumer обнаруживает дубликаты заказов в BigQuery после планового restart Debezium connector. Дубликаты имеют одинаковый order_id но разные processed_at timestamps. BigQuery table использует PRIMARY KEY (order_id) NOT ENFORCED с UPSERT. Почему дубликаты появились несмотря на idempotent UPSERT?",
+      "options": [
+        { "id": "a", "text": "BigQuery PRIMARY KEY NOT ENFORCED не гарантирует уникальность -- UPSERT может создавать дубликаты при concurrent writes от разных PyFlink subtasks" },
+        { "id": "b", "text": "Debezium при restart повторно отправил events (at-least-once), PyFlink обработал их как новые (новый processed_at), и BigQuery UPSERT обновил строки. Дубликатов в BigQuery нет -- это одни и те же строки с обновленным processed_at. Проблема в downstream consumers, читающих changelog topic с двумя версиями записи" },
+        { "id": "c", "text": "PyFlink checkpoint не завершился до restart -- Flink повторно обработал batch с новыми timestamps" },
+        { "id": "d", "text": "Debezium snapshot.mode=always вызвал полный resnapshot при restart" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет Module 01 (at-least-once delivery), Module 04 (connector restart и offset recovery), Module 06 (PyFlink checkpointing) и Module 08 (BigQuery CDC). At-least-once delivery означает, что Debezium при restart может повторно отправить events, уже записанные в Kafka перед restart. PyFlink обрабатывает каждое событие и добавляет CURRENT_TIMESTAMP как processed_at -- повторное событие получает новый timestamp. BigQuery UPSERT по order_id обновляет существующую строку -- в BigQuery нет дубликатов. 'Дубликаты' видны в Kafka changelog topic (два сообщения для одного order_id), что может вводить в заблуждение. Вариант A неверен: хотя NOT ENFORCED не enforce uniqueness, MERGE statement BigQuery корректно делает upsert.",
+      "hint": "Разделите 'дубликаты в Kafka' и 'дубликаты в BigQuery'. At-least-once = повторные events в Kafka. BigQuery UPSERT по primary key = одна строка. Что видит downstream consumer, читающий changelog topic?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m08-4",
+      "type": "multiple-choice",
+      "question": "Вы проектируете multi-database capstone: PostgreSQL (orders) + MySQL (inventory). PostgreSQL использует replication slot для position tracking, MySQL -- GTID. Происходит одновременный failover обоих источников на standby серверы. Какая стратегия recovery для каждого коннектора и почему время восстановления различается?",
+      "options": [
+        { "id": "a", "text": "Оба коннектора восстановятся автоматически за 30 секунд -- Debezium одинаково обрабатывает failover для PostgreSQL и MySQL" },
+        { "id": "b", "text": "MySQL connector (~30s): GTID глобально идентифицирует транзакции, connector автоматически находит позицию на новом primary. PostgreSQL connector (~5-10 min): replication slot привязан к конкретному серверу, требуется миграция slot на новый primary или создание нового slot с последующим resnapshot" },
+        { "id": "c", "text": "PostgreSQL connector восстанавливается быстрее, потому что WAL-based replication более зрелая технология" },
+        { "id": "d", "text": "Оба коннектора требуют полного resnapshot после failover -- offset information теряется при переключении на standby" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет Module 02 (PostgreSQL replication slots, failover), Module 03 (MySQL GTID, binlog-based failover), Module 04 (disaster recovery) и Module 08 (multi-database operations). MySQL GTID обеспечивает global transaction identification: connector просто подключается к новому primary и продолжает с GTID позиции (~30 секунд). PostgreSQL replication slot -- server-local ресурс: при failover slot не существует на новом primary. Требуется: (1) создать slot на новом primary через pg_create_logical_replication_slot(), (2) согласовать позицию с последним committed offset из connect-offsets, (3) при невозможности согласования -- resnapshot. Это занимает 5-10 минут и требует manual или scripted intervention.",
+      "hint": "Ключевое различие: GTID = глобальный идентификатор (работает на любом сервере кластера), replication slot = локальный ресурс (привязан к конкретному серверу). Что происходит с каждым при failover?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m08-5",
+      "type": "multiple-choice",
+      "question": "Capstone pipeline работает в GCP: Cloud SQL PostgreSQL → Debezium on Cloud Run → Pub/Sub → Dataflow → BigQuery. Monitoring показывает растущий WAL lag. heartbeat.interval.ms=10000 настроен, но WAL продолжает расти. В чем наиболее вероятная причина?",
+      "options": [
+        { "id": "a", "text": "Heartbeat не поддерживается в Cloud SQL PostgreSQL" },
+        { "id": "b", "text": "heartbeat.action.query не настроен -- heartbeat генерирует synthetic CDC events в Kafka, но не продвигает replication slot в PostgreSQL. Для продвижения slot нужен heartbeat.action.query с фактической SQL операцией (например, UPDATE heartbeat SET ts=NOW())" },
+        { "id": "c", "text": "Cloud Run автоматически масштабирует instances до нуля, и при scale-down connector теряет соединение с PostgreSQL" },
+        { "id": "d", "text": "Pub/Sub не поддерживает Debezium heartbeat events -- они теряются при доставке" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет Module 04 (heartbeat mechanism, WAL bloat prevention), Module 07 (Cloud SQL, Cloud Run, GCP deployment) и Module 08 (production capstone). Базовый heartbeat.interval.ms генерирует synthetic события для обновления метрик, но НЕ продвигает confirmed_flush_lsn replication slot. Для продвижения slot нужен heartbeat.action.query -- фактическая операция записи (INSERT/UPDATE) в heartbeat-таблицу. Эта запись попадает в WAL, Debezium захватывает её через slot, и slot продвигает confirmed_flush_lsn. Без action.query slot остается на последней позиции реального события, и WAL накапливается. В Cloud SQL это особенно критично: нет прямого доступа к pg_replication_slots для ручного продвижения.",
+      "hint": "Heartbeat имеет два компонента: (1) interval -- как часто генерировать synthetic events для метрик, (2) action.query -- SQL запрос для продвижения slot. Какой из них продвигает confirmed_flush_lsn?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m08-6",
+      "type": "multiple-choice",
+      "question": "Для capstone проекта Python consumer обрабатывает CDC events из Debezium. В обработке используется pandas DataFrame для агрегации заказов по региону. При получении DELETE-события (op='d') consumer падает с KeyError на поле 'region'. В каком месте Debezium envelope находятся данные удаленной записи и как правильно обработать DELETE?",
+      "options": [
+        { "id": "a", "text": "Данные DELETE находятся в event['payload']['after']['region']. Нужно добавить null-check" },
+        { "id": "b", "text": "Для DELETE after=null, данные удаленной записи находятся в event['payload']['before']['region']. Consumer должен проверять op='d' и читать before вместо after. При REPLICA IDENTITY DEFAULT before содержит только primary key -- для полных данных требуется REPLICA IDENTITY FULL" },
+        { "id": "c", "text": "DELETE-события не содержат данных -- Debezium отправляет только tombstone (null value). Consumer должен игнорировать DELETE" },
+        { "id": "d", "text": "DELETE-события содержат данные в event['payload']['source']['region'], потому что Debezium перемещает данные в source section для DELETE" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет Module 01 (структура Debezium events, op field), Module 02 (REPLICA IDENTITY и before/after), Module 06 (Python consumer обработка) и Module 08 (production data processing). В Debezium envelope для DELETE: after=null (записи больше нет), before содержит данные до удаления. При REPLICA IDENTITY DEFAULT before содержит только primary key; при FULL -- все колонки. Правильная обработка: проверить op, для 'd' читать before. Частая ошибка: consumer всегда читает after, что работает для c/u/r но падает на d.",
+      "hint": "Вспомните структуру Debezium envelope: before (old state), after (new state), op (operation type). Для DELETE -- какое состояние 'новое'? Какое содержит данные удаленной записи?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m08-7",
+      "type": "multiple-choice",
+      "question": "Capstone pipeline использует SMT chain: outbox → mask → route. outbox (Outbox Event Router) извлекает domain event, mask (MaskField) маскирует customer_email, route (ContentBasedRouter) маршрутизирует по region. После deployment обнаружено: маскирование работает, но routing не срабатывает -- все события попадают в один топик. Что произошло?",
+      "options": [
+        { "id": "a", "text": "ContentBasedRouter не совместим с Outbox Event Router в одном SMT chain" },
+        { "id": "b", "text": "MaskField замаскировал поле region вместе с customer_email, и ContentBasedRouter не может прочитать значение для routing" },
+        { "id": "c", "text": "После Outbox Event Router структура события изменилась: domain event имеет flat payload, а ContentBasedRouter routing expression (например, value.region) должен быть адаптирован к post-outbox структуре. Если routing expression указывает на поле в оригинальной CDC envelope (value.after.region) вместо flat payload (value.region) -- routing не работает" },
+        { "id": "d", "text": "Порядок mask и route должен быть обратным: route → mask. Маскирование после routing не влияет на routing decision" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Этот сценарий объединяет Module 05 (SMT chain order, Outbox Event Router, ContentBasedRouter, MaskField) и Module 08 (production pipeline). Outbox Event Router преобразует CDC envelope (с before/after/source) в flat domain event (payload fields на верхнем уровне). После этого SMT chain работает с измененной структурой. Если ContentBasedRouter expression написан для pre-outbox структуры (value.after.region), он не найдет поле в post-outbox flat payload (value.region). Вариант D частично верен: порядок mask/route не критичен, если mask не затрагивает routing field. Вариант B возможен только если mask.fields включает region.",
+      "hint": "Outbox Event Router -- это не просто routing, а ТРАНСФОРМАЦИЯ структуры. До outbox: CDC envelope {before, after, source, op}. После outbox: flat domain event {payload fields}. Как это влияет на routing expression?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m08-8",
+      "type": "true-false",
+      "question": "В multi-database capstone project PostgreSQL и MySQL коннекторы могут использовать один и тот же database.server.name, если они подключены к разным типам баз данных.",
+      "correctAnswer": false,
+      "explanation": "Этот вопрос объединяет Module 08 (multi-database unique identifiers) и Module 04 (topic naming). database.server.name используется как prefix в именах Kafka-топиков. Даже при подключении к разным типам БД, если таблицы имеют одинаковые имена (например, orders), топики будут коллидировать: prod.public.orders (PostgreSQL) и prod.ecommerce.orders (MySQL). Это приводит к смешиванию событий с разными schema в одном топике, вызывая parsing errors у consumers. Стандартная конвенция: postgres_prod и mysql_prod.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m08-9",
+      "type": "multiple-choice",
+      "question": "Вы проводите chaos testing capstone pipeline: убиваете Debezium connector (docker stop) на 5 минут во время активной записи. После перезапуска PyFlink обнаруживает 50,000 дублей в BigQuery (COUNT(*) > COUNT(DISTINCT order_id)). BigQuery PRIMARY KEY (order_id) NOT ENFORCED. Почему UPSERT не предотвратил дубли и какое исправление необходимо?",
+      "options": [
+        { "id": "a", "text": "BigQuery NOT ENFORCED означает, что PRIMARY KEY используется только как hint для optimizer, а не для deduplication. MERGE с UPSERT семантикой работает, но если PyFlink использует простой INSERT INTO вместо MERGE -- дубли неизбежны. Исправление: настроить BigQuery sink connector с upsertEnabled=true или использовать MERGE statement" },
+        { "id": "b", "text": "Debezium отправил события дважды из-за at-most-once delivery гарантии" },
+        { "id": "c", "text": "PyFlink checkpoint corrupted при restart -- данные переобработаны с нуля" },
+        { "id": "d", "text": "BigQuery PRIMARY KEY NOT ENFORCED всегда создает дубли -- это ожидаемое поведение" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот сценарий объединяет Module 01 (at-least-once), Module 04 (connector restart recovery), Module 06 (PyFlink sink configuration), Module 07 (BigQuery CDC ingestion) и Module 08 (chaos testing). BigQuery NOT ENFORCED ключевое слово означает: BigQuery ЗНАЕТ о primary key (использует для MERGE), но НЕ ПРОВЕРЯЕТ уникальность при INSERT. Если sink connector использует INSERT вместо MERGE (upsertEnabled=false) -- каждый at-least-once дубль создает новую строку. Исправление: (1) для BigQuery Sink Connector: upsertEnabled=true (использует MERGE INTO ... WHEN MATCHED THEN UPDATE), (2) для custom sink: использовать Storage Write API с MERGE semantics. Вариант D неверен: NOT ENFORCED не 'всегда' создает дубли -- при правильном MERGE дублей не будет.",
+      "hint": "NOT ENFORCED = BigQuery не отклоняет INSERT с дублирующим key. Но MERGE statement может использовать key для upsert. Какой тип операции использует ваш sink connector -- INSERT или MERGE?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m08-10",
+      "type": "multiple-choice",
+      "question": "Итоговое проектирование: команда выбирает между двумя архитектурами multi-database CDC для аналитической платформы. Вариант 1: Separate Topics (postgres.orders, mysql.orders → PyFlink UNION ALL). Вариант 2: Unified Topics (ByLogicalTableRouter → unified.orders). PostgreSQL и MySQL outbox tables имеют одинаковую структуру. Какой вариант рекомендуется для production и почему?",
+      "options": [
+        { "id": "a", "text": "Unified Topics -- меньше consumer complexity, один topic для обработки" },
+        { "id": "b", "text": "Separate Topics: (1) independent schema evolution -- PostgreSQL ALTER TABLE не ломает MySQL consumer, (2) clear traceability -- topic name shows origin database, (3) easier troubleshooting -- изолированный отказ одного connector не влияет на другой topic, (4) natural key uniqueness -- нет конфликтов order_id между базами. Unified Topics добавляют complexity: координированная schema evolution, composite keys, ByLogicalTableRouter config" },
+        { "id": "c", "text": "Unified Topics с обязательным Schema Registry для координации schema evolution между PostgreSQL и MySQL" },
+        { "id": "d", "text": "Ни один из вариантов -- нужна третья архитектура с Apache Kafka Streams для merge" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет Module 05 (SMT, ByLogicalTableRouter), Module 06 (PyFlink UNION ALL, stream processing), Module 07 (production deployment patterns) и Module 08 (multi-database architecture comparison). Separate Topics рекомендуется для большинства production deployments: (1) разные команды могут эволюционировать schema независимо (PostgreSQL DBA добавляет колонку -- MySQL не затронут), (2) topic name = source database (troubleshooting за секунды), (3) failure isolation (PostgreSQL connector down -- MySQL events продолжают поступать), (4) order_id=5 в PostgreSQL и order_id=5 в MySQL остаются в разных потоках, не требуя composite keys. Unified Topics оправданы только при identical schemas + single consumer, что редко в enterprise.",
+      "hint": "Рассмотрите четыре критерия: schema evolution independence, traceability, failure isolation, key uniqueness. Какой паттерн лучше по каждому критерию? Когда complexity Unified Topics оправдана?",
+      "bloomLevel": "analytical"
+    }
+  ]
+}
