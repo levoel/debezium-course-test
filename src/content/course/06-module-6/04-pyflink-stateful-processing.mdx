@@ -136,6 +136,11 @@ CREATE TABLE orders (
 
 > **Production рекомендация:** Для CDC pipeline используйте 5-10 секунд allowed lateness. Этого достаточно для network jitter, но не слишком много для latency.
 
+<KnowledgeCheck
+  question={'Watermark = max_event_time - INTERVAL 5 SECONDS. Текущий max event_time = 10:00:30. Событие с event_time = 10:00:24 прибывает в этот момент. Будет ли оно обработано или отброшено?'}
+  answer={'Watermark = 10:00:30 - 5 секунд = 10:00:25. Событие с event_time 10:00:24 прибыло позже watermark (10:00:24 < 10:00:25), поэтому оно будет отброшено (late event). Flink считает, что все события с timestamp до 10:00:25 уже прибыли. Чтобы это событие было обработано, нужно увеличить allowed lateness до 7+ секунд (30 - 24 = 6 секунд опоздания). Это иллюстрирует trade-off: больший watermark interval = меньше потерь, но выше latency.'}
+/>
+
 ### Обработка Late Data
 
 Даже с watermark некоторые события **прибудут позже** allowed lateness. Что с ними делать?
@@ -620,6 +625,11 @@ GROUP BY ...
 ```
 
 > **Production рекомендация:** Всегда конфигурируйте state TTL для production jobs. Мониторьте state size metrics. Используйте RocksDB для state > 10 GB.
+
+<KnowledgeCheck
+  question={'Почему global aggregation (SELECT customer_id, COUNT(*) FROM orders GROUP BY customer_id) в streaming mode приводит к unbounded state growth? Как session windows решают эту проблему?'}
+  answer={'Global aggregation хранит state для каждого уникального customer_id навсегда: новые customer добавляются, но старые никогда не удаляются. Через месяцы работы state содержит миллионы ключей, что приводит к OutOfMemoryError. Session windows решают проблему: после gap (например, 30 минут без событий для customer) сессия закрывается, и Flink может очистить state для этого ключа. State становится bounded: хранятся только активные сессии. Альтернатива: state TTL автоматически удаляет записи старше заданного времени.'}
+/>
 
 ## Лабораторная работа: Real-Time Dashboard
 

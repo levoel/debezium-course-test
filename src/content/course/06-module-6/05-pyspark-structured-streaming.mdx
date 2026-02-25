@@ -46,6 +46,11 @@ import {
 
 > **Production истина:** Большинство CDC → data lake пайплайнов используют PySpark. Большинство real-time alerting систем — PyFlink.
 
+<KnowledgeCheck
+  question={'PySpark Structured Streaming использует micro-batch модель. Почему это означает, что PySpark не может обеспечить exactly-once доставку в Kafka sink, в отличие от PyFlink?'}
+  answer={'PySpark micro-batch обрабатывает данные порциями: read batch -> process -> write. Для Kafka sink PySpark не поддерживает Kafka transactional producer API, поэтому при failure и retry одного micro-batch дублирующие сообщения могут попасть в output topic (at-least-once). PyFlink работает event-by-event и использует Kafka transactional producer для atomic commit: чтение offset + обработка + запись в output topic -- одна транзакция. Для записи в файлы (Parquet, Delta) PySpark обеспечивает idempotent writes (тот же batch пишет те же файлы), поэтому для data lake сценариев PySpark вполне подходит.'}
+/>
+
 ## Structured Streaming основы
 
 **Structured Streaming** — это Spark API для stream processing, использующий DataFrame abstraction.
@@ -301,6 +306,11 @@ query = result_df \
 4. **Never change shuffle partitions** — после checkpoint нельзя менять `spark.sql.shuffle.partitions`
 
 > **Production WARNING:** Pitfall 3 из RESEARCH.md — shared checkpoint dirs приводят к corruption.
+
+<KnowledgeCheck
+  question={'Почему после создания checkpoint в PySpark нельзя изменить spark.sql.shuffle.partitions? Что произойдёт при попытке?'}
+  answer={'Checkpoint сохраняет state, распределённый по определённому количеству shuffle partitions. Каждая partition хранит свою часть aggregation state (например, часть customer_id для GROUP BY). При изменении количества partitions Spark не может перераспределить сохранённый state -- mapping между ключами и partitions изменился. Spark выбросит ошибку при попытке восстановления: state из 200 partitions нельзя загрузить в 4 partitions. Решение: установить shuffle.partitions до первого запуска и не менять, или создать новый checkpoint (с потерей state).'}
+/>
 
 ## Output Modes: append, update, complete
 

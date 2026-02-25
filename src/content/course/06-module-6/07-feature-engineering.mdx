@@ -144,6 +144,11 @@ derived_df = features_df.withColumn(
 
 > **Важно:** Выбор feature types зависит от ML задачи. Fraud detection любит behavioral features (velocity, patterns). Recommendations предпочитают aggregated features (popularity, recency).
 
+<KnowledgeCheck
+  question={'Чем CDC события уникально полезны для feature engineering по сравнению с обычными batch-запросами к базе данных? Какой тип features невозможен без CDC?'}
+  answer={'CDC события содержат полную историю изменений: before (состояние до) и after (состояние после) для каждой операции, с точными timestamps. Это позволяет вычислять behavioral features, которые невозможны из snapshot базы данных: order_velocity (изменение частоты заказов), price_change_frequency (как часто менялась цена), status_transition_time (время между статусами). Batch-запрос SELECT * FROM orders видит только текущее состояние, а CDC видит все промежуточные изменения. Например, если заказ менял статус pending -> processing -> shipped -> delivered, batch видит только delivered, а CDC видит все 4 перехода с timestamps.'}
+/>
+
 ## Паттерн: Customer Behavior Features
 
 Рассмотрим классический пример: вычисление customer features из CDC событий таблицы `orders`.
@@ -500,6 +505,11 @@ Stable features (lifetime value) → Batch (daily ETL)
 ```
 
 > **Production principle:** Use real-time features only when freshness **directly impacts business metrics**. If model performance same with daily features → use batch.
+
+<KnowledgeCheck
+  question={'Компания хочет перевести ВСЕ ML features на real-time вычисление из CDC потока. Почему это плохая идея и какой принцип определяет, какие features вычислять в real-time?'}
+  answer={'Real-time features требуют постоянно работающей инфраструктуры (Kafka + Spark/Flink), мониторинга и operational overhead -- это значительно дороже batch features (cron job раз в сутки). Принцип: используйте real-time только когда свежесть данных напрямую влияет на бизнес-метрики. Пример: fraud_score (задержка = пропущенное мошенничество) -- real-time. customer_lifetime_value (не меняется значительно за сутки) -- batch. Hybrid approach оптимален: критичные features в real-time, стабильные в batch. Если модель показывает одинаковое качество с daily features -- batch дешевле и проще.'}
+/>
 
 ## Мониторинг feature pipeline
 

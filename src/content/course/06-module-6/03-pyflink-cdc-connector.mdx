@@ -68,6 +68,11 @@ result = table_env.sql_query("SELECT customer_id, COUNT(*) FROM orders GROUP BY 
 
 > **Рекомендация:** Для CDC pipeline используйте Table API. DataStream API только если нужна низкоуровневая обработка (custom state management, side outputs).
 
+<KnowledgeCheck
+  question={'Почему для обработки CDC событий в PyFlink рекомендуется Table API, а не DataStream API? Какое ключевое преимущество даёт SQL DDL?'}
+  answer={'Table API использует SQL DDL для описания структуры CDC событий, и Kafka connector автоматически парсит Debezium envelope (before, after, op, ts_ms, source). С DataStream API вам пришлось бы вручную десериализовать JSON и маппить вложенные структуры. Кроме того, Flink оптимизирует SQL-запросы (предикатный pushdown, projection pruning), чего нет для произвольного DataStream кода. Table API -- стандарт для CDC processing в Flink.'}
+/>
+
 ## Настройка окружения
 
 PyFlink требует следующие зависимости:
@@ -300,6 +305,11 @@ table_env.get_config().get_configuration().set_string(
 ```
 
 Flink будет писать в logs события, которые не удалось распарсить.
+
+<KnowledgeCheck
+  question={'Какой trade-off создаёт настройка json.ignore-parse-errors = true в PyFlink Kafka connector? Почему её всё равно рекомендуют для production?'}
+  answer={'json.ignore-parse-errors = true заставляет PyFlink молча пропускать malformed JSON события вместо остановки job. Trade-off: resilience (job не падает при ошибке) vs data completeness (потерянные события). В production рекомендуется, потому что остановка всего streaming job из-за одного malformed сообщения гораздо дороже, чем потеря единичных событий. Критически важно: необходимо настроить мониторинг и alerting на dropped events, чтобы обнаруживать систематические проблемы (schema changes, bugs в коннекторе).'}
+/>
 
 ## Выполнение запроса
 

@@ -128,6 +128,11 @@ pd.to_datetime(df['ts_ms'], unit='ms')  # dtype: datetime64[us]
 
 **Рекомендация:** В этом курсе мы сразу учим pandas 3.0 паттернам. Если встречаете старый код, обновите его.
 
+<KnowledgeCheck
+  question={'Почему Copy-on-Write в pandas 3.0 делает chained assignment (df[condition]["col"] = value) опасным? Что произойдёт с данными?'}
+  answer={'В pandas 3.0 Copy-on-Write включён по умолчанию. При chained assignment df[condition] возвращает view (не copy), и присваивание ["col"] = value создаёт новый объект, не связанный с исходным DataFrame. В результате изменение молча не применяется -- данные не обновляются, ошибка не возникает. Правильный подход: использовать df.loc[condition, "col"] = value, который модифицирует DataFrame напрямую. Это частая причина багов при миграции с pandas 2.x на 3.0.'}
+/>
+
 ---
 
 ## Структура Debezium CDC события
@@ -400,6 +405,11 @@ significant_updates = updates_df[updates_df['total_change'].abs() > 100]
 print(f"Significant updates: {len(significant_updates)}")
 print(significant_updates[['after_id', 'before_total', 'after_total', 'total_change']])
 ```
+
+<KnowledgeCheck
+  question={'Почему при преобразовании CDC событий в DataFrame нельзя всегда использовать поле after для извлечения данных? Какой тип операции это сломает?'}
+  answer={'DELETE операции (op="d") имеют after=null, потому что после удаления записи нет состояния "после". Данные удалённой строки находятся в поле before. Если код извлекает данные только из after, DELETE события приведут к KeyError или NullPointerException. Правильный подход: для операций c (create), u (update), r (read/snapshot) использовать after, а для d (delete) -- before. Это критическая особенность Debezium envelope, которую необходимо учитывать в любом CDC-to-DataFrame pipeline.'}
+/>
 
 ---
 

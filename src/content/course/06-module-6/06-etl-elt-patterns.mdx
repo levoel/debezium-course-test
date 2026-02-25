@@ -76,6 +76,11 @@ import {
 
 **В этом уроке:** Фокус на **ELT with CDC** — как спроектировать data lake для CDC events.
 
+<KnowledgeCheck
+  question={'Почему ELT подход лучше ETL для CDC данных, если бизнес-требования могут измениться? Какое ключевое преимущество даёт сохранение raw CDC событий?'}
+  answer={'В ETL трансформация происходит до загрузки: если бизнес захочет новую метрику, придётся переделать ETL pipeline и перезапустить обработку. В ELT raw CDC события сохраняются в data lake (Parquet/Delta), а трансформации выполняются в warehouse через SQL/dbt. Новая метрика = новый SQL query, без изменения pipeline. Кроме того, raw CDC данные содержат полную историю изменений (before/after, timestamps, operation types), что позволяет восстановить состояние на любой момент времени (time travel) и провести audit trail.'}
+/>
+
 ## CDC как источник для Data Lake
 
 **Data Lake** — это centralized repository для хранения raw data в native format (Parquet, ORC, Avro).
@@ -351,6 +356,11 @@ query = cdc_stream \
 - **Optimizations** — Z-ordering, data skipping
 
 **Performance tip:** MERGE операции дорогие. Используйте batching (trigger каждую минуту, не каждое событие).
+
+<KnowledgeCheck
+  question={'Почему Delta Lake MERGE предпочтительнее append-only Parquet для CDC данных, если нужен актуальный snapshot таблицы? Какое ограничение Parquet это создаёт?'}
+  answer={'Parquet -- immutable формат: файлы не изменяются после записи. Для CDC с UPDATE и DELETE операциями append-only Parquet сохраняет все версии строки, но для получения актуального snapshot нужен дорогой запрос с ROW_NUMBER() OVER (PARTITION BY id ORDER BY timestamp DESC). Delta Lake MERGE выполняет atomic upsert: при UPDATE перезаписывает строку, при DELETE удаляет. Результат -- актуальная таблица без дополнительных запросов. Компромисс: MERGE дороже append, но downstream queries быстрее и проще.'}
+/>
 
 ## Streaming to Parquet
 
