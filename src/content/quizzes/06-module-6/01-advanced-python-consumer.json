@@ -56,6 +56,48 @@
       "hint": "Рассчитайте общее время обработки: при 500 сообщениях consumer тратит 7 минут (840 мс на сообщение). Как изменить параметры, чтобы время обработки одного batch укладывалось в max.poll.interval.ms?",
       "explanation": "Consumer был исключён из группы потому, что обработка 500 сообщений (7 минут = 420 секунд) превысила max.poll.interval.ms (300 секунд = 5 минут). Уменьшение max.poll.records до 50 сократит время обработки batch до ~42 секунд (50 * 840 мс), что значительно меньше 5-минутного лимита. Вариант A тоже решит проблему, но увеличение таймаута маскирует проблему и замедляет обнаружение реально упавших consumer'ов. Вариант C усугубит ситуацию -- меньший session.timeout.ms приведёт к ещё более частым ложным срабатываниям.",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m06-01-code-1",
+      "type": "code-challenge",
+      "question": "Напишите функцию, которая парсит CDC-событие Debezium и извлекает тип операции, имя таблицы и список изменённых полей. Для INSERT (op='c') и snapshot (op='r') возвращайте ключи из after. Для UPDATE (op='u') возвращайте только те поля из after, значения которых отличаются от before. Для DELETE (op='d') возвращайте ключи из before.",
+      "language": "python",
+      "starterCode": "import json\n\ndef solve(event_json):\n    \"\"\"Парсит CDC-событие Debezium.\n    \n    Args:\n        event_json: JSON-строка с CDC событием\n    \n    Returns:\n        JSON-строка: {\"op\": \"...\", \"table\": \"...\", \"fields\": [...]}\n    \"\"\"\n    event = json.loads(event_json)\n    payload = event[\"payload\"]\n    # Извлеките op, table из source, и список изменённых полей\n    pass",
+      "solutionCode": "import json\n\ndef solve(event_json):\n    event = json.loads(event_json)\n    payload = event[\"payload\"]\n    op = payload[\"op\"]\n    table = payload[\"source\"][\"table\"]\n    if op in (\"c\", \"r\"):\n        fields = sorted(payload[\"after\"].keys())\n    elif op == \"u\":\n        before = payload.get(\"before\", {})\n        after = payload[\"after\"]\n        fields = sorted(k for k in after if before.get(k) != after[k])\n    elif op == \"d\":\n        fields = sorted(payload[\"before\"].keys())\n    else:\n        fields = []\n    return json.dumps({\"op\": op, \"table\": table, \"fields\": fields})",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "INSERT событие (op='c'): извлечь все поля из after",
+          "input": "{\"payload\":{\"op\":\"c\",\"source\":{\"table\":\"orders\"},\"before\":null,\"after\":{\"id\":1,\"amount\":100,\"status\":\"new\"}}}",
+          "expectedOutput": "{\"op\": \"c\", \"table\": \"orders\", \"fields\": [\"amount\", \"id\", \"status\"]}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "UPDATE событие (op='u'): извлечь только изменённые поля",
+          "input": "{\"payload\":{\"op\":\"u\",\"source\":{\"table\":\"orders\"},\"before\":{\"id\":1,\"amount\":100,\"status\":\"new\"},\"after\":{\"id\":1,\"amount\":250,\"status\":\"shipped\"}}}",
+          "expectedOutput": "{\"op\": \"u\", \"table\": \"orders\", \"fields\": [\"amount\", \"status\"]}",
+          "hidden": false
+        },
+        {
+          "id": "tc3",
+          "description": "DELETE событие (op='d'): извлечь поля из before",
+          "input": "{\"payload\":{\"op\":\"d\",\"source\":{\"table\":\"customers\"},\"before\":{\"id\":42,\"name\":\"Alice\",\"email\":\"alice@example.com\"},\"after\":null}}",
+          "expectedOutput": "{\"op\": \"d\", \"table\": \"customers\", \"fields\": [\"email\", \"id\", \"name\"]}",
+          "hidden": true
+        },
+        {
+          "id": "tc4",
+          "description": "Snapshot событие (op='r'): извлечь поля из after",
+          "input": "{\"payload\":{\"op\":\"r\",\"source\":{\"table\":\"products\"},\"before\":null,\"after\":{\"id\":5,\"price\":29.99}}}",
+          "expectedOutput": "{\"op\": \"r\", \"table\": \"products\", \"fields\": [\"id\", \"price\"]}",
+          "hidden": true
+        }
+      ],
+      "hint": "Тип операции находится в payload.op, имя таблицы -- в payload.source.table. Для UPDATE сравните значения полей before и after, чтобы найти изменённые.",
+      "explanation": "Debezium CDC-событие содержит envelope с полями op (тип операции: c=create, u=update, d=delete, r=read/snapshot), source (метаданные включая имя таблицы), before (состояние до изменения) и after (состояние после). Для INSERT/snapshot after содержит все поля новой записи. Для UPDATE сравнение before и after позволяет найти именно изменённые поля -- это критично для инкрементальной обработки. Для DELETE данные находятся только в before, так как запись удалена.",
+      "bloomLevel": "applied",
+      "timeoutMs": 10000
     }
   ]
 }

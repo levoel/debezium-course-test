@@ -56,6 +56,41 @@
       "hint": "В Pandas 3.0 с Copy-on-Write важно создать явную копию (.copy()) перед модификацией подмножества DataFrame. Почему .loc[] предпочтительнее прямого присваивания?",
       "explanation": "В Pandas 3.0 с Copy-on-Write нужно: (1) создать явную копию через .copy(), чтобы отсоединить подмножество от исходного DataFrame; (2) использовать .loc[:, 'col'] для модификации, а не chained assignment. Вариант A создаёт view (без .copy()), и изменения через chained assignment не сохранятся. Вариант C вычислит разницу для всех строк (включая non-UPDATE), что приведёт к NaN для INSERT/DELETE строк, где before_total отсутствует.",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m06-02-code-1",
+      "type": "code-challenge",
+      "question": "Преобразуйте список CDC-событий Debezium в pandas DataFrame и выполните дедупликацию: для каждой записи (по id) оставьте только последнюю версию по ts_ms. Верните результат как JSON-массив записей, отсортированный по id.",
+      "language": "python",
+      "starterCode": "import json\nimport pandas as pd\n\ndef solve(events_json):\n    \"\"\"Конвертирует CDC события в DataFrame и дедуплицирует.\n    \n    Args:\n        events_json: JSON-строка с массивом CDC событий\n    \n    Returns:\n        JSON-строка: массив записей [{id, name, total, ts_ms}, ...]\n        отсортированный по id\n    \"\"\"\n    events = json.loads(events_json)\n    # 1. Извлеките поля из payload.after + payload.ts_ms\n    # 2. Создайте DataFrame\n    # 3. Дедуплицируйте: для каждого id оставьте запись с максимальным ts_ms\n    # 4. Верните JSON массив записей\n    pass",
+      "solutionCode": "import json\nimport pandas as pd\n\ndef solve(events_json):\n    events = json.loads(events_json)\n    rows = []\n    for e in events:\n        p = e[\"payload\"]\n        if p[\"op\"] in (\"c\", \"u\", \"r\") and p[\"after\"] is not None:\n            row = dict(p[\"after\"])\n            row[\"ts_ms\"] = p[\"ts_ms\"]\n            rows.append(row)\n    df = pd.DataFrame(rows)\n    df = df.sort_values(\"ts_ms\").drop_duplicates(subset=[\"id\"], keep=\"last\")\n    df = df.sort_values(\"id\").reset_index(drop=True)\n    return df.to_json(orient=\"records\")",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Дедупликация: два UPDATE для одного id -- оставить последний по ts_ms",
+          "input": "[{\"payload\":{\"op\":\"c\",\"ts_ms\":1000,\"before\":null,\"after\":{\"id\":1,\"name\":\"Alice\",\"total\":100}}},{\"payload\":{\"op\":\"u\",\"ts_ms\":2000,\"before\":{\"id\":1,\"name\":\"Alice\",\"total\":100},\"after\":{\"id\":1,\"name\":\"Alice\",\"total\":250}}},{\"payload\":{\"op\":\"c\",\"ts_ms\":1500,\"before\":null,\"after\":{\"id\":2,\"name\":\"Bob\",\"total\":50}}}]",
+          "expectedOutput": "[{\"id\":1,\"name\":\"Alice\",\"total\":250,\"ts_ms\":2000},{\"id\":2,\"name\":\"Bob\",\"total\":50,\"ts_ms\":1500}]",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Множественные обновления одной записи",
+          "input": "[{\"payload\":{\"op\":\"c\",\"ts_ms\":100,\"before\":null,\"after\":{\"id\":10,\"name\":\"Order1\",\"total\":10}}},{\"payload\":{\"op\":\"u\",\"ts_ms\":200,\"before\":{\"id\":10,\"name\":\"Order1\",\"total\":10},\"after\":{\"id\":10,\"name\":\"Order1\",\"total\":20}}},{\"payload\":{\"op\":\"u\",\"ts_ms\":300,\"before\":{\"id\":10,\"name\":\"Order1\",\"total\":20},\"after\":{\"id\":10,\"name\":\"Order1\",\"total\":30}}}]",
+          "expectedOutput": "[{\"id\":10,\"name\":\"Order1\",\"total\":30,\"ts_ms\":300}]",
+          "hidden": true
+        },
+        {
+          "id": "tc3",
+          "description": "DELETE события игнорируются (after=null)",
+          "input": "[{\"payload\":{\"op\":\"c\",\"ts_ms\":1000,\"before\":null,\"after\":{\"id\":1,\"name\":\"X\",\"total\":5}}},{\"payload\":{\"op\":\"d\",\"ts_ms\":2000,\"before\":{\"id\":1,\"name\":\"X\",\"total\":5},\"after\":null}},{\"payload\":{\"op\":\"c\",\"ts_ms\":1500,\"before\":null,\"after\":{\"id\":2,\"name\":\"Y\",\"total\":10}}}]",
+          "expectedOutput": "[{\"id\":1,\"name\":\"X\",\"total\":5,\"ts_ms\":1000},{\"id\":2,\"name\":\"Y\",\"total\":10,\"ts_ms\":1500}]",
+          "hidden": true
+        }
+      ],
+      "hint": "Используйте payload.after для данных записи и payload.ts_ms для временной метки. Для дедупликации: отсортируйте по ts_ms, затем drop_duplicates(subset=['id'], keep='last').",
+      "explanation": "При обработке CDC потока одна и та же запись может изменяться многократно (INSERT, затем несколько UPDATE). Для получения актуального состояния каждой записи необходима дедупликация: сортировка по ts_ms и сохранение только последней версии для каждого id. DELETE события (after=null) пропускаются, так как запись удалена. Этот паттерн -- основа построения materialized view из CDC потока в pandas.",
+      "bloomLevel": "applied",
+      "timeoutMs": 30000
     }
   ]
 }

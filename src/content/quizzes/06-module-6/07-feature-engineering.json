@@ -56,6 +56,48 @@
       "hint": "Training-serving skew возникает, когда features для обучения и inference вычисляются разными pipeline с разной логикой. Какой архитектурный компонент гарантирует, что одинаковые features используются в обоих контекстах?",
       "explanation": "Feature store решает проблему training-serving skew: features вычисляются одним pipeline и сохраняются как в offline store (для training), так и в online store (для inference). Feast, Tecton и подобные инструменты обеспечивают consistency, versioning и lineage. Вариант A не решает корневую проблему: batch и streaming pipeline могут вычислять features по-разному (разная логика агрегации, разные time boundaries). Вариант C маскирует проблему, но модель всё равно видит разные features при inference.",
       "bloomLevel": "analytical"
+    },
+    {
+      "id": "m06-07-code-1",
+      "type": "code-challenge",
+      "question": "Реализуйте функцию вычисления real-time фичей из потока CDC-событий: количество операций по типу (create, update, delete) и среднее время между последовательными событиями в миллисекундах. Верните JSON с полями counts и avg_interval_ms.",
+      "language": "python",
+      "starterCode": "import json\n\ndef solve(events_json):\n    \"\"\"Вычисляет фичи из CDC событий.\n    \n    Args:\n        events_json: JSON-строка с массивом CDC событий\n    \n    Returns:\n        JSON-строка: {\n            \"counts\": {\"c\": N, \"u\": N, \"d\": N},\n            \"avg_interval_ms\": число (0 если < 2 событий)\n        }\n    \"\"\"\n    events = json.loads(events_json)\n    # 1. Подсчитайте количество операций каждого типа (c, u, d)\n    # 2. Извлеките ts_ms из каждого события, отсортируйте\n    # 3. Вычислите средний интервал между последовательными событиями\n    pass",
+      "solutionCode": "import json\n\ndef solve(events_json):\n    events = json.loads(events_json)\n    counts = {\"c\": 0, \"u\": 0, \"d\": 0}\n    timestamps = []\n    for e in events:\n        op = e[\"payload\"][\"op\"]\n        if op in counts:\n            counts[op] += 1\n        timestamps.append(e[\"payload\"][\"ts_ms\"])\n    timestamps.sort()\n    if len(timestamps) < 2:\n        avg_interval = 0\n    else:\n        intervals = [timestamps[i+1] - timestamps[i] for i in range(len(timestamps)-1)]\n        avg_interval = round(sum(intervals) / len(intervals), 1)\n    return json.dumps({\"counts\": counts, \"avg_interval_ms\": avg_interval})",
+      "testCases": [
+        {
+          "id": "tc1",
+          "description": "Смешанные операции: подсчёт по типу и средний интервал",
+          "input": "[{\"payload\":{\"op\":\"c\",\"ts_ms\":1000}},{\"payload\":{\"op\":\"c\",\"ts_ms\":1500}},{\"payload\":{\"op\":\"u\",\"ts_ms\":2000}},{\"payload\":{\"op\":\"d\",\"ts_ms\":3000}}]",
+          "expectedOutput": "{\"counts\": {\"c\": 2, \"u\": 1, \"d\": 1}, \"avg_interval_ms\": 666.7}",
+          "hidden": false
+        },
+        {
+          "id": "tc2",
+          "description": "Одно событие: avg_interval_ms = 0",
+          "input": "[{\"payload\":{\"op\":\"c\",\"ts_ms\":5000}}]",
+          "expectedOutput": "{\"counts\": {\"c\": 1, \"u\": 0, \"d\": 0}, \"avg_interval_ms\": 0}",
+          "hidden": false
+        },
+        {
+          "id": "tc3",
+          "description": "Только UPDATE операции с равными интервалами",
+          "input": "[{\"payload\":{\"op\":\"u\",\"ts_ms\":100}},{\"payload\":{\"op\":\"u\",\"ts_ms\":200}},{\"payload\":{\"op\":\"u\",\"ts_ms\":300}},{\"payload\":{\"op\":\"u\",\"ts_ms\":400}}]",
+          "expectedOutput": "{\"counts\": {\"c\": 0, \"u\": 4, \"d\": 0}, \"avg_interval_ms\": 100.0}",
+          "hidden": true
+        },
+        {
+          "id": "tc4",
+          "description": "События не в хронологическом порядке",
+          "input": "[{\"payload\":{\"op\":\"d\",\"ts_ms\":3000}},{\"payload\":{\"op\":\"c\",\"ts_ms\":1000}},{\"payload\":{\"op\":\"u\",\"ts_ms\":2000}}]",
+          "expectedOutput": "{\"counts\": {\"c\": 1, \"u\": 1, \"d\": 1}, \"avg_interval_ms\": 1000.0}",
+          "hidden": true
+        }
+      ],
+      "hint": "Для подсчёта операций используйте словарь-счётчик по полю payload.op. Для среднего интервала: отсортируйте ts_ms, вычислите разницы между соседними значениями и возьмите среднее. Округляйте до 1 знака.",
+      "explanation": "Feature engineering из CDC потока включает два базовых типа фичей: (1) Aggregated counts -- количество операций по типу показывает интенсивность изменений (много DELETE может сигнализировать о массовой очистке, всплеск UPDATE -- о пакетном обновлении). (2) Temporal features -- средний интервал между событиями характеризует ритм изменений (уменьшение интервала может указывать на аномальную активность). Эти фичи используются в ML-моделях для fraud detection, anomaly detection и capacity planning.",
+      "bloomLevel": "applied",
+      "timeoutMs": 10000
     }
   ]
 }
