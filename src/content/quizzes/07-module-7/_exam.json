@@ -115,12 +115,8 @@
       "id": "exam-m07-q8",
       "type": "true-false",
       "question": "При использовании Debezium Server с Pub/Sub sink и offset storage в файле (offsets.dat) на Kubernetes PersistentVolumeClaim, можно безопасно масштабировать Deployment до replicas: 2 для обеспечения высокой доступности.",
-      "options": [
-        { "id": "a", "text": "Верно — PVC с accessMode ReadWriteOnce поддерживает несколько pod-ов на одном узле" },
-        { "id": "b", "text": "Неверно — file-based offset storage поддерживает только один pod (replicas: 1), так как два pod-а с одним replication slot и одним offset файлом создадут конфликт позиций чтения и дубликаты событий" }
-      ],
-      "correctAnswer": "b",
-      "explanation": "Этот сценарий объединяет концепции из уроков 02 (offset storage strategies) и 01 (replication slots). File-based offset storage — single-instance решение. PostgreSQL replication slot может иметь только одного активного consumer. Два pod-а с одним slot = второй pod получит ошибку 'replication slot is active'. Даже если создать два slot-а, два offset файла на shared PVC создадут race condition. Для HA нужен Redis offset storage, позволяющий быстрое переключение между pod-ами.",
+      "correctAnswer": false,
+      "explanation": "File-based offset storage — single-instance решение. PostgreSQL replication slot может иметь только одного активного consumer. Два pod-а с одним slot = второй pod получит ошибку 'replication slot is active'. Даже если создать два slot-а, два offset файла на shared PVC создадут race condition. Для HA нужен Redis offset storage, позволяющий быстрое переключение между pod-ами.",
       "hint": "Вспомните из урока 02: file-based storage рекомендуется для single instance, Redis — для HA. Что произойдёт, если два pod-а попытаются использовать один replication slot?",
       "bloomLevel": "analytical"
     },
