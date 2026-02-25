@@ -73,6 +73,11 @@ import { TraditionalKafkaArchitectureDiagram, KafkalessArchitectureDiagram, Debe
 - Multi-cloud или on-premise развертывание
 - Уже есть Kafka expertise в команде
 
+<KnowledgeCheck
+  question={'В чём ключевое архитектурное различие между Debezium Server (Kafka-less) и Debezium Connector (Kafka Connect), и когда Kafka-less подход предпочтительнее?'}
+  answer={'Debezium Connector — это плагин для Kafka Connect, который публикует события в Kafka и требует полной Kafka-инфраструктуры (brokers + Zookeeper/KRaft + Connect workers). Debezium Server — standalone Quarkus-приложение, публикующее напрямую в Pub/Sub, Kinesis или другие sink без Kafka. Kafka-less подход предпочтительнее при: простых CDC pipelines с одним sink, GCP-native инфраструктуре, отсутствии потребности в Kafka Streams/ksqlDB и приоритете простоты развертывания.'}
+/>
+
 ---
 
 ## Debezium Server: архитектура
@@ -428,6 +433,11 @@ debezium.source.offset.storage.redis.key=debezium:offsets:postgres-cdc
 - Дополнительная сложность
 
 **Рекомендация:** Для production используйте Redis offset storage с GKE. Для development и single-instance развертываний file-based storage достаточно.
+
+<KnowledgeCheck
+  question={'Почему offset storage критически важен для Debezium Server, и чем отличаются стратегии file-based и Redis для production?'}
+  answer={'Offset файл хранит позицию чтения WAL. Без persistent storage при перезапуске pod Debezium потеряет позицию и начнёт с начала (дубликаты) или с текущей позиции (пропуск данных). File-based storage работает только для single instance (replicas: 1) с PersistentVolumeClaim. Redis storage поддерживает HA (multiple replicas) — при падении pod-а другой replica продолжит с сохранённого offset. Для production на GKE рекомендуется Redis.'}
+/>
 
 ---
 

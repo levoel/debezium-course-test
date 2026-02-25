@@ -237,6 +237,11 @@ if __name__ == "__main__":
    - `5xx` → ошибка, Pub/Sub повторит доставку с exponential backoff
    - `4xx` → невалидное сообщение, Pub/Sub отправит в Dead Letter Queue
 
+<KnowledgeCheck
+  question={'Cloud Run обработчик CDC событий должен возвращать разные HTTP-коды в разных ситуациях. Что произойдёт, если обработчик вернёт 500 при временной ошибке внешнего API?'}
+  answer={'Pub/Sub интерпретирует 5xx как временную ошибку и повторит доставку сообщения с exponential backoff (10s, 20s, 40s...). После исчерпания max-delivery-attempts (например, 5 попыток) сообщение отправляется в Dead Letter Queue. Поэтому обработчик должен быть идемпотентным — одно и то же событие может быть обработано несколько раз. Для успешной обработки нужно вернуть 2xx (обычно 204), для невалидных данных — 4xx.'}
+/>
+
 ---
 
 ## Dockerfile для Cloud Run
@@ -611,6 +616,11 @@ gcloud run deploy cdc-processor \
 ### Cold Start Considerations
 
 **Проблема:** При scale to zero первый запрос после idle может занять 1-3 секунды (cold start).
+
+<KnowledgeCheck
+  question={'Cloud Run с min-instances=0 масштабируется до нуля при отсутствии трафика. Какой компромисс это создаёт для CDC event processing и когда стоит использовать min-instances=1?'}
+  answer={'min-instances=0 экономит деньги (pay-per-request), но создаёт cold start задержку 1-3 секунды для первого события после idle. Для CDC это означает: первое событие после периода тишины обрабатывается с задержкой. min-instances=1 (~$10/мес) устраняет cold start, но платите за постоянно работающий контейнер. Используйте min-instances=1 для high-traffic таблиц или latency-sensitive обработки, и min-instances=0 для редких событий, где задержка допустима.'}
+/>
 
 **Решения:**
 

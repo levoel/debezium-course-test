@@ -246,6 +246,11 @@ documentation:
     5. Если lag не уменьшается → рассмотреть scale up Cloud SQL tier
 ```
 
+<KnowledgeCheck
+  question={'Debezium Server экспортирует метрику MilliSecondsBehindSource. Что именно она измеряет и почему это ключевая метрика для CDC pipeline?'}
+  answer={'MilliSecondsBehindSource измеряет задержку между timestamp события в PostgreSQL WAL и моментом его обработки Debezium Server. Это показывает, насколько CDC pipeline отстаёт от реального времени. Ключевая метрика, потому что: (1) напрямую отражает freshness данных в downstream системах (BigQuery, Cloud Run), (2) рост lag предупреждает о bottleneck до его влияния на бизнес, (3) связана с WAL retention — длительный lag приводит к WAL bloat на Cloud SQL.'}
+/>
+
 ### Alert: Queue Backpressure
 
 ```yaml
@@ -316,6 +321,11 @@ documentation:
     3. Проверить dead_letter_message_count
     4. Если consumer health OK → увеличить Dataflow workers или Cloud Run max-instances
 ```
+
+<KnowledgeCheck
+  question={'Pub/Sub метрика oldest_unacked_message_age показывает 600 секунд (10 минут). Что это означает для CDC pipeline и каков порядок диагностики?'}
+  answer={'Oldest_unacked_message_age = 600 секунд означает, что самое старое необработанное сообщение ожидает в subscription 10 минут — consumers (Dataflow/Cloud Run) не успевают обрабатывать события. Диагностика: (1) проверить Dataflow job status и system_lag, (2) проверить Cloud Run error rate (5xx), (3) проверить dead_letter_message_count, (4) если consumer здоров — увеличить Dataflow workers или Cloud Run max-instances. Растущий backlog при здоровых consumers указывает на недостаток ресурсов.'}
+/>
 
 ### Alert: Dead Letter Queue Messages
 

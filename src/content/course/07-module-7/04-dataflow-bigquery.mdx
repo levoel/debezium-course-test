@@ -296,6 +296,11 @@ CREATE TABLE cdc_replica.orders (
 
 **Частота MERGE:** Каждые `updateFrequencySecs` секунд (в примере: 60 секунд).
 
+<KnowledgeCheck
+  question={'Зачем Dataflow CDC template использует двухтабличный паттерн (changelog + replica), а не записывает данные напрямую в одну таблицу?'}
+  answer={'Changelog table хранит полную историю всех CDC операций (INSERT/UPDATE/DELETE) для аудита, compliance и time-travel queries. Replica table содержит только текущее состояние данных после применения MERGE операций. Разделение позволяет: (1) сохранить полную историю изменений, (2) предоставить быстрые аналитические запросы на текущих данных, (3) отладить проблемы через историю changelog, (4) восстановить состояние на произвольный момент времени.'}
+/>
+
 **Пример запроса текущего состояния:**
 
 ```sql
@@ -357,6 +362,11 @@ Dataflow template поддерживает два режима доставки:
 - Строгие compliance требования (аудит, регуляторика)
 - Невозможность дубликатов в changelog table
 - Бюджет позволяет
+
+<KnowledgeCheck
+  question={'Почему для большинства CDC use cases at-least-once режим Dataflow достаточен, несмотря на возможность дубликатов?'}
+  answer={'MERGE операции в replica таблице идемпотентны — upsert по primary key приводит к одинаковому результату независимо от количества применений. Дубликаты в changelog table не критичны (это staging/audit данные). At-least-once стоит примерно 50% от exactly-once режима. Exactly-once нужен только при строгих compliance требованиях или если дубликаты в changelog недопустимы.'}
+/>
 
 **Связь с Module 5 концепциями:**
 

@@ -89,6 +89,11 @@ gcloud projects add-iam-policy-binding PROJECT_ID \
 
 **Важно:** Замените `PROJECT_ID` на ваш GCP project ID.
 
+<KnowledgeCheck
+  question={'Почему Debezium Server должен иметь роль roles/pubsub.publisher, а не более широкую roles/pubsub.admin или roles/editor?'}
+  answer={'Principle of least privilege: Debezium Server только публикует события в Pub/Sub topics — ему не нужно создавать/удалять топики или управлять подписками. roles/pubsub.publisher ограничивает blast radius — если Debezium Server скомпрометирован, атакующий может только публиковать сообщения, но не получить доступ к другим ресурсам проекта. roles/editor предоставляет почти полный доступ к GCP проекту.'}
+/>
+
 ---
 
 ## Workload Identity для GKE
@@ -431,6 +436,11 @@ gcloud secrets list --project=PROJECT_ID
 | `Permission denied: pubsub.topics.publish` | GCP SA не имеет роли `pubsub.publisher` | Выполнить `gcloud projects add-iam-policy-binding` |
 | `Annotation not found` | Отсутствует аннотация `iam.gke.io/gcp-service-account` | Добавить аннотацию в K8s ServiceAccount |
 | `Binding not propagated` | IAM binding еще не вступил в силу (до 7 минут) | Подождать 5-10 минут после создания binding |
+
+<KnowledgeCheck
+  question={'Workload Identity требует три связанных компонента. Какие это компоненты и что произойдёт, если один из них отсутствует?'}
+  answer={'Три компонента: (1) K8s ServiceAccount с аннотацией iam.gke.io/gcp-service-account, (2) GCP Service Account с нужными IAM ролями, (3) Workload Identity binding (roles/iam.workloadIdentityUser с member формата PROJECT.svc.id.goog[namespace/sa-name]). Если отсутствует аннотация — pod не запросит GCP токен. Если нет ролей — получит PERMISSION_DENIED на конкретных API. Если нет binding — GKE Metadata Server не выдаст токен, любой GCP вызов вернёт ошибку аутентификации.'}
+/>
 
 ---
 
