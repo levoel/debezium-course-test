@@ -65,6 +65,11 @@ import { CapstoneArchitectureDiagram } from '../../../components/diagrams/module
 
 **Ваша задача:** Собрать эти компоненты в единую работающую систему.
 
+<KnowledgeCheck
+  question={'Почему Outbox Pattern используется в capstone вместо прямого захвата CDC-событий из таблицы orders?'}
+  answer={'Outbox Pattern обеспечивает transactional consistency: бизнес-операция (INSERT в orders) и публикация события (INSERT в outbox) происходят в одной транзакции. Без Outbox возможна ситуация, когда заказ создан, но событие потеряно (или наоборот). Debezium захватывает только outbox INSERT, а Outbox Event Router SMT преобразует CDC-событие в domain event.'}
+/>
+
 ---
 
 ## Что вы будете строить
@@ -211,6 +216,11 @@ import { CapstoneArchitectureDiagram } from '../../../components/diagrams/module
 | Testing | Manual verification | Automated + chaos testing |
 
 **Capstone проверяет:** Вы можете **самостоятельно спроектировать** систему, а не просто следовать инструкциям.
+
+<KnowledgeCheck
+  question={'Какие пять категорий deliverables должен содержать capstone проект для признания его production-ready?'}
+  answer={'(1) Working Infrastructure — Docker Compose/Kubernetes с полным стеком компонентов. (2) Code & Configuration — DDL, connector config, PyFlink job. (3) Monitoring & Observability — Prometheus + Grafana с ключевыми метриками. (4) Documentation — README, architecture.md, runbook.md. (5) Testing Evidence — скриншоты или логи end-to-end прохождения события через pipeline.'}
+/>
 
 ### Типичные ошибки (чего избегать)
 

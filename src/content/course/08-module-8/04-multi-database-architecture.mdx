@@ -93,6 +93,11 @@ mysql_prod.schema_history           # MySQL schema history topic (PostgreSQL doe
 - ✅ Different aggregates (orders vs inventory — conceptually different)
 - ✅ Independent schema evolution (PostgreSQL team и MySQL team работают независимо)
 
+<KnowledgeCheck
+  question={'Почему Separate Topics Architecture рекомендуется для capstone проекта вместо Unified Topics?'}
+  answer={'Separate Topics проще: (1) independent schema evolution — PostgreSQL ALTER TABLE не ломает MySQL consumer, (2) clear traceability — topic name показывает origin database, (3) easier troubleshooting — изолированный отказ одного connector не влияет на другой topic, (4) natural key uniqueness — нет конфликтов одинаковых ID между базами. Unified Topics добавляют complexity: координированная schema evolution, composite keys, ByLogicalTableRouter.'}
+/>
+
 ---
 
 ### Pattern 2: Unified Topics Architecture
@@ -242,6 +247,11 @@ MySQL Connector:
 | **Position lost (offsets deleted)** | Recreate slot + resnapshot | Resnapshot (cannot recover without snapshot) |
 | **Source failover** | Migrate slot to new primary (complex) | GTID auto-relocates to new primary (simple) |
 | **Schema history corruption** | N/A (no separate schema history) | Restore schema history topic from backup or resnapshot |
+
+<KnowledgeCheck
+  question={'Почему PostgreSQL connector не требует schema.history.internal.kafka.topic, а MySQL connector — обязательно?'}
+  answer={'PostgreSQL pgoutput plugin встраивает полную schema-информацию в каждое WAL-событие, поэтому Debezium может декодировать события без внешнего хранилища. MySQL binlog содержит row data без schema context — Debezium сохраняет DDL-историю (CREATE TABLE, ALTER TABLE) в отдельный Kafka-топик и использует её при перезапуске для восстановления schema state и корректного парсинга binlog events.'}
+/>
 
 **Recovery time comparison:**
 

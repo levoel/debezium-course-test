@@ -89,6 +89,11 @@ capstone-project/
 
 **Цель:** Показать технологии каждого компонента и data flow между ними.
 
+<KnowledgeCheck
+  question={'В C4 модели какой уровень диаграммы показывает внешних пользователей и системы, а какой — внутренние компоненты pipeline?'}
+  answer={'System Context (Level 1) показывает внешних пользователей и системы, с которыми взаимодействует CDC pipeline — бизнес-аналитиков, e-commerce приложение, BigQuery. Container Diagram (Level 2) показывает внутренние компоненты: Aurora PostgreSQL, Kafka, Debezium Connect, PyFlink, BigQuery Sink и их взаимодействия.'}
+/>
+
 ---
 
 ## Technical Requirements по компонентам
@@ -455,6 +460,11 @@ scrape_configs:
 - [ ] Chaos testing results:
   - [ ] Connector restart without data loss
   - [ ] PyFlink restart from checkpoint
+
+<KnowledgeCheck
+  question={'Почему snapshot.mode=always является anti-pattern для production capstone проекта?'}
+  answer={'snapshot.mode=always выполняет полный re-snapshot при каждом перезапуске коннектора, игнорируя существующий offset. Для outbox table это означает повторную отправку ВСЕХ записей в Kafka, создавая массовые дубликаты. В production следует использовать snapshot.mode=when_needed — snapshot выполняется только при отсутствии offset или невозможности продолжить с сохраненной позиции.'}
+/>
 
 ---
 

@@ -53,6 +53,11 @@ Google SRE определяет **Four Golden Signals** для monitoring люб
 
 > **SRE wisdom:** Если вы не измеряете Four Golden Signals, вы не управляете системой — она управляет вами.
 
+<KnowledgeCheck
+  question={'Назовите Four Golden Signals и укажите, какая метрика Debezium соответствует каждому сигналу для CDC pipeline.'}
+  answer={'(1) Latency — MilliSecondsBehindSource (задержка репликации). (2) Traffic — events/second throughput (TotalNumberOfEventsSeen rate). (3) Errors — connector status RUNNING/FAILED и error rate. (4) Saturation — QueueRemainingCapacity (уровень заполнения внутренней очереди) и Kafka consumer lag.'}
+/>
+
 ## Чеклист как инструмент обучения
 
 Этот checklist — **не экзамен**, а **learning tool**. Он помогает:
@@ -463,6 +468,11 @@ CREATE TABLE orders (
 - Design all operations to be idempotent
 
 **Prevention:** Default to at-least-once + idempotency, not exactly-once.
+
+<KnowledgeCheck
+  question={'Какой scoring level получит capstone проект, в котором pipeline работает end-to-end, connector restart протестирован, но Grafana dashboard отсутствует и нет runbook?'}
+  answer={'Meets Expectations (60-74%). Core functionality works (Section 1, 2): pipeline передает данные, восстанавливается после connector restart. Но Monitoring incomplete (нет Grafana dashboard) и Documentation minimal (нет runbook). Для Above Average нужны: dashboard с Four Golden Signals и runbook с хотя бы 2-3 failure scenarios.'}
+/>
 
 ### 6. Insufficient Monitoring
 

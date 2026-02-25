@@ -214,6 +214,11 @@ MySQL connector требует **дополнительные параметры
 - Событие с `aggregatetype = "orders"` → topic `outbox.event.mysql.orders`
 - Событие с `aggregatetype = "customers"` → topic `outbox.event.mysql.customers`
 
+<KnowledgeCheck
+  question={'Какие три параметра MySQL connector ОБЯЗАНЫ быть уникальными в multi-database deployment и почему?'}
+  answer={'(1) database.server.name — используется как prefix в Kafka topic names; дублирование приводит к коллизии топиков и смешиванию событий. (2) database.server.id — MySQL видит каждый connector как replica-сервер; дублирование вызывает отключение одного из readers. (3) schema.history.internal.kafka.topic — DDL от одного connector загрязняет историю другого, вызывая schema mismatch при restart.'}
+/>
+
 ---
 
 ## Deploying Both Connectors
@@ -614,6 +619,11 @@ PostgreSQL and MySQL используют разные lag metrics:
 | **MySQL binlog purged** | Connector fails с "binlog file no longer available" | binlog_expire_logs_seconds слишком короткий | Increase retention или resnapshot connector |
 | **No events in unified topic** | PyFlink sink пуст | Consumer group offset tracking issues | Reset consumer group: `--reset-offsets --to-earliest` |
 | **Mixed schema versions** | Consumer crashes на schema incompatibility | PostgreSQL and MySQL outbox tables have different schemas | Align outbox table schemas across databases |
+
+<KnowledgeCheck
+  question={'Зачем PyFlink multi-source consumer добавляет колонку source_database и composite_key при UNION ALL потоков из PostgreSQL и MySQL?'}
+  answer={'source_database (postgresql/mysql) обеспечивает traceability: при troubleshooting можно быстро определить origin database для каждого события. composite_key (PG-{id}/MY-{id}) предотвращает конфликт primary key: order_id=5 в PostgreSQL и order_id=5 в MySQL — разные записи, но при MERGE в BigQuery по order_id одна перезапишет другую. Composite key гарантирует уникальность в unified stream.'}
+/>
 
 ### Debugging Commands
 
