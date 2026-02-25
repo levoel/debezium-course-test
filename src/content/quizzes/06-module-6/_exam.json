@@ -1,0 +1,160 @@
+{
+  "lessonSlug": "06-module-6/_exam",
+  "moduleId": "06-module-6",
+  "_meta": {
+    "idPrefix": "exam-m06",
+    "description": "Use IDs: exam-m06-q1, exam-m06-q2, ... (8-10 analytical questions)"
+  },
+  "questions": [
+    {
+      "id": "exam-m06-q1",
+      "type": "multiple-choice",
+      "question": "Команда проектирует CDC pipeline для real-time fraud detection. Требования: latency менее 100ms, exactly-once доставка в output Kafka topic, complex event patterns (3 транзакции от одного customer за 5 минут). Параллельно нужен daily batch ETL в data lake (Parquet) для обучения ML-модели. Какая архитектура оптимальна?",
+      "options": [
+        { "id": "a", "text": "PySpark Structured Streaming для обоих задач: micro-batch для fraud detection и batch для ETL. Unified DataFrame API упрощает поддержку" },
+        { "id": "b", "text": "PyFlink для real-time fraud detection (low latency, exactly-once to Kafka, CEP library для patterns), PySpark для daily batch ETL в Parquet (native data lake integration, unified batch API)" },
+        { "id": "c", "text": "Python consumer с confluent-kafka для fraud detection и pandas для batch ETL. Минимум инфраструктуры" },
+        { "id": "d", "text": "PyFlink для обоих задач: streaming mode для fraud detection, batch mode для ETL. Один фреймворк проще в эксплуатации" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 01 (Python consumer ограничения), 04 (PyFlink stateful processing, CEP), 05 (PySpark data lake integration) и 07 (real-time features). PyFlink оптимален для fraud detection: latency менее 100ms (event-by-event processing), exactly-once to Kafka через transactional producer, CEP library для complex patterns. PySpark оптимален для batch ETL: native Parquet/Delta Lake support, unified batch/streaming DataFrame API, интеграция с ML pipelines. Вариант A ошибочен: PySpark micro-batch обеспечивает latency 1-10 секунд, не менее 100ms, и предоставляет только at-least-once для Kafka sink. Вариант C не масштабируется для distributed processing.",
+      "hint": "Сравните гарантии доставки: PyFlink поддерживает exactly-once to Kafka через transactional producer, а PySpark предоставляет только at-least-once для Kafka sink. Какой фреймворк лучше подходит для каждой задачи по критериям latency, delivery guarantees и data lake integration?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m06-q2",
+      "type": "multiple-choice",
+      "question": "Data engineer построил PyFlink pipeline с tumbling window агрегацией (5-минутные окна) по customer_id. В production обнаружено, что некоторые окна содержат неполные данные: customer с 10 заказами за 5 минут показывает order_count=7. Watermark настроен: WATERMARK FOR event_time AS event_time - INTERVAL '2' SECONDS. Какая наиболее вероятная причина и как её устранить?",
+      "options": [
+        { "id": "a", "text": "Слишком маленький allowed lateness (2 секунды). 3 события прибыли с задержкой более 2 секунд и были отброшены после закрытия окна. Решение: увеличить watermark до event_time - INTERVAL '10' SECONDS для CDC pipeline" },
+        { "id": "b", "text": "Tumbling window неправильно настроен: 5 минут слишком мало для CDC событий. Нужно увеличить до 15 минут" },
+        { "id": "c", "text": "Проблема в Kafka partition ordering: события одного customer попали в разные партиции и прибыли не по порядку. Нужно настроить key-based partitioning" },
+        { "id": "d", "text": "PyFlink state backend потерял данные при checkpoint. Нужно переключиться на RocksDB state backend" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот сценарий объединяет концепции из уроков 03 (PyFlink CDC connector, json.ignore-parse-errors) и 04 (watermarks, late data, tumbling windows). Watermark = max_event_time - 2 секунды означает допустимую задержку всего 2 секунды. В distributed CDC pipeline (Debezium -> Kafka -> PyFlink) задержки легко превышают 2 секунды из-за network latency, Kafka partition rebalancing, connector restarts. Когда watermark продвигается за конец окна, поздние события отбрасываются. Для CDC pipeline рекомендуется 5-10 секунд allowed lateness. Вариант C частично верен (ordering влияет), но основная проблема -- watermark, а не partitioning.",
+      "hint": "Проследите путь события: CDC commit -> Debezium capture -> Kafka produce -> PyFlink consume. На каждом этапе добавляется задержка. Если суммарная задержка > 2 секунд (watermark), что происходит с событием, прибывшим после закрытия окна?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m06-q3",
+      "type": "multiple-choice",
+      "question": "Вам нужно построить ML feature pipeline для churn prediction. Features: order_count_30d, total_spend_30d, days_since_last_order. Данные нужны для двух целей: (1) online inference (Redis, latency менее 100ms), (2) offline training (Parquet, historical features). Какой паттерн обеспечит consistency между online и offline features?",
+      "options": [
+        { "id": "a", "text": "Два независимых pipeline: PySpark streaming -> Redis (online), PySpark batch -> Parquet (offline). Разный код вычисления features" },
+        { "id": "b", "text": "PySpark Structured Streaming с foreachBatch: один pipeline вычисляет features, затем dual write -- Redis (online store) + Parquet (offline store) в каждом micro-batch. Один код вычисления для обоих stores" },
+        { "id": "c", "text": "Pandas batch job раз в сутки пишет и в Redis, и в Parquet. Простейший подход" },
+        { "id": "d", "text": "PyFlink streaming -> Redis (online). Feast offline store читает напрямую из Kafka для training" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 05 (PySpark checkpoint, foreachBatch), 06 (ETL/ELT patterns) и 07 (feature store, dual write pattern, training-serving skew). Вариант B -- dual write через foreachBatch -- решает проблему training-serving skew: один и тот же код вычисляет features для обоих stores, гарантируя consistency. Вариант A создаёт training-serving skew: два разных pipeline могут вычислять features по-разному (разный код, разные окна, разные timestamp). Вариант C не обеспечивает freshness для online inference (обновление раз в сутки). Вариант D: Feast не имеет прямого PySpark connector для streaming.",
+      "hint": "Ключевая проблема ML систем -- training-serving skew: если features для training вычисляются иначе, чем для inference, модель деградирует. Какой подход гарантирует, что один и тот же код вычисляет features для обоих целей?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m06-q4",
+      "type": "multiple-choice",
+      "question": "PySpark Structured Streaming pipeline читает CDC события, выполняет windowed aggregation и пишет в Parquet. После перезапуска job обнаружено, что последние 2 часа данных потеряны. Checkpoint directory настроена как /tmp/checkpoints. Что произошло и как предотвратить?",
+      "options": [
+        { "id": "a", "text": "/tmp очищается при перезапуске сервера. Checkpoint содержал Kafka offsets и state для aggregations. После потери checkpoint PySpark начал читать с latest offset, пропустив 2 часа данных. Решение: использовать persistent storage (HDFS, S3) для checkpoints" },
+        { "id": "b", "text": "Parquet файлы были повреждены при аварийном завершении. Решение: использовать Delta Lake вместо Parquet" },
+        { "id": "c", "text": "Kafka retention истёк и удалил данные. Решение: увеличить retention.ms" },
+        { "id": "d", "text": "Watermark отбросил все поздние события. Решение: увеличить watermark threshold" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот сценарий объединяет концепции из уроков 05 (PySpark checkpoints, fault recovery, checkpoint best practices) и 06 (ETL pipeline robustness). /tmp -- временная директория, которая очищается при перезапуске сервера или контейнера. Checkpoint содержит: (1) Kafka offsets для каждой partition, (2) aggregation state для window операций, (3) metadata запроса. Без checkpoint PySpark не знает, где остановился, и по умолчанию начинает с latest offset (если startingOffsets не переопределён). Решение: persistent storage (HDFS, S3, Azure Blob), уникальная директория для каждого query, мониторинг checkpoint health.",
+      "hint": "Checkpoint в PySpark сохраняет три критических компонента: Kafka offsets, aggregation state и query metadata. Что происходит, если все три компонента потеряны при перезапуске? С какого offset PySpark начнёт чтение?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m06-q5",
+      "type": "multiple-choice",
+      "question": "Команда мигрирует batch ETL pipeline (ежедневный SELECT * FROM orders WHERE updated_at > yesterday) на CDC-based ELT. Данные загружаются в data lake для downstream аналитики. Какое ключевое преимущество CDC-based подхода и какой новый challenge он создаёт?",
+      "options": [
+        { "id": "a", "text": "Преимущество: CDC захватывает DELETE операции (batch ETL теряет удалённые записи). Challenge: CDC stream содержит дубликаты при перезапуске коннектора, требуется idempotent processing" },
+        { "id": "b", "text": "Преимущество: CDC быстрее, т.к. читает только WAL, а не таблицу. Challenge: CDC не поддерживает JOIN между таблицами" },
+        { "id": "c", "text": "Преимущество: CDC уменьшает нагрузку на source database (нет full table scan). Challenge: обработка разных типов операций (INSERT/UPDATE/DELETE) требует разной логики, и DELETE имеет after=null" },
+        { "id": "d", "text": "Преимущество: CDC обеспечивает exactly-once доставку. Challenge: latency выше, чем у batch ETL" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "Этот сценарий объединяет концепции из уроков 02 (CDC структура: before/after, DELETE after=null) и 06 (ETL vs ELT, CDC advantages, operation separation pattern). Ключевое преимущество: batch ETL с SELECT ... WHERE updated_at > yesterday создаёт full table scan, нагружая production database. CDC читает из WAL без нагрузки на таблицы. Challenge: три типа операций требуют разной обработки -- INSERT (после=данные), UPDATE (до+после), DELETE (после=null). Вариант A частично верен (DELETE -- преимущество), но основное преимущество -- снижение нагрузки на source. Вариант D ошибочен: CDC не гарантирует exactly-once, а at-least-once.",
+      "hint": "Сравните нагрузку на production database: batch ETL выполняет SELECT по таблице (I/O на данные + индексы), CDC читает из WAL (отдельный поток, минимальная нагрузка). Какие новые сложности появляются при обработке CDC событий вместо SQL результатов?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m06-q6",
+      "type": "multiple-choice",
+      "question": "Data engineer использует pandas 3.0 для batch-анализа CDC событий. Код работал на pandas 2.x, но после обновления некоторые UPDATE операции не отображают изменения в DataFrame. Проблемный код:\n\nupdates_df = df[df['op'] == 'u']\nupdates_df['total_change'] = updates_df['after_total'] - updates_df['before_total']\n\nКакова причина и как исправить?",
+      "options": [
+        { "id": "a", "text": "pandas 3.0 изменил строковый тип с object на str, и сравнение df['op'] == 'u' не работает для нового типа" },
+        { "id": "b", "text": "Copy-on-Write (CoW) в pandas 3.0: chained assignment updates_df['total_change'] = ... создаёт view, а не copy. Изменения не применяются к updates_df. Исправление: использовать updates_df = df[df['op'] == 'u'].copy() и затем updates_df.loc[:, 'total_change'] = ..." },
+        { "id": "c", "text": "pandas 3.0 изменил datetime resolution с nanosecond на microsecond, что влияет на вычисление total_change" },
+        { "id": "d", "text": "Проблема не в pandas, а в CDC данных: UPDATE события с before_total = null при snapshot mode" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из урока 02 (pandas 3.0 breaking changes, Copy-on-Write, .loc[] requirement, CDC DataFrame operations). В pandas 3.0 Copy-on-Write включён по умолчанию. Строка updates_df = df[df['op'] == 'u'] создаёт view (не copy). Последующее updates_df['total_change'] = ... -- это chained assignment, который в CoW режиме молча не применяет изменения к исходному DataFrame. Правильный подход: (1) создать явную copy через .copy(), (2) использовать .loc[] для модификации. Вариант A частично верен (str вместо object), но это не влияет на сравнение строк.",
+      "hint": "Вспомните три ключевых breaking changes pandas 3.0: строковый dtype, Copy-on-Write и datetime resolution. Какой из них влияет на присваивание значений в отфильтрованном DataFrame?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m06-q7",
+      "type": "multiple-choice",
+      "question": "PyFlink job выполняет temporal join между orders stream и products dimension table для обогащения заказов информацией о продукте. Через 3 дня работы job падает с OutOfMemoryError. State size metrics показывают непрерывный рост. Какова причина и какие два решения помогут?",
+      "options": [
+        { "id": "a", "text": "Temporal join хранит всю историю версий products table в state. Без state TTL каждое обновление продукта добавляет новую версию, но старые не удаляются. Решения: (1) настроить state TTL для автоматического cleanup старых версий, (2) переключить state backend на RocksDB для хранения state на диске вместо памяти" },
+        { "id": "b", "text": "Tumbling window не закрывается из-за отсутствия watermark. Решение: добавить WATERMARK и уменьшить window size" },
+        { "id": "c", "text": "Слишком много партиций Kafka создают параллельные state экземпляры. Решение: уменьшить количество партиций" },
+        { "id": "d", "text": "Debezium генерирует слишком много событий. Решение: добавить Filter SMT для уменьшения потока" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот сценарий объединяет концепции из урока 04 (temporal joins, versioned state, state size management, RocksDB state backend, state TTL). Temporal join с FOR SYSTEM_TIME AS OF хранит версионированную историю dimension table в managed state. Каждое CDC UPDATE продукта (цена изменилась, название обновлено) создаёт новую версию в state. Без TTL state растёт unbounded: product_id=101 может иметь 1000 версий за 3 дня. Два решения: (1) StateTtlConfig с reasonable duration (7 дней) для автоматического cleanup, (2) RocksDB state backend поддерживает state размером в терабайты (disk вместо memory). Оптимально применять оба.",
+      "hint": "Temporal join хранит версионированную state для dimension table: product_id -> [{timestamp, data}, ...]. Что происходит, когда products таблица активно обновляется (цены меняются каждый час) и state не имеет механизма очистки?",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m06-q8",
+      "type": "multiple-choice",
+      "question": "Вы проектируете CDC-to-data-lake pipeline с Delta Lake. Требования: (1) ACID upserts для INSERT/UPDATE/DELETE, (2) time travel для аудита, (3) streaming ingestion каждые 30 секунд. Какой PySpark паттерн реализует все три требования?",
+      "options": [
+        { "id": "a", "text": "writeStream.format('parquet') с append mode и partitionBy('_processed_date'). Parquet обеспечивает хорошую компрессию и query performance" },
+        { "id": "b", "text": "writeStream.foreachBatch(merge_to_delta) с trigger(processingTime='30 seconds'). Внутри foreachBatch: DeltaTable.merge() с whenMatchedDelete (op='d'), whenMatchedUpdateAll (op='u'), whenNotMatchedInsertAll (op='c'). Delta Lake обеспечивает ACID, time travel и versioning" },
+        { "id": "c", "text": "writeStream.format('delta') с append mode. Delta Lake автоматически обрабатывает upserts" },
+        { "id": "d", "text": "foreachBatch с прямой записью INSERT/UPDATE/DELETE в PostgreSQL через JDBC. Database обеспечивает ACID" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из уроков 05 (PySpark foreachBatch, trigger configuration) и 06 (Delta Lake MERGE, ACID upserts, time travel, append-only vs merge patterns). foreachBatch получает micro-batch как DataFrame и позволяет выполнить произвольную логику, включая Delta MERGE. MERGE с тремя ветками (whenMatchedDelete для 'd', whenMatchedUpdateAll для 'u', whenNotMatchedInsertAll для 'c') обрабатывает все типы CDC операций. Delta Lake обеспечивает ACID transactions (atomic MERGE), time travel (VERSION AS OF N), и streaming совместимость. Вариант C ошибочен: append mode не выполняет upserts -- просто добавляет строки. Вариант A: Parquet не поддерживает ACID updates/deletes.",
+      "hint": "Рассмотрите, какой PySpark sink позволяет выполнить произвольную логику (MERGE) внутри streaming pipeline. Как Delta Lake MERGE обрабатывает три типа CDC операций (c, u, d) в одном атомарном statement?",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "exam-m06-q9",
+      "type": "multiple-choice",
+      "question": "Компания решает, какие ML features вычислять в real-time (CDC streaming) vs batch (daily ETL). Четыре feature candidates: (1) fraud_score -- оценка мошенничества на основе последних 5 минут транзакций, (2) customer_lifetime_value -- общая сумма покупок за всё время, (3) product_popularity_7d -- продажи продукта за 7 дней, (4) order_velocity -- изменение частоты заказов за последний час. Какие features требуют real-time вычисления?",
+      "options": [
+        { "id": "a", "text": "Все четыре: real-time features всегда лучше batch" },
+        { "id": "b", "text": "Только fraud_score и order_velocity: оба зависят от свежести данных (минуты), batch обновление раз в сутки приведёт к пропуску мошеннических транзакций. CLV и product_popularity могут обновляться daily без потери качества модели" },
+        { "id": "c", "text": "Только fraud_score: единственный use case, где latency критична" },
+        { "id": "d", "text": "fraud_score, order_velocity и product_popularity_7d: все три используют временные окна" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Этот сценарий объединяет концепции из урока 07 (feature freshness vs latency tradeoff, decision framework, batch vs streaming features). Ключевой критерий: свежесть данных напрямую влияет на business metrics. fraud_score (5-минутное окно) и order_velocity (часовое окно) критически зависят от real-time данных -- мошенник совершает транзакции за минуты, и batch обновление пропустит аномалию. customer_lifetime_value стабилен (не меняется значительно за сутки) и дёшев в batch. product_popularity_7d -- 7-дневное окно, обновление раз в сутки даёт менее 15% погрешности. Real-time features дороже (always-running infrastructure), поэтому применяются только где freshness критична.",
+      "hint": "Используйте decision framework из урока 07: для каждого feature спросите 'если feature обновится на 24 часа позже, насколько это повлияет на business outcome?'. Fraud -- критично (пропуск мошенничества). CLV -- незначительно (не меняется за день).",
+      "bloomLevel": "analytical"
+    },
+    {
+      "id": "exam-m06-q10",
+      "type": "multiple-choice",
+      "question": "Python consumer обрабатывает CDC события с at-least-once семантикой (enable.auto.offset.store=False). Бизнес-требование: обогатить заказы данными о продукте из products table через CDC stream. Consumer читает два топика: dbserver1.public.orders и dbserver1.public.products. Как реализовать join между двумя CDC потоками на уровне Python consumer без PyFlink/PySpark?",
+      "options": [
+        { "id": "a", "text": "Подписать consumer на оба топика. Для products: хранить последнюю версию каждого product_id в in-memory dict. Для orders: lookup product по product_id в dict, обогатить заказ, записать результат. При UPDATE продукта -- обновить dict. Преимущество: простота. Ограничение: single-machine, no temporal semantics (всегда текущая версия product)" },
+        { "id": "b", "text": "Два отдельных consumer для каждого топика с Redis как shared state между ними" },
+        { "id": "c", "text": "Использовать SQL JOIN через psycopg2 напрямую к source database для каждого order" },
+        { "id": "d", "text": "Consumer не может выполнять join -- требуется PyFlink или PySpark" }
+      ],
+      "correctAnswer": "a",
+      "explanation": "Этот сценарий объединяет концепции из уроков 01 (Python consumer patterns, at-least-once) и 04 (temporal joins, versioned state). In-memory dictionary -- простейший способ реализовать stream-table join: products table загружается в dict, orders обогащаются lookup'ом. Преимущество: минимальная инфраструктура, достаточно для small-medium datasets. Ключевое ограничение: нет temporal semantics -- order с event_time=вчера получит сегодняшнюю цену продукта (не цену на момент заказа). Для temporal join нужен PyFlink с FOR SYSTEM_TIME AS OF. Вариант C нагружает source database синхронными запросами на каждое событие (anti-pattern для CDC pipeline). Вариант D ошибочен: join возможен, хотя и с ограничениями.",
+      "hint": "Подумайте о двух моделях join: (1) stream-table join -- одна сторона загружена целиком в memory, lookup по ключу; (2) temporal join -- учитывает версию данных на момент события. Какую модель можно реализовать простым Python consumer?",
+      "bloomLevel": "analytical"
+    }
+  ]
+}
