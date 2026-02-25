@@ -1,0 +1,61 @@
+{
+  "lessonSlug": "06-module-6/01-advanced-python-consumer",
+  "moduleId": "06-module-6",
+  "_meta": {
+    "idPrefix": "m06-01",
+    "description": "Use IDs: m06-01-q1, m06-01-q2, ... for MC/TF; m06-01-code-1 for code challenges"
+  },
+  "questions": [
+    {
+      "id": "m06-01-q1",
+      "type": "multiple-choice",
+      "question": "Какой параметр конфигурации confluent-kafka consumer является ключевым для реализации at-least-once семантики?",
+      "options": [
+        { "id": "a", "text": "enable.auto.commit = False" },
+        { "id": "b", "text": "enable.auto.offset.store = False" },
+        { "id": "c", "text": "isolation.level = read_committed" },
+        { "id": "d", "text": "max.poll.records = 1" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Для at-least-once семантики критически важен параметр enable.auto.offset.store = False. При этом enable.auto.commit остаётся True -- фоновый поток периодически коммитит оффсеты, но оффсет сохраняется в store только после явного вызова consumer.store_offsets(msg) при успешной обработке. Вариант A (enable.auto.commit = False) используется в exactly-once паттерне с транзакционным API, а не для at-least-once. Вариант C (isolation.level = read_committed) относится к настройке чтения committed транзакций, а не к гарантии обработки.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m06-01-q2",
+      "type": "multiple-choice",
+      "question": "Consumer обрабатывает CDC события из Kafka и записывает результат в PostgreSQL через INSERT ... ON CONFLICT DO UPDATE. Используется at-least-once семантика с manual offset store. При сбое consumer после записи в БД, но до вызова store_offsets(), что произойдёт при перезапуске?",
+      "options": [
+        { "id": "a", "text": "Потеря данных: последнее обработанное событие будет пропущено" },
+        { "id": "b", "text": "Дублирование: событие будет обработано повторно, но upsert в БД обеспечит идемпотентность" },
+        { "id": "c", "text": "Ошибка: consumer не сможет подключиться, т.к. оффсет повреждён" },
+        { "id": "d", "text": "Consumer продолжит с нового оффсета, пропустив необработанные события" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "При at-least-once семантике оффсет сохраняется только после успешной обработки. Если crash произошёл до store_offsets(), при перезапуске consumer повторит обработку с последнего сохранённого оффсета. Событие будет обработано дважды, но INSERT ... ON CONFLICT DO UPDATE (upsert) обеспечивает идемпотентность -- повторная запись не создаст дубликат в БД, а обновит существующую строку. Именно поэтому at-least-once требует идемпотентной обработки на стороне приложения.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-01-q3",
+      "type": "true-false",
+      "question": "Exactly-once семантика в Kafka гарантирует, что каждое сообщение будет обработано ровно один раз, включая запись результата в любую внешнюю систему (базу данных, REST API).",
+      "correctAnswer": false,
+      "explanation": "Exactly-once семантика в Kafka работает только для паттерна Kafka -> обработка -> Kafka: транзакционный API объединяет чтение, обработку и запись в Kafka topic в одну атомарную операцию. Для записи в внешние системы (базы данных, REST API) exactly-once на уровне Kafka не распространяется -- требуется дополнительная идемпотентность на уровне приложения. Это распространённое заблуждение, что Kafka exactly-once покрывает end-to-end сценарий.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-01-q4",
+      "type": "multiple-choice",
+      "question": "Consumer group обрабатывает CDC события, и один из consumer'ов тратит 7 минут на обработку batch'а из 500 сообщений (max.poll.interval.ms = 300000, max.poll.records = 500). Он был исключён из группы. Какое сочетание параметров предотвратит rebalancing и сохранит пропускную способность?",
+      "options": [
+        { "id": "a", "text": "Увеличить max.poll.interval.ms до 600000 (10 минут)" },
+        { "id": "b", "text": "Уменьшить max.poll.records до 50, оставив max.poll.interval.ms = 300000" },
+        { "id": "c", "text": "Уменьшить session.timeout.ms до 10000 для более быстрого обнаружения сбоев" },
+        { "id": "d", "text": "Установить enable.auto.commit = False для отключения автоматического rebalancing" }
+      ],
+      "correctAnswer": "b",
+      "hint": "Рассчитайте общее время обработки: при 500 сообщениях consumer тратит 7 минут (840 мс на сообщение). Как изменить параметры, чтобы время обработки одного batch укладывалось в max.poll.interval.ms?",
+      "explanation": "Consumer был исключён из группы потому, что обработка 500 сообщений (7 минут = 420 секунд) превысила max.poll.interval.ms (300 секунд = 5 минут). Уменьшение max.poll.records до 50 сократит время обработки batch до ~42 секунд (50 * 840 мс), что значительно меньше 5-минутного лимита. Вариант A тоже решит проблему, но увеличение таймаута маскирует проблему и замедляет обнаружение реально упавших consumer'ов. Вариант C усугубит ситуацию -- меньший session.timeout.ms приведёт к ещё более частым ложным срабатываниям.",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

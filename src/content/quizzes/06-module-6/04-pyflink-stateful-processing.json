@@ -1,0 +1,67 @@
+{
+  "lessonSlug": "06-module-6/04-pyflink-stateful-processing",
+  "moduleId": "06-module-6",
+  "_meta": {
+    "idPrefix": "m06-04",
+    "description": "Use IDs: m06-04-q1, m06-04-q2, ... for MC/TF; m06-04-code-1 for code challenges"
+  },
+  "questions": [
+    {
+      "id": "m06-04-q1",
+      "type": "multiple-choice",
+      "question": "Какую роль выполняет watermark в PyFlink при обработке CDC событий?",
+      "options": [
+        { "id": "a", "text": "Ограничивает максимальное количество событий в окне агрегации" },
+        { "id": "b", "text": "Отслеживает прогресс event time и определяет, когда можно закрыть временное окно" },
+        { "id": "c", "text": "Обеспечивает exactly-once доставку между Kafka partitions" },
+        { "id": "d", "text": "Сжимает state для экономии памяти при длительных агрегациях" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Watermark -- это маркер, который сообщает Flink: все события с event_time < watermark уже прибыли. Watermark вычисляется как max(event_time) - allowed_lateness. Когда watermark проходит end time окна, Flink закрывает окно и выдаёт результат агрегации. Без watermark окна никогда не закроются, потому что Flink не знает, когда все данные для окна собраны. Это фундаментальный механизм для обработки out-of-order событий в distributed stream processing.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m06-04-q2",
+      "type": "multiple-choice",
+      "question": "Для CDC pipeline настроен watermark:\n\n```sql\nWATERMARK FOR event_time AS event_time - INTERVAL '10' SECONDS\n```\n\nТекущий max event_time = 10:01:00. Событие с event_time = 10:00:45 прибывает с задержкой. Будет ли оно включено в окно 10:00:00-10:01:00?",
+      "options": [
+        { "id": "a", "text": "Да, потому что watermark = 10:00:50, а event_time 10:00:45 меньше watermark -- событие будет отброшено" },
+        { "id": "b", "text": "Да, потому что watermark = 10:00:50 ещё не достиг end окна 10:01:00 -- окно открыто и принимает события" },
+        { "id": "c", "text": "Нет, потому что событие пришло после закрытия окна" },
+        { "id": "d", "text": "Нет, потому что allowed lateness применяется только к DataStream API" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Watermark = max_event_time - allowed_lateness = 10:01:00 - 10 секунд = 10:00:50. Окно 10:00:00-10:01:00 закроется только когда watermark достигнет 10:01:00, то есть когда max_event_time станет 10:01:10. Сейчас watermark = 10:00:50, поэтому окно ещё открыто. Событие с event_time 10:00:45 попадает в окно 10:00:00-10:01:00 и будет включено в агрегацию. Событие не отбрасывается, потому что его event_time (10:00:45) >= watermark start не является условием отбрасывания -- отбрасываются только события с event_time < watermark при закрытии окна.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-04-q3",
+      "type": "multiple-choice",
+      "question": "Какой тип оконной агрегации в PyFlink подходит для расчёта moving average суммы заказов за 10 минут с обновлением каждые 2 минуты?",
+      "options": [
+        { "id": "a", "text": "TUMBLE(event_time, INTERVAL '10' MINUTES) -- tumbling window" },
+        { "id": "b", "text": "HOP(event_time, INTERVAL '2' MINUTES, INTERVAL '10' MINUTES) -- sliding window" },
+        { "id": "c", "text": "SESSION(event_time, INTERVAL '10' MINUTES) -- session window" },
+        { "id": "d", "text": "TUMBLE(event_time, INTERVAL '2' MINUTES) -- tumbling window с малым интервалом" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Sliding window (HOP) создаёт перекрывающиеся окна с фиксированным размером и интервалом сдвига. HOP(event_time, INTERVAL '2' MINUTES, INTERVAL '10' MINUTES) создаёт 10-минутные окна, которые сдвигаются каждые 2 минуты. Каждое событие попадает в несколько перекрывающихся окон, что обеспечивает непрерывный moving average. Tumbling window (вариант A) создаёт неперекрывающиеся окна -- каждое событие попадает ровно в одно окно, что не подходит для moving average.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-04-q4",
+      "type": "multiple-choice",
+      "question": "PyFlink job выполняет temporal join между потоком заказов (orders) и таблицей продуктов (products) с использованием FOR SYSTEM_TIME AS OF. Через неделю state вырос до 50 GB и job упал с OutOfMemoryError. Какое сочетание мер решит проблему?",
+      "options": [
+        { "id": "a", "text": "Увеличить heap memory до 64 GB и перезапустить job" },
+        { "id": "b", "text": "Переключиться на RocksDB state backend и настроить State TTL для автоматического удаления старых версий dimension table" },
+        { "id": "c", "text": "Заменить temporal join на обычный INNER JOIN для уменьшения state" },
+        { "id": "d", "text": "Уменьшить watermark allowed lateness до 1 секунды для более быстрого закрытия окон" }
+      ],
+      "correctAnswer": "b",
+      "hint": "Temporal join хранит версионированную историю dimension table (products) в state. Подумайте, какие два механизма контролируют (1) где хранится state и (2) как долго хранятся старые версии.",
+      "explanation": "Temporal join хранит полную версионированную историю dimension table в state. Без cleanup state растёт unbounded. Решение: (1) RocksDB state backend позволяет хранить state на диске вместо heap memory (поддерживает терабайты); (2) State TTL автоматически удаляет старые версии записей, которые больше не нужны для join. Вариант A -- временное решение, state продолжит расти. Вариант C потеряет корректность temporal join (обычный join вернёт текущую цену, а не цену на момент заказа). Вариант D не влияет на state temporal join.",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

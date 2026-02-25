@@ -1,0 +1,61 @@
+{
+  "lessonSlug": "06-module-6/02-pandas-integration",
+  "moduleId": "06-module-6",
+  "_meta": {
+    "idPrefix": "m06-02",
+    "description": "Use IDs: m06-02-q1, m06-02-q2, ... for MC/TF; m06-02-code-1 for code challenges"
+  },
+  "questions": [
+    {
+      "id": "m06-02-q1",
+      "type": "multiple-choice",
+      "question": "Какое критическое изменение в Pandas 3.0 влияет на обработку CDC данных при модификации DataFrame?",
+      "options": [
+        { "id": "a", "text": "DataFrame больше не поддерживает nested JSON структуры" },
+        { "id": "b", "text": "Copy-on-Write делает chained assignment (df[condition]['col'] = value) бесполезным -- изменения не применяются к исходному DataFrame" },
+        { "id": "c", "text": "Метод json_normalize() удалён в пользу from_json()" },
+        { "id": "d", "text": "Тип данных int автоматически конвертируется в float при наличии NaN" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "В Pandas 3.0 включён Copy-on-Write (CoW) по умолчанию. Chained assignment вроде df[df['total'] > 100]['status'] = 'high-value' теперь создаёт view вместо copy -- изменения молча не применяются к исходному DataFrame. Правильный способ -- использовать .loc[]: df.loc[df['total'] > 100, 'status'] = 'high-value'. Это критично для CDC обработки, где фильтрация и модификация DataFrame -- стандартные операции. Вариант D описывает поведение, которое существовало и до Pandas 3.0.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m06-02-q2",
+      "type": "multiple-choice",
+      "question": "При преобразовании CDC событий в Pandas DataFrame вы обнаружили, что столбец after_customer_id содержит NaN для некоторых строк. Какой тип CDC операций является причиной?",
+      "options": [
+        { "id": "a", "text": "Snapshot операции (op='r'), потому что при начальной загрузке данные неполные" },
+        { "id": "b", "text": "UPDATE операции (op='u'), потому что Debezium не включает неизменённые поля" },
+        { "id": "c", "text": "DELETE операции (op='d'), потому что у них поле after равно null" },
+        { "id": "d", "text": "CREATE операции (op='c'), потому что nullable-поля не заполнены" }
+      ],
+      "correctAnswer": "c",
+      "explanation": "При DELETE операциях (op='d') Debezium устанавливает поле after в null, так как записи больше не существует. При manual flattening с prefix after_ все поля from after будут NaN для DELETE событий. Для получения данных удалённой записи нужно использовать поле before. Это одна из частых ошибок при работе с CDC DataFrame -- код, обращающийся к after_* полям без фильтрации по типу операции, упадёт на DELETE строках.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-02-q3",
+      "type": "true-false",
+      "question": "Функция pd.json_normalize() рекомендуется для всех CDC сценариев, так как она автоматически обрабатывает nested Debezium envelope без необходимости ручного flattening.",
+      "correctAnswer": false,
+      "explanation": "json_normalize() автоматически разворачивает nested JSON, но не является универсальным решением для всех CDC сценариев. Для простых схем (orders: id, customer_id, total) manual flattening даёт больше контроля над именованием колонок и обработкой before/after полей. При performance-критичных сценариях (миллионы событий) manual flattening имеет меньший overhead. json_normalize() рекомендуется при сложных или часто изменяющихся схемах, где ручное маппирование стало бы слишком трудоёмким.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-02-q4",
+      "type": "multiple-choice",
+      "question": "Вы строите DataFrame из CDC событий таблицы orders, содержащей INSERT, UPDATE и DELETE операции. Для вычисления разницы total между before и after состояниями нужно выбрать только UPDATE строки. Какая последовательность операций корректна с учётом Pandas 3.0?",
+      "options": [
+        { "id": "a", "text": "updates = df[df['op'] == 'u']; updates['total_change'] = updates['after_total'] - updates['before_total']" },
+        { "id": "b", "text": "updates = df[df['op'] == 'u'].copy(); updates.loc[:, 'total_change'] = updates['after_total'] - updates['before_total']" },
+        { "id": "c", "text": "df.loc[df['op'] == 'u', 'total_change'] = df['after_total'] - df['before_total']; updates = df[df['op'] == 'u']" },
+        { "id": "d", "text": "updates = df.query(\"op == 'u'\"); updates['total_change'] = updates['after_total'] - updates['before_total']" }
+      ],
+      "correctAnswer": "b",
+      "hint": "В Pandas 3.0 с Copy-on-Write важно создать явную копию (.copy()) перед модификацией подмножества DataFrame. Почему .loc[] предпочтительнее прямого присваивания?",
+      "explanation": "В Pandas 3.0 с Copy-on-Write нужно: (1) создать явную копию через .copy(), чтобы отсоединить подмножество от исходного DataFrame; (2) использовать .loc[:, 'col'] для модификации, а не chained assignment. Вариант A создаёт view (без .copy()), и изменения через chained assignment не сохранятся. Вариант C вычислит разницу для всех строк (включая non-UPDATE), что приведёт к NaN для INSERT/DELETE строк, где before_total отсутствует.",
+      "bloomLevel": "analytical"
+    }
+  ]
+}

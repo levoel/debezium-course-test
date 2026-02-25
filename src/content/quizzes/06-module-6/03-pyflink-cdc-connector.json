@@ -1,0 +1,67 @@
+{
+  "lessonSlug": "06-module-6/03-pyflink-cdc-connector",
+  "moduleId": "06-module-6",
+  "_meta": {
+    "idPrefix": "m06-03",
+    "description": "Use IDs: m06-03-q1, m06-03-q2, ... for MC/TF; m06-03-code-1 for code challenges"
+  },
+  "questions": [
+    {
+      "id": "m06-03-q1",
+      "type": "multiple-choice",
+      "question": "Почему для обработки CDC событий в PyFlink рекомендуется Table API, а не DataStream API?",
+      "options": [
+        { "id": "a", "text": "DataStream API не поддерживает чтение из Kafka" },
+        { "id": "b", "text": "Table API использует SQL DDL для определения источников, понимает Debezium envelope и оптимизирует SQL-запросы" },
+        { "id": "c", "text": "Table API работает быстрее DataStream API за счёт использования GPU" },
+        { "id": "d", "text": "DataStream API не поддерживает Python -- только Java и Scala" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "Table API рекомендуется для CDC по трём причинам: (1) CDC события имеют чёткую схему (envelope + payload), и SQL DDL удобно описывает вложенные структуры через ROW<>; (2) Kafka connector в Table API нативно поддерживает Debezium envelope; (3) Flink лучше оптимизирует SQL-запросы, чем произвольный DataStream код. DataStream API поддерживает и Kafka, и Python (вариант A и D неверны), но для CDC структурированных данных Table API проще и эффективнее.",
+      "bloomLevel": "conceptual"
+    },
+    {
+      "id": "m06-03-q2",
+      "type": "multiple-choice",
+      "question": "В SQL DDL определения Kafka source table для PyFlink Table API указано поле:\n\n```sql\nsource ROW<\n    db STRING,\n    `table` STRING,\n    connector STRING\n>\n```\n\nПочему поле table обёрнуто в backticks?",
+      "options": [
+        { "id": "a", "text": "Backticks указывают, что поле является primary key таблицы" },
+        { "id": "b", "text": "table -- зарезервированное слово SQL, без backticks Flink выдаст syntax error" },
+        { "id": "c", "text": "Backticks конвертируют STRING тип в BINARY для производительности" },
+        { "id": "d", "text": "Backticks необходимы для всех полей внутри ROW<> в PyFlink" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "В SQL слово table является зарезервированным keyword (используется в CREATE TABLE, DROP TABLE и т.д.). Когда имя поля в Debezium source совпадает с зарезервированным словом, его нужно обернуть в backticks для экранирования. Без backticks Flink SQL parser интерпретирует table как начало нового SQL-выражения и выдаст syntax error. Backticks нужны только для зарезервированных слов (вариант D неверен), а не для всех полей.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-03-q3",
+      "type": "multiple-choice",
+      "question": "PyFlink job читает CDC события из Kafka и выводит результаты агрегации. В output вы видите строки с префиксами +I, -U, +U. Что означает пара строк -U[1, 5, 1250.00] и +U[1, 6, 1500.00]?",
+      "options": [
+        { "id": "a", "text": "Ошибка десериализации: -U означает failed, +U означает retry" },
+        { "id": "b", "text": "Обновление агрегата: старое значение (5 заказов, 1250) заменяется новым (6 заказов, 1500) для customer_id=1" },
+        { "id": "c", "text": "Два независимых UPDATE события из базы данных для разных записей" },
+        { "id": "d", "text": "Rebalancing в consumer group: -U означает удаление consumer, +U означает добавление" }
+      ],
+      "correctAnswer": "b",
+      "explanation": "PyFlink Table API выводит changelog stream, а не snapshot результатов. При обновлении агрегации (например, GROUP BY customer_id с COUNT/SUM) Flink сначала отзывает старое значение (-U = retract/update-before), затем публикует новое (+U = update-after). Таким образом, -U[1, 5, 1250.00] отзывает предыдущий результат для customer_id=1, а +U[1, 6, 1500.00] публикует актуальный. Это стандартный механизм changelog stream в Flink для поддержания корректности downstream потребителей.",
+      "bloomLevel": "applied"
+    },
+    {
+      "id": "m06-03-q4",
+      "type": "multiple-choice",
+      "question": "В production PyFlink job настроены параметры json.fail-on-missing-field = false и json.ignore-parse-errors = true. Debezium connector обновил schema, добавив новую колонку в source table. Какой trade-off возникает при такой конфигурации?",
+      "options": [
+        { "id": "a", "text": "Новая колонка автоматически добавится в PyFlink schema, но с задержкой в 5 минут" },
+        { "id": "b", "text": "PyFlink job продолжит работать без ошибок, но события с новой колонкой будут иметь null для неизвестного поля -- данные не теряются" },
+        { "id": "c", "text": "Job продолжит работу, но malformed или несовместимые события молча пропускаются -- потенциальная потеря данных без алертов" },
+        { "id": "d", "text": "Job автоматически перезапустится для загрузки обновлённой schema" }
+      ],
+      "correctAnswer": "c",
+      "hint": "Подумайте, что происходит, когда JSON parser встречает сообщение, которое не может распарсить согласно текущей schema. Куда деваются эти события?",
+      "explanation": "Конфигурация json.ignore-parse-errors = true обеспечивает resilience: job не падает при ошибках десериализации. Однако malformed события (или события с несовместимыми schema changes) молча пропускаются -- это потенциальная потеря данных. В production необходимо мониторить метрики Flink на dropped events и настроить alerting на аномалии. Вариант B описывает поведение fail-on-missing-field = false (новые поля игнорируются), но ignore-parse-errors = true дополнительно пропускает полностью нераспарсиваемые события.",
+      "bloomLevel": "analytical"
+    }
+  ]
+}
