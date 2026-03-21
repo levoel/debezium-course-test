@@ -8,7 +8,7 @@ topics: ["logical-decoding", "pgoutput", "wal", "publications"]
 prerequisites: ["module-1/02-debezium-architecture"]
 ---
 
-import { PhysicalVsLogicalDiagram, LogicalDecodingComponentsDiagram, PublicationsDiagram, LogicalDecodingSequenceDiagram } from '../../../components/diagrams/module2';
+import { PhysicalVsLogicalDiagram, LogicalDecodingComponentsDiagram, PublicationsDiagram, LogicalDecodingSequenceDiagram, WalRecordDiagram } from '../../../components/diagrams/module2';
 
 # Logical Decoding: Глубокое погружение
 
@@ -87,19 +87,7 @@ PostgreSQL поддерживает два типа репликации. Пон
 
 ### Что содержит WAL запись при logical decoding?
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    WAL Record                       │
-├─────────────────────────────────────────────────────┤
-│ LSN (Log Sequence Number): 0/1A3B4C0                │
-│ Transaction ID: 12345                               │
-│ Timestamp: 2026-02-01 10:30:00.123                  │
-│ Operation: UPDATE                                   │
-│ Relation: public.customers (OID: 16384)             │
-│ Old tuple key: {id: 1}                              │
-│ New tuple: {id: 1, name: 'Alice', email: '...'}     │
-└─────────────────────────────────────────────────────┘
-```
+<WalRecordDiagram client:visible />
 
 **LSN (Log Sequence Number)** — уникальный идентификатор позиции в WAL. Debezium использует LSN для отслеживания прогресса.
 

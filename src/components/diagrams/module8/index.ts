@@ -4,7 +4,8 @@ export { CapstoneArchitectureDiagram } from './CapstoneArchitectureDiagrams';
 // Lesson 02 - Architecture Deliverables
 export {
   SystemContextDiagram,
-  ContainerDiagram
+  ContainerDiagram,
+  CapstoneProjectStructureDiagram
 } from './C4ArchitectureDiagrams';
 
 // Lesson 03 - Self Assessment

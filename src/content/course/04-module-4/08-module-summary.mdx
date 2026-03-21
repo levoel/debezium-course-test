@@ -7,6 +7,8 @@ estimatedTime: 3
 topics: ["Итоги", "Monitoring", "JMX", "Operations"]
 ---
 
+import { DiagnosticTreeDiagram } from '../../../components/diagrams/module4';
+
 # Итоги модуля 4: Production Operations
 
 <div className="glass-card p-6 rounded-xl mb-8">
@@ -65,13 +67,7 @@ topics: ["Итоги", "Monitoring", "JMX", "Operations"]
 
 ## Diagnostic Decision Tree
 
-```
-High lag?
-├── Queue full? → Increase max.queue.size
-├── Slow consumers? → Check downstream
-├── Source overload? → Snapshot in progress?
-└── Network issues? → Check connectivity
-```
+<DiagnosticTreeDiagram client:visible />
 
 ---
 

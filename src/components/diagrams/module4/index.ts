@@ -15,3 +15,4 @@ export * from './AlertingDiagrams';
 export * from './WalBloatHeartbeatDiagrams';
 export * from './ConnectorScalingDiagrams';
 export * from './DisasterRecoveryDiagrams';
+export * from './ModuleSummaryDiagrams';

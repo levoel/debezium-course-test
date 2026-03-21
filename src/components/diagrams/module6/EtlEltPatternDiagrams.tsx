@@ -3,6 +3,7 @@
  *
  * Exports:
  * - TraditionalEtlDiagram: Classic ETL flow with staging area
+ * (plus DataLakePartitionDiagram, DataLakeLabPartitionDiagram added below)
  * - ModernEltDiagram: ELT flow with CDC and data lake
  * - CdcToDataLakeDiagram: Multi-layer data lake architecture
  * - AppendOnlyHistoryDiagram: Metadata columns for append-only pattern
@@ -864,6 +865,73 @@ export function OperationSeparationDiagram() {
             compression, monitoring для каждого типа.
           </p>
         </div>
+      </div>
+    </DiagramContainer>
+  );
+}
+
+/** Helper: renders a file tree from a nested data structure. */
+function FileTreeItem({ name, children, indent = 0 }: { name: string; children?: { name: string; children?: { name: string }[] }[]; indent?: number }) {
+  return (
+    <>
+      <div className="flex items-center gap-1.5" style={{ paddingLeft: `${indent * 16}px` }}>
+        <span className="text-gray-500 select-none">{children ? '📁' : '📄'}</span>
+        <span className={`text-xs ${children ? 'text-gray-300 font-medium' : 'text-gray-400 font-mono'}`}>{name}</span>
+      </div>
+      {children?.map((c) => (
+        <FileTreeItem key={c.name} name={c.name} children={(c as any).children} indent={indent + 1} />
+      ))}
+    </>
+  );
+}
+
+/**
+ * DataLakePartitionDiagram — Parquet partitioned directory structure.
+ * Replaces first ASCII tree in 06-etl-elt-patterns.mdx (~line 182).
+ */
+export function DataLakePartitionDiagram() {
+  const tree = [
+    { name: '_processed_date=2026-01-01/', children: [
+      { name: 'part-00000.parquet' },
+      { name: 'part-00001.parquet' },
+    ]},
+    { name: '_processed_date=2026-01-02/', children: [
+      { name: 'part-00000.parquet' },
+    ]},
+  ];
+
+  return (
+    <DiagramContainer title="/data/lake/orders_history/" color="purple">
+      <div className="space-y-0.5">
+        {tree.map((item) => (
+          <FileTreeItem key={item.name} name={item.name} children={item.children} />
+        ))}
+      </div>
+    </DiagramContainer>
+  );
+}
+
+/**
+ * DataLakeLabPartitionDiagram — Lab exercise expected directory output.
+ * Replaces second ASCII tree in 06-etl-elt-patterns.mdx (~line 594).
+ */
+export function DataLakeLabPartitionDiagram() {
+  const tree = [
+    { name: '_processed_date=2026-02-01/', children: [
+      { name: 'part-00000-xxx.snappy.parquet' },
+      { name: 'part-00001-xxx.snappy.parquet' },
+    ]},
+    { name: '_processed_date=2026-02-02/', children: [
+      { name: 'part-00000-xxx.snappy.parquet' },
+    ]},
+  ];
+
+  return (
+    <DiagramContainer title="/data/lake/orders/" color="emerald">
+      <div className="space-y-0.5">
+        {tree.map((item) => (
+          <FileTreeItem key={item.name} name={item.name} children={item.children} />
+        ))}
       </div>
     </DiagramContainer>
   );

@@ -8,7 +8,7 @@ topics: ["Cloud Monitoring", "Alerting", "Metrics", "Dashboards", "SRE"]
 prerequisites: ["module-6/01-cloud-sql-setup", "module-6/02-debezium-server-pubsub", "module-6/04-dataflow-bigquery", "module-6/05-cloud-run-event-driven"]
 ---
 
-import { MonitoringComponentsDiagram, MonitoringPointsHierarchyDiagram, AlertFlowDiagram } from '../../../components/diagrams/module7';
+import { MonitoringComponentsDiagram, MonitoringPointsHierarchyDiagram, AlertFlowDiagram, CdcDashboardStructureDiagram } from '../../../components/diagrams/module7';
 
 # End-to-End Мониторинг CDC Pipeline
 
@@ -513,31 +513,7 @@ documentation:
 
 ### Dashboard Structure
 
-```
-╔════════════════════════════════════════════════════════════╗
-║         CDC Pipeline Health Dashboard                       ║
-╠════════════════════════════════════════════════════════════╣
-║ Row 1: High-Level Health                                    ║
-║  [Cloud SQL Status] [Debezium Status] [Pub/Sub Status]     ║
-║  [Dataflow Status]  [Cloud Run Status]                     ║
-╠════════════════════════════════════════════════════════════╣
-║ Row 2: Source Metrics (Cloud SQL)                          ║
-║  [CPU Utilization] [Disk Utilization] [Active Connections] ║
-║  [WAL Size] [Replication Slot Lag]                         ║
-╠════════════════════════════════════════════════════════════╣
-║ Row 3: CDC Engine (Debezium)                               ║
-║  [MilliSecondsBehindSource] [Events Processed/sec]         ║
-║  [Queue Remaining Capacity]                                 ║
-╠════════════════════════════════════════════════════════════╣
-║ Row 4: Messaging (Pub/Sub)                                 ║
-║  [Oldest Unacked Message Age] [Num Undelivered Messages]   ║
-║  [Dead Letter Queue Count]                                  ║
-╠════════════════════════════════════════════════════════════╣
-║ Row 5: Consumers (Dataflow + Cloud Run)                    ║
-║  [Dataflow System Lag] [Dataflow vCPUs]                    ║
-║  [Cloud Run Request Rate] [Cloud Run Error Rate]           ║
-╚════════════════════════════════════════════════════════════╝
-```
+<CdcDashboardStructureDiagram client:visible />
 
 <MonitoringPointsHierarchyDiagram client:visible />
 

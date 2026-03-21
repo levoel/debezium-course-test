@@ -8,7 +8,7 @@ topics: ["Architecture", "Production", "Documentation", "Monitoring"]
 prerequisites: ["module-7/01-capstone-overview"]
 ---
 
-import { SystemContextDiagram, ContainerDiagram } from '../../../components/diagrams/module8';
+import { SystemContextDiagram, ContainerDiagram, CapstoneProjectStructureDiagram } from '../../../components/diagrams/module8';
 
 # Архитектура и Deliverables
 
@@ -22,45 +22,7 @@ import { SystemContextDiagram, ContainerDiagram } from '../../../components/diag
 
 ### Directory Layout
 
-```
-capstone-project/
-├── infrastructure/          # Docker Compose, Kubernetes manifests
-│   ├── docker-compose.yml  # Local dev environment
-│   ├── debezium/           # Connector configs
-│   │   └── connector.json  # Debezium connector configuration
-│   └── monitoring/         # Prometheus, Grafana configs
-│       ├── prometheus.yml  # Prometheus scrape configs
-│       └── grafana/        # Grafana dashboards (JSON exports)
-│
-├── database/               # Aurora/PostgreSQL schema and migrations
-│   ├── schema.sql          # Tables including outbox
-│   ├── migrations/         # Schema evolution scripts
-│   └── seed-data/          # Test data generation scripts
-│       └── generate_orders.sql
-│
-├── pyflink-jobs/           # Stream processing applications
-│   ├── cdc_processor.py    # Main PyFlink Table API job
-│   ├── requirements.txt    # Python dependencies
-│   └── tests/              # Unit and integration tests
-│       └── test_transformations.py
-│
-├── bigquery/               # Warehouse schema and config
-│   ├── schema.sql          # Table definitions with primary keys
-│   └── ddl/                # BigQuery-specific DDL scripts
-│
-├── monitoring/             # Dashboards and alerts
-│   ├── dashboards/         # Grafana JSON exports
-│   │   └── debezium-overview.json
-│   └── alerts/             # Alert rules (Prometheus)
-│       └── debezium-alerts.yml
-│
-├── docs/                   # Project documentation
-│   ├── architecture.md     # C4 diagrams, system context
-│   ├── runbook.md          # Operational procedures
-│   └── testing-strategy.md # Validation approach
-│
-└── README.md               # Project overview and setup instructions
-```
+<CapstoneProjectStructureDiagram client:visible />
 
 **Почему важна структура:**
 - **Разделение concerns:** Infrastructure vs application code vs documentation

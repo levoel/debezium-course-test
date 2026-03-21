@@ -6,6 +6,7 @@
  * - LogicalDecodingComponentsDiagram: Pipeline of logical decoding components
  * - PublicationsDiagram: Publication filtering concept
  * - LogicalDecodingSequenceDiagram: Complete flow sequence
+ * - WalRecordDiagram: WAL record anatomy with key fields
  */
 
 import { FlowNode } from '@primitives/FlowNode';
@@ -379,5 +380,36 @@ export function LogicalDecodingSequenceDiagram() {
         messageSpacing={45}
       />
     </div>
+  );
+}
+
+/**
+ * WalRecordDiagram — anatomy of a WAL record with logical decoding metadata.
+ * Replaces ASCII box in 01-logical-decoding-deep-dive.mdx.
+ */
+export function WalRecordDiagram() {
+  const fields = [
+    { label: 'LSN (Log Sequence Number)', value: '0/1A3B4C0', tooltip: 'Уникальный идентификатор позиции в WAL. Debezium использует LSN для отслеживания прогресса.' },
+    { label: 'Transaction ID', value: '12345', tooltip: 'Группирует изменения одной транзакции. Debezium публикует события с одним transaction ID атомарно.' },
+    { label: 'Timestamp', value: '2026-02-01 10:30:00.123', tooltip: 'Время коммита транзакции в базе данных.' },
+    { label: 'Operation', value: 'UPDATE', tooltip: 'Тип операции: INSERT, UPDATE или DELETE.' },
+    { label: 'Relation', value: 'public.customers (OID: 16384)', tooltip: 'Таблица и её OID в каталоге PostgreSQL.' },
+    { label: 'Old tuple key', value: '{id: 1}', tooltip: 'Ключевые поля до изменения. Доступность зависит от REPLICA IDENTITY.' },
+    { label: 'New tuple', value: "{id: 1, name: 'Alice', email: '...'}", tooltip: 'Полное значение строки после изменения.' },
+  ];
+
+  return (
+    <DiagramContainer title="WAL Record" color="purple">
+      <div className="space-y-2">
+        {fields.map((f) => (
+          <DiagramTooltip key={f.label} content={f.tooltip}>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-3 py-2 rounded-lg bg-white/[.03] border border-white/[.06] cursor-help">
+              <span className="text-xs text-gray-400 sm:w-56 shrink-0 font-medium">{f.label}</span>
+              <span className="text-sm text-gray-200 font-mono break-all">{f.value}</span>
+            </div>
+          </DiagramTooltip>
+        ))}
+      </div>
+    </DiagramContainer>
   );
 }

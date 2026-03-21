@@ -4,6 +4,7 @@
  * Exports:
  * - SystemContextDiagram: C4 Level 1 - external actors and system boundaries
  * - ContainerDiagram: C4 Level 2 - internal components with technology details
+ * - CapstoneProjectStructureDiagram: Recommended capstone directory layout
  */
 
 import { FlowNode } from '@primitives/FlowNode';
@@ -260,6 +261,81 @@ export function ContainerDiagram() {
           <li><span className="text-blue-300">ContainerQueue</span> - messaging компоненты (variant="cluster")</li>
           <li>Технология указана под каждым компонентом</li>
         </ul>
+      </div>
+    </DiagramContainer>
+  );
+}
+
+/**
+ * CapstoneProjectStructureDiagram — recommended capstone project directory.
+ * Replaces ASCII tree in 02-architecture-deliverables.mdx.
+ */
+export function CapstoneProjectStructureDiagram() {
+  type TreeNode = { name: string; comment?: string; children?: TreeNode[] };
+
+  const tree: TreeNode[] = [
+    { name: 'infrastructure/', comment: 'Docker Compose, Kubernetes manifests', children: [
+      { name: 'docker-compose.yml', comment: 'Local dev environment' },
+      { name: 'debezium/', comment: 'Connector configs', children: [
+        { name: 'connector.json', comment: 'Debezium connector configuration' },
+      ]},
+      { name: 'monitoring/', comment: 'Prometheus, Grafana configs', children: [
+        { name: 'prometheus.yml', comment: 'Prometheus scrape configs' },
+        { name: 'grafana/', comment: 'Grafana dashboards (JSON exports)' },
+      ]},
+    ]},
+    { name: 'database/', comment: 'Aurora/PostgreSQL schema and migrations', children: [
+      { name: 'schema.sql', comment: 'Tables including outbox' },
+      { name: 'migrations/', comment: 'Schema evolution scripts' },
+      { name: 'seed-data/', comment: 'Test data generation scripts', children: [
+        { name: 'generate_orders.sql' },
+      ]},
+    ]},
+    { name: 'pyflink-jobs/', comment: 'Stream processing applications', children: [
+      { name: 'cdc_processor.py', comment: 'Main PyFlink Table API job' },
+      { name: 'requirements.txt', comment: 'Python dependencies' },
+      { name: 'tests/', comment: 'Unit and integration tests', children: [
+        { name: 'test_transformations.py' },
+      ]},
+    ]},
+    { name: 'bigquery/', comment: 'Warehouse schema and config', children: [
+      { name: 'schema.sql', comment: 'Table definitions with primary keys' },
+      { name: 'ddl/', comment: 'BigQuery-specific DDL scripts' },
+    ]},
+    { name: 'monitoring/', comment: 'Dashboards and alerts', children: [
+      { name: 'dashboards/', comment: 'Grafana JSON exports', children: [
+        { name: 'debezium-overview.json' },
+      ]},
+      { name: 'alerts/', comment: 'Alert rules (Prometheus)', children: [
+        { name: 'debezium-alerts.yml' },
+      ]},
+    ]},
+    { name: 'docs/', comment: 'Project documentation', children: [
+      { name: 'architecture.md', comment: 'C4 diagrams, system context' },
+      { name: 'runbook.md', comment: 'Operational procedures' },
+      { name: 'testing-strategy.md', comment: 'Validation approach' },
+    ]},
+    { name: 'README.md', comment: 'Project overview and setup instructions' },
+  ];
+
+  function renderNode(node: TreeNode, depth: number) {
+    const isDir = !!node.children;
+    return (
+      <div key={node.name}>
+        <div className="flex items-center gap-2" style={{ paddingLeft: `${depth * 16}px` }}>
+          <span className="text-gray-500 select-none text-xs">{isDir ? '📁' : '📄'}</span>
+          <span className={`text-xs ${isDir ? 'text-gray-300 font-medium' : 'text-gray-400 font-mono'}`}>{node.name}</span>
+          {node.comment && <span className="text-[10px] text-gray-600 ml-1">{'// ' + node.comment}</span>}
+        </div>
+        {node.children?.map((c) => renderNode(c, depth + 1))}
+      </div>
+    );
+  }
+
+  return (
+    <DiagramContainer title="capstone-project/" color="emerald">
+      <div className="space-y-0.5">
+        {tree.map((node) => renderNode(node, 0))}
       </div>
     </DiagramContainer>
   );

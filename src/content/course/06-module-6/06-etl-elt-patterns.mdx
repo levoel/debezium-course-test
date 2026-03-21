@@ -13,7 +13,9 @@ import {
   ModernEltDiagram,
   CdcToDataLakeDiagram,
   AppendOnlyHistoryDiagram,
-  OperationSeparationDiagram
+  OperationSeparationDiagram,
+  DataLakePartitionDiagram,
+  DataLakeLabPartitionDiagram
 } from '../../../components/diagrams/module6';
 
 # ETL/ELT паттерны с CDC данными
@@ -177,14 +179,7 @@ query.awaitTermination()
 
 **Partitioning strategy:**
 
-```
-/data/lake/orders_history/
-├── _processed_date=2026-01-01/
-│   ├── part-00000.parquet
-│   └── part-00001.parquet
-├── _processed_date=2026-01-02/
-│   └── part-00000.parquet
-```
+<DataLakePartitionDiagram client:visible />
 
 **Зачем партиционирование по дате:**
 - Efficient pruning для time-range queries
@@ -589,14 +584,7 @@ from pyspark.sql.functions import (
 
 **Expected directory structure:**
 
-```
-/data/lake/orders/
-├── _processed_date=2026-02-01/
-│   ├── part-00000-xxx.snappy.parquet
-│   └── part-00001-xxx.snappy.parquet
-└── _processed_date=2026-02-02/
-    └── part-00000-xxx.snappy.parquet
-```
+<DataLakeLabPartitionDiagram client:visible />
 
 **Verification query:**
 

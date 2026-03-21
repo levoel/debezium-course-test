@@ -46,7 +46,9 @@ export {
   ModernEltDiagram,
   CdcToDataLakeDiagram,
   AppendOnlyHistoryDiagram,
-  OperationSeparationDiagram
+  OperationSeparationDiagram,
+  DataLakePartitionDiagram,
+  DataLakeLabPartitionDiagram
 } from './EtlEltPatternDiagrams';
 
 // Lesson 07: Feature Engineering

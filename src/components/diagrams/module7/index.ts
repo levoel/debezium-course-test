@@ -21,12 +21,14 @@ export {
 export {
   PubSubEventarcCloudRunDiagram,
   AutoScalingBehaviorSequence,
-  EndToEndEventProcessingSequence
+  EndToEndEventProcessingSequence,
+  CloudRunProjectStructureDiagram
 } from './CloudRunEventDiagrams';
 
 // Lesson 06 - End-to-End Monitoring
 export {
   MonitoringComponentsDiagram,
   MonitoringPointsHierarchyDiagram,
-  AlertFlowDiagram
+  AlertFlowDiagram,
+  CdcDashboardStructureDiagram
 } from './MonitoringDiagrams';

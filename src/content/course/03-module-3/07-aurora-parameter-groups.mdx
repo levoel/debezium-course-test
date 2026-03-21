@@ -62,29 +62,7 @@ mysql -e "SHOW VARIABLES LIKE 'binlog_format'"
 
 ### Aurora MySQL: Parameter Groups Abstraction
 
-```
-┌────────────────────────────────────────────────────────────┐
-│                  AWS Management Layer                      │
-│  (Console / CLI / CloudFormation / Terraform)              │
-└────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────────┐
-│               DB Cluster Parameter Group                   │
-│  (cluster-wide settings: binlog_format, GTID, etc.)        │
-└────────────────────────────────────────────────────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  Writer      │    │  Reader 1    │    │  Reader 2    │
-│  Instance    │    │  Instance    │    │  Instance    │
-│              │    │              │    │              │
-│  DB Param    │    │  DB Param    │    │  DB Param    │
-│  Group       │    │  Group       │    │  Group       │
-│  (instance)  │    │  (instance)  │    │  (instance)  │
-└──────────────┘    └──────────────┘    └──────────────┘
-```
+<ParameterHierarchyDiagram client:visible />
 
 **Вы не имеете:**
 - SSH доступа к Aurora instances

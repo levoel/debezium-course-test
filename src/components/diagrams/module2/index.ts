@@ -3,7 +3,7 @@
  *
  * Glass-styled interactive diagrams for Module 2 lessons 01-07:
  * - Lesson 01: Logical Decoding (PhysicalVsLogicalDiagram, LogicalDecodingComponentsDiagram,
- *              PublicationsDiagram, LogicalDecodingSequenceDiagram)
+ *              PublicationsDiagram, LogicalDecodingSequenceDiagram, WalRecordDiagram)
  * - Lesson 02: Replication Slots (WalRetentionDiagram, SlotLifecycleDiagram)
  * - Lesson 03: WAL Configuration (WalLevelHierarchyDiagram, WorkloadWalImpactDiagram)
  * - Lesson 04: Aurora Parameters (AuroraParameterGroupDiagram, AuroraSetupProcessDiagram)

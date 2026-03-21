@@ -5,6 +5,7 @@
  * - PubSubEventarcCloudRunDiagram: Serverless event routing (Pub/Sub → Eventarc → Cloud Run)
  * - AutoScalingBehaviorSequence: Dynamic scaling based on concurrency
  * - EndToEndEventProcessingSequence: Complete flow from Cloud SQL to external API
+ * - CloudRunProjectStructureDiagram: cdc-processor project directory
  */
 
 import { FlowNode } from '@primitives/FlowNode';
@@ -313,6 +314,33 @@ export function EndToEndEventProcessingSequence() {
           <li>• Cloud Run → External API: depends on API (50-500ms)</li>
           <li>• <span className="font-semibold">Total: ~500-2000ms end-to-end</span></li>
         </ul>
+      </div>
+    </DiagramContainer>
+  );
+}
+
+/**
+ * CloudRunProjectStructureDiagram — cdc-processor service directory layout.
+ * Replaces ASCII tree in 05-cloud-run-event-driven.mdx.
+ */
+export function CloudRunProjectStructureDiagram() {
+  const files = [
+    { icon: '🐍', name: 'main.py', desc: 'Flask приложение' },
+    { icon: '📋', name: 'requirements.txt', desc: 'Зависимости' },
+    { icon: '🐳', name: 'Dockerfile', desc: 'Контейнер образ' },
+    { icon: '⚙️', name: '.gcloudignore', desc: 'Игнорируемые файлы' },
+  ];
+
+  return (
+    <DiagramContainer title="cdc-processor/" color="blue">
+      <div className="space-y-1.5">
+        {files.map((f) => (
+          <div key={f.name} className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-white/[.03] border border-white/[.06]">
+            <span className="select-none">{f.icon}</span>
+            <span className="text-sm text-gray-200 font-mono">{f.name}</span>
+            <span className="text-xs text-gray-500 ml-auto">{f.desc}</span>
+          </div>
+        ))}
       </div>
     </DiagramContainer>
   );

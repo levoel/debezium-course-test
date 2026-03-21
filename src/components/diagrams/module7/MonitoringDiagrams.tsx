@@ -5,6 +5,7 @@
  * - MonitoringComponentsDiagram: End-to-end observability for CDC pipeline
  * - MonitoringPointsHierarchyDiagram: Key metrics per service (3-column grid)
  * - AlertFlowDiagram: Alert hierarchy with severity levels (Critical/Warning/Info)
+ * - CdcDashboardStructureDiagram: Unified dashboard row layout
  */
 
 import { FlowNode } from '@primitives/FlowNode';
@@ -220,6 +221,67 @@ export function AlertFlowDiagram() {
           <li>• Warning: investigate within 1 hour (Slack notification)</li>
           <li>• Info: awareness only (email digest)</li>
         </ul>
+      </div>
+    </DiagramContainer>
+  );
+}
+
+/**
+ * CdcDashboardStructureDiagram — Unified dashboard row structure.
+ * Replaces the ╔═ ASCII table in 06-cloud-monitoring.mdx.
+ */
+export function CdcDashboardStructureDiagram() {
+  const rows = [
+    {
+      label: 'Row 1: High-Level Health',
+      color: 'emerald' as const,
+      widgets: ['Cloud SQL Status', 'Debezium Status', 'Pub/Sub Status', 'Dataflow Status', 'Cloud Run Status'],
+    },
+    {
+      label: 'Row 2: Source Metrics (Cloud SQL)',
+      color: 'purple' as const,
+      widgets: ['CPU Utilization', 'Disk Utilization', 'Active Connections', 'WAL Size', 'Replication Slot Lag'],
+    },
+    {
+      label: 'Row 3: CDC Engine (Debezium)',
+      color: 'amber' as const,
+      widgets: ['MilliSecondsBehindSource', 'Events Processed/sec', 'Queue Remaining Capacity'],
+    },
+    {
+      label: 'Row 4: Messaging (Pub/Sub)',
+      color: 'blue' as const,
+      widgets: ['Oldest Unacked Message Age', 'Num Undelivered Messages', 'Dead Letter Queue Count'],
+    },
+    {
+      label: 'Row 5: Consumers (Dataflow + Cloud Run)',
+      color: 'rose' as const,
+      widgets: ['Dataflow System Lag', 'Dataflow vCPUs', 'Cloud Run Request Rate', 'Cloud Run Error Rate'],
+    },
+  ];
+
+  const colorMap: Record<string, string> = {
+    emerald: 'border-emerald-500/40 bg-emerald-500/5',
+    purple: 'border-purple-500/40 bg-purple-500/5',
+    amber: 'border-amber-500/40 bg-amber-500/5',
+    blue: 'border-blue-500/40 bg-blue-500/5',
+    rose: 'border-rose-500/40 bg-rose-500/5',
+  };
+
+  return (
+    <DiagramContainer title="CDC Pipeline Health Dashboard" color="blue">
+      <div className="space-y-3">
+        {rows.map((row) => (
+          <div key={row.label} className={`rounded-lg border p-3 ${colorMap[row.color]}`}>
+            <div className="text-xs font-semibold text-gray-300 mb-2">{row.label}</div>
+            <div className="flex flex-wrap gap-2">
+              {row.widgets.map((w) => (
+                <span key={w} className="text-[11px] text-gray-400 px-2 py-1 rounded bg-white/[.04] border border-white/[.08]">
+                  {w}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </DiagramContainer>
   );
