@@ -87,19 +87,18 @@ PostgreSQL поддерживает два типа репликации. Пон
 
 ### Что содержит WAL запись при logical decoding?
 
-```mermaid
-graph TD
-    subgraph WAL["WAL Record"]
-        LSN["LSN: 0/1A3B4C0"]
-        TXN["Transaction ID: 12345"]
-        TS["Timestamp: 2026-02-01 10:30:00.123"]
-        OP["Operation: UPDATE"]
-        REL["Relation: public.customers (OID: 16384)"]
-        OLD["Old tuple key: {id: 1}"]
-        NEW["New tuple: {id: 1, name: 'Alice', email: '...'}"]
-    end
-
-    LSN --- TXN --- TS --- OP --- REL --- OLD --- NEW
+```
+┌─────────────────────────────────────────────────────┐
+│                    WAL Record                       │
+├─────────────────────────────────────────────────────┤
+│ LSN (Log Sequence Number): 0/1A3B4C0                │
+│ Transaction ID: 12345                               │
+│ Timestamp: 2026-02-01 10:30:00.123                  │
+│ Operation: UPDATE                                   │
+│ Relation: public.customers (OID: 16384)             │
+│ Old tuple key: {id: 1}                              │
+│ New tuple: {id: 1, name: 'Alice', email: '...'}     │
+└─────────────────────────────────────────────────────┘
 ```
 
 **LSN (Log Sequence Number)** — уникальный идентификатор позиции в WAL. Debezium использует LSN для отслеживания прогресса.

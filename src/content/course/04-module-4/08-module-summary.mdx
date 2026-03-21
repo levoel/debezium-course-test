@@ -65,26 +65,12 @@ topics: ["Итоги", "Monitoring", "JMX", "Operations"]
 
 ## Diagnostic Decision Tree
 
-```mermaid
-graph TD
-    A["High lag?"]
-    B["Queue full?"]
-    C["Slow consumers?"]
-    D["Source overload?"]
-    E["Network issues?"]
-    B1["Increase max.queue.size"]
-    C1["Check downstream"]
-    D1["Snapshot in progress?"]
-    E1["Check connectivity"]
-
-    A --> B
-    A --> C
-    A --> D
-    A --> E
-    B --> B1
-    C --> C1
-    D --> D1
-    E --> E1
+```
+High lag?
+├── Queue full? → Increase max.queue.size
+├── Slow consumers? → Check downstream
+├── Source overload? → Snapshot in progress?
+└── Network issues? → Check connectivity
 ```
 
 ---
