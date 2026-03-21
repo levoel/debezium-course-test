@@ -32,20 +32,16 @@ topics: ["Docker", "Lab", "Подготовка"]
 
 В Module 1 вы развернёте полную CDC-инфраструктуру:
 
-```
-┌─────────────────────────────────────────────────────┐
-│                Docker Compose                        │
-│                                                      │
-│  ┌──────────┐  ┌───────────┐  ┌──────────────────┐ │
-│  │PostgreSQL│  │   Kafka   │  │    Debezium      │ │
-│  │  :5432   │  │   :9092   │  │  Connect :8083   │ │
-│  └──────────┘  └───────────┘  └──────────────────┘ │
-│                                                      │
-│  ┌──────────┐  ┌───────────┐  ┌──────────────────┐ │
-│  │  MySQL   │  │ Schema    │  │   Prometheus     │ │
-│  │  :3307   │  │ Registry  │  │   + Grafana      │ │
-│  └──────────┘  └───────────┘  └──────────────────┘ │
-└─────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph DC["Docker Compose"]
+        PG["PostgreSQL\n:5432"]
+        K["Kafka\n:9092"]
+        DBZ["Debezium\nConnect :8083"]
+        MY["MySQL\n:3307"]
+        SR["Schema\nRegistry"]
+        PM["Prometheus\n+ Grafana"]
+    end
 ```
 
 <KnowledgeCheck

@@ -513,30 +513,42 @@ documentation:
 
 ### Dashboard Structure
 
-```
-╔════════════════════════════════════════════════════════════╗
-║         CDC Pipeline Health Dashboard                       ║
-╠════════════════════════════════════════════════════════════╣
-║ Row 1: High-Level Health                                    ║
-║  [Cloud SQL Status] [Debezium Status] [Pub/Sub Status]     ║
-║  [Dataflow Status]  [Cloud Run Status]                     ║
-╠════════════════════════════════════════════════════════════╣
-║ Row 2: Source Metrics (Cloud SQL)                          ║
-║  [CPU Utilization] [Disk Utilization] [Active Connections] ║
-║  [WAL Size] [Replication Slot Lag]                         ║
-╠════════════════════════════════════════════════════════════╣
-║ Row 3: CDC Engine (Debezium)                               ║
-║  [MilliSecondsBehindSource] [Events Processed/sec]         ║
-║  [Queue Remaining Capacity]                                 ║
-╠════════════════════════════════════════════════════════════╣
-║ Row 4: Messaging (Pub/Sub)                                 ║
-║  [Oldest Unacked Message Age] [Num Undelivered Messages]   ║
-║  [Dead Letter Queue Count]                                  ║
-╠════════════════════════════════════════════════════════════╣
-║ Row 5: Consumers (Dataflow + Cloud Run)                    ║
-║  [Dataflow System Lag] [Dataflow vCPUs]                    ║
-║  [Cloud Run Request Rate] [Cloud Run Error Rate]           ║
-╚════════════════════════════════════════════════════════════╝
+```mermaid
+graph TD
+    subgraph Row1["Row 1: High-Level Health"]
+        CS["Cloud SQL Status"]
+        DS["Debezium Status"]
+        PS["Pub/Sub Status"]
+        DFS["Dataflow Status"]
+        CRS["Cloud Run Status"]
+    end
+
+    subgraph Row2["Row 2: Source Metrics (Cloud SQL)"]
+        CPU["CPU Utilization"]
+        DISK["Disk Utilization"]
+        CONN["Active Connections"]
+        WAL["WAL Size"]
+        RSLAG["Replication Slot Lag"]
+    end
+
+    subgraph Row3["Row 3: CDC Engine (Debezium)"]
+        MBS["MilliSecondsBehindSource"]
+        EPS["Events Processed/sec"]
+        QRC["Queue Remaining Capacity"]
+    end
+
+    subgraph Row4["Row 4: Messaging (Pub/Sub)"]
+        OUMA["Oldest Unacked Message Age"]
+        NUM["Num Undelivered Messages"]
+        DLQ["Dead Letter Queue Count"]
+    end
+
+    subgraph Row5["Row 5: Consumers (Dataflow + Cloud Run)"]
+        DFSL["Dataflow System Lag"]
+        DFVC["Dataflow vCPUs"]
+        CRRR["Cloud Run Request Rate"]
+        CRER["Cloud Run Error Rate"]
+    end
 ```
 
 <MonitoringPointsHierarchyDiagram client:visible />

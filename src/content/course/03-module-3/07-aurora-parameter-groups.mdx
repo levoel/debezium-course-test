@@ -62,28 +62,18 @@ mysql -e "SHOW VARIABLES LIKE 'binlog_format'"
 
 ### Aurora MySQL: Parameter Groups Abstraction
 
-```
-┌────────────────────────────────────────────────────────────┐
-│                  AWS Management Layer                      │
-│  (Console / CLI / CloudFormation / Terraform)              │
-└────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────────┐
-│               DB Cluster Parameter Group                   │
-│  (cluster-wide settings: binlog_format, GTID, etc.)        │
-└────────────────────────────────────────────────────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  Writer      │    │  Reader 1    │    │  Reader 2    │
-│  Instance    │    │  Instance    │    │  Instance    │
-│              │    │              │    │              │
-│  DB Param    │    │  DB Param    │    │  DB Param    │
-│  Group       │    │  Group       │    │  Group       │
-│  (instance)  │    │  (instance)  │    │  (instance)  │
-└──────────────┘    └──────────────┘    └──────────────┘
+```mermaid
+graph TD
+    AWS["AWS Management Layer\n(Console / CLI / CloudFormation / Terraform)"]
+    CPG["DB Cluster Parameter Group\n(cluster-wide: binlog_format, GTID, etc.)"]
+    W["Writer\nInstance\n\nDB Param\nGroup\n(instance)"]
+    R1["Reader 1\nInstance\n\nDB Param\nGroup\n(instance)"]
+    R2["Reader 2\nInstance\n\nDB Param\nGroup\n(instance)"]
+
+    AWS --> CPG
+    CPG --> W
+    CPG --> R1
+    CPG --> R2
 ```
 
 **Вы не имеете:**
