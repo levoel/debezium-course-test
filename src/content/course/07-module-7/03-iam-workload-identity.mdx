@@ -23,7 +23,7 @@ import { WorkloadIdentityFlowDiagram } from '../../../components/diagrams/module
 
 **Традиционный подход (anti-pattern):**
 ```bash
-# ❌ НЕ ДЕЛАЙТЕ ТАК
+# [NO] НЕ ДЕЛАЙТЕ ТАК
 gcloud iam service-accounts keys create key.json \
   --iam-account=debezium@project.iam.gserviceaccount.com
 
@@ -449,14 +449,14 @@ gcloud secrets list --project=PROJECT_ID
 ### 1. Service Account Key Files
 
 ```bash
-# ❌ НИКОГДА НЕ ДЕЛАЙТЕ ТАК
+# [NO] НИКОГДА НЕ ДЕЛАЙТЕ ТАК
 gcloud iam service-accounts keys create key.json \
   --iam-account=debezium@project.iam.gserviceaccount.com
 
-# ❌ Не коммитить в git
+# [NO] Не коммитить в git
 git add key.json
 
-# ❌ Не монтировать в контейнеры
+# [NO] Не монтировать в контейнеры
 -v $(pwd)/key.json:/app/key.json
 ```
 
@@ -465,12 +465,12 @@ git add key.json
 ### 2. Излишне широкие роли
 
 ```bash
-# ❌ НЕ ИСПОЛЬЗУЙТЕ
+# [NO] НЕ ИСПОЛЬЗУЙТЕ
 roles/owner
 roles/editor
 roles/viewer  # (для сервисов, которые что-то пишут)
 
-# ✅ ИСПОЛЬЗУЙТЕ конкретные роли
+# [OK] ИСПОЛЬЗУЙТЕ конкретные роли
 roles/pubsub.publisher
 roles/secretmanager.secretAccessor
 ```
@@ -480,10 +480,10 @@ roles/secretmanager.secretAccessor
 ### 3. Shared Service Accounts между окружениями
 
 ```bash
-# ❌ Не использовать один SA для dev/staging/prod
+# [NO] Не использовать один SA для dev/staging/prod
 debezium-sa@project.iam.gserviceaccount.com  # (для всех окружений)
 
-# ✅ Создавать отдельные SA
+# [OK] Создавать отдельные SA
 debezium-dev-sa@dev-project.iam.gserviceaccount.com
 debezium-staging-sa@staging-project.iam.gserviceaccount.com
 debezium-prod-sa@prod-project.iam.gserviceaccount.com
@@ -494,12 +494,12 @@ debezium-prod-sa@prod-project.iam.gserviceaccount.com
 ### 4. Хранение credentials в environment variables
 
 ```yaml
-# ❌ Не делайте так
+# [NO] Не делайте так
 env:
 - name: DB_PASSWORD
   value: "postgres123"  # Plain text в манифесте
 
-# ✅ Используйте Secret Manager или Kubernetes Secrets
+# [OK] Используйте Secret Manager или Kubernetes Secrets
 env:
 - name: DB_PASSWORD
   valueFrom:

@@ -9,6 +9,7 @@ prerequisites: ["module-5/04-pyflink-stateful-processing"]
 ---
 
 import {
+
   PyflinkVsPysparkComparisonDiagram,
   StructuredStreamingConceptDiagram,
   PysparkWatermarkDiagram,
@@ -32,11 +33,11 @@ import {
 | Критерий | PyFlink | PySpark |
 |---------|---------|---------|
 | **Latency требования** | менее 100ms | 1-10 seconds |
-| **Exactly-once в Kafka** | ✅ Native support | ❌ At-least-once only |
-| **Интеграция с ML** | Limited | ✅ MLlib, feature stores |
-| **Batch + Stream unified** | Separate APIs | ✅ Same DataFrame API |
-| **Data lake writes** | Possible | ✅ Native (Parquet, Delta) |
-| **Complex event patterns** | ✅ CEP library | Basic windowing only |
+| **Exactly-once в Kafka** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Native support | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> At-least-once only |
+| **Интеграция с ML** | Limited | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> MLlib, feature stores |
+| **Batch + Stream unified** | Separate APIs | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Same DataFrame API |
+| **Data lake writes** | Possible | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Native (Parquet, Delta) |
+| **Complex event patterns** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> CEP library | Basic windowing only |
 | **Operational complexity** | Flink cluster | Spark cluster |
 
 **Правило выбора:**

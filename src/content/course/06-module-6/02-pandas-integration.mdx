@@ -52,7 +52,7 @@ import { CdcEventStructureDiagram } from '../../../components/diagrams/module6';
 
 ## Pandas 3.0: Важные изменения
 
-> **⚠️ КРИТИЧЕСКОЕ ОБНОВЛЕНИЕ**
+> **<Icon name="warning" className="text-yellow-400 inline" size="1.2em" /> КРИТИЧЕСКОЕ ОБНОВЛЕНИЕ**
 >
 > Pandas 3.0.0 вышел **21 января 2026** с breaking changes, которые влияют на обработку CDC данных.
 >
@@ -85,10 +85,10 @@ df[df['total'] > 100]['status'] = 'high-value'
 
 **Теперь (pandas 3.0+):**
 ```python
-# ❌ Chained assignment НЕ РАБОТАЕТ (silent failure)
+# [NO] Chained assignment НЕ РАБОТАЕТ (silent failure)
 df[df['total'] > 100]['status'] = 'high-value'
 
-# ✅ Правильный способ
+# [OK] Правильный способ
 df.loc[df['total'] > 100, 'status'] = 'high-value'
 ```
 
@@ -156,10 +156,10 @@ pd.to_datetime(df['ts_ms'], unit='ms')  # dtype: datetime64[us]
 
 | Операция | `op` | `before` | `after` | Когда |
 |----------|------|----------|---------|-------|
-| **Snapshot** | `'r'` | null | ✅ | Начальная загрузка существующих данных |
-| **INSERT** | `'c'` | null | ✅ | Новая запись добавлена |
-| **UPDATE** | `'u'` | ✅ | ✅ | Запись изменена |
-| **DELETE** | `'d'` | ✅ | null | Запись удалена |
+| **Snapshot** | `'r'` | null | Да | Начальная загрузка существующих данных |
+| **INSERT** | `'c'` | null | Да | Новая запись добавлена |
+| **UPDATE** | `'u'` | Да | Да | Запись изменена |
+| **DELETE** | `'d'` | Да | null | Запись удалена |
 
 **Критически важно:** DELETE события имеют `after=null`, используйте поле `before` для получения данных!
 
@@ -172,6 +172,7 @@ pd.to_datetime(df['ts_ms'], unit='ms')  # dtype: datetime64[us]
 ```python
 import pandas as pd
 import json
+
 from confluent_kafka import Consumer
 
 def cdc_events_to_dataframe(messages):
@@ -345,11 +346,11 @@ def cdc_events_to_dataframe_normalized(messages):
 ### Критическая ошибка: DELETE events
 
 ```python
-# ❌ НЕПРАВИЛЬНО - упадет на DELETE операциях
+# [NO] НЕПРАВИЛЬНО - упадет на DELETE операциях
 df['customer_id'] = df.apply(lambda row: row['payload']['after']['customer_id'], axis=1)
 # KeyError: 'after' is None for DELETE events
 
-# ✅ ПРАВИЛЬНО - использовать after для c/u, before для d
+# [OK] ПРАВИЛЬНО - использовать after для c/u, before для d
 def extract_customer_id(row):
     payload = row['payload']
     op = payload.get('op')
@@ -462,7 +463,7 @@ while len(messages) < 100:
         print(f"  Собрано: {len(messages)}/100")
 
 consumer.close()
-print(f"✅ Собрано {len(messages)} сообщений\n")
+print(f"[OK] Собрано {len(messages)} сообщений\n")
 
 # ==============================================================================
 # ЧАСТЬ 2: Преобразование в DataFrame
@@ -572,7 +573,7 @@ axes[1].tick_params(axis='x', rotation=45)
 plt.tight_layout()
 plt.show()
 
-print("\n✅ Анализ завершен!")
+print("\n[OK] Анализ завершен!")
 ```
 
 ### Генерация тестовых данных

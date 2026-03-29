@@ -102,16 +102,16 @@ gh-ost \
 
 **Плюсы:**
 
-- ✅ Triggerless — не добавляет overhead на каждую запись
-- ✅ Throttling — автоматическое замедление при высокой нагрузке
-- ✅ Replica-aware — может читать binlog с реплики
-- ✅ Pausable — можно приостановить и возобновить
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Triggerless — не добавляет overhead на каждую запись
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Throttling — автоматическое замедление при высокой нагрузке
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Replica-aware — может читать binlog с реплики
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Pausable — можно приостановить и возобновить
 
 **Минусы:**
 
-- ❌ **Не поддерживает foreign keys** (нужно временно удалить)
-- ❌ Читает тот же binlog, что и Debezium (удвоенная нагрузка)
-- ❌ Требует binlog format ROW
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Не поддерживает foreign keys** (нужно временно удалить)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Читает тот же binlog, что и Debezium (удвоенная нагрузка)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Требует binlog format ROW
 
 ### pt-online-schema-change (Percona Toolkit)
 
@@ -142,15 +142,15 @@ pt-online-schema-change \
 
 **Плюсы:**
 
-- ✅ **Поддерживает foreign keys** (через trigger cascade)
-- ✅ Не читает binlog (меньше нагрузка на binlog)
-- ✅ Проще в отладке (triggers видны в MySQL)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Поддерживает foreign keys** (через trigger cascade)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Не читает binlog (меньше нагрузка на binlog)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Проще в отладке (triggers видны в MySQL)
 
 **Минусы:**
 
-- ❌ Trigger overhead — каждая запись вызывает 3 триггера
-- ❌ Нельзя приостановить без удаления триггеров
-- ❌ Triggers увеличивают binlog размер
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Trigger overhead — каждая запись вызывает 3 триггера
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Нельзя приостановить без удаления триггеров
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Triggers увеличивают binlog размер
 
 ### Сравнительная таблица: gh-ost vs pt-osc
 
@@ -158,11 +158,11 @@ pt-online-schema-change \
 |----------------|--------|-------------------------|
 | **Механизм** | Binlog reading | Triggers |
 | **Helper tables** | `_gho`, `_ghc` | `_new`, `_old` |
-| **Foreign keys** | ❌ Не поддерживает | ✅ Поддерживает |
+| **Foreign keys** | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Не поддерживает | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Поддерживает |
 | **Binlog impact** | Удвоенная нагрузка (читает + пишет) | Нормальная нагрузка |
 | **CDC event volume** | Выше (события от ghost table) | Ниже (только оригинальная таблица) |
 | **Throttling** | Встроенный, replica-aware | Ручная настройка |
-| **Pausable** | ✅ Да | ⚠️ Требует удаления триггеров |
+| **Pausable** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Да | <Icon name="warning" className="text-yellow-400 inline" size="1.2em" /> Требует удаления триггеров |
 | **Рекомендация для CDC** | Если нет FK и Debezium читает реплику | Если есть FK или нужна меньшая нагрузка |
 
 <KnowledgeCheck
@@ -208,7 +208,7 @@ gh-ost --table=orders --alter="ADD COLUMN status VARCHAR(20)" --execute
 2. Binlog содержит события для этих таблиц
 3. Debezium видит события для таблиц, которых нет в schema history
 4. **ERROR:** `Table _orders_gho not found in schema history topic`
-5. **Connector crashes mid-migration** 💥
+5. **Connector crashes mid-migration** <Icon name="alert" className="text-red-400 inline" size="1.2em" />
 
 <Callout type="danger">
 **Connector crash во время gh-ost миграции**
@@ -363,10 +363,10 @@ gh-ost --table=orders --alter="ADD COLUMN status VARCHAR(20)" --execute
 
 ### Недостатки Dynamic Include List
 
-- ❌ Требует ручного изменения конфигурации коннектора
-- ❌ Риск забыть удалить helper tables после миграции
-- ❌ Не подходит для автоматизированных DDL пайплайнов
-- ❌ Helper table события всё равно попадают в Kafka
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Требует ручного изменения конфигурации коннектора
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Риск забыть удалить helper tables после миграции
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Не подходит для автоматизированных DDL пайплайнов
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Helper table события всё равно попадают в Kafka
 
 **Вердикт:** Используйте Pattern 1 (Broad Capture + Filter SMT) как default подход.
 

@@ -9,6 +9,7 @@ prerequisites: ["module-4/04-content-based-routing"]
 ---
 
 import {
+
   DualWriteProblemDiagram,
   OutboxSolutionDiagram,
   OutboxTransactionFlowDiagram,
@@ -196,7 +197,7 @@ conn.commit()
 
 Outbox Pattern — не magic. Важно понимать, что он дает, а что нет.
 
-### ✅ Что Outbox ГАРАНТИРУЕТ
+### <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Что Outbox ГАРАНТИРУЕТ
 
 | Guarantee | Описание |
 |-----------|----------|
@@ -205,7 +206,7 @@ Outbox Pattern — не magic. Важно понимать, что он дает
 | **Ordering per aggregate** | События одного aggregateid доставляются в том же порядке (Kafka partition key = aggregateid) |
 | **Durability** | События в WAL, пережевут crash приложения или Debezium |
 
-### ❌ Что Outbox НЕ ГАРАНТИРУЕТ
+### <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Что Outbox НЕ ГАРАНТИРУЕТ
 
 | Limitation | Описание |
 |------------|----------|
@@ -292,14 +293,14 @@ WHERE created_at < NOW() - INTERVAL '1 hour';
 
 ## Когда использовать Outbox Pattern?
 
-### ✅ Use Cases для Outbox
+### <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Use Cases для Outbox
 
 - **Microservices event publishing:** Сервис обновляет свои данные и должен уведомить другие сервисы
 - **CQRS (Command Query Responsibility Segregation):** Write model эмитит события для Read model
 - **Event Sourcing integration:** События из БД попадают в event stream
 - **Audit trail:** Гарантированная запись критичных бизнес-событий
 
-### ❌ Когда Outbox избыточен
+### <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Когда Outbox избыточен
 
 - **Request-response communication:** Если downstream система должна ответить синхронно — используйте REST/gRPC
 - **Low-value events:** Если потеря события некритична — используйте direct Kafka send

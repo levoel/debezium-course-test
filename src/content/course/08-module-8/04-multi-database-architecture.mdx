@@ -88,10 +88,10 @@ mysql_prod.schema_history           # MySQL schema history topic (PostgreSQL doe
 | **Traceability** | Clear origin tracking (topic name shows source database) |
 
 **Когда использовать:**
-- ✅ Learning и initial implementation (easier to understand)
-- ✅ Different schemas в PostgreSQL vs MySQL (нельзя объединить в одну структуру)
-- ✅ Different aggregates (orders vs inventory — conceptually different)
-- ✅ Independent schema evolution (PostgreSQL team и MySQL team работают независимо)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Learning и initial implementation (easier to understand)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Different schemas в PostgreSQL vs MySQL (нельзя объединить в одну структуру)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Different aggregates (orders vs inventory — conceptually different)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Independent schema evolution (PostgreSQL team и MySQL team работают независимо)
 
 <KnowledgeCheck
   question={'Почему Separate Topics Architecture рекомендуется для capstone проекта вместо Unified Topics?'}
@@ -137,10 +137,10 @@ mysql_prod.schema_history           # MySQL schema history topic (PostgreSQL doe
 | **Key uniqueness** | Requires handling (PostgreSQL order_id=5 vs MySQL order_id=5 are different) |
 
 **Когда использовать:**
-- ✅ **Identical schemas** в PostgreSQL и MySQL (same columns, same types)
-- ✅ Outbox Pattern в обеих базах (aggregatetype роутит события)
-- ✅ Consumer preference для single stream (проще обработка)
-- ⚠️ **Требует careful key design** — добавить source_database prefix к key для уникальности
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Identical schemas** в PostgreSQL и MySQL (same columns, same types)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Outbox Pattern в обеих базах (aggregatetype роутит события)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Consumer preference для single stream (проще обработка)
+- <Icon name="warning" className="text-yellow-400 inline" size="1.2em" /> **Требует careful key design** — добавить source_database prefix к key для уникальности
 
 <Callout type="warning">
 
@@ -159,12 +159,12 @@ mysql_prod.schema_history           # MySQL schema history topic (PostgreSQL doe
 | Criteria | Separate Topics | Unified Topics |
 |----------|-----------------|----------------|
 | **Schemas identical** | Optional | **Required** |
-| **Independent schema evolution** | ✅ Yes | ❌ No (coordinated changes) |
-| **Traceability (which source?)** | ✅ Automatic (topic name) | ⚠️ Requires metadata field |
-| **Consumer complexity** | ⚠️ Multiple sources to join | ✅ Single source |
-| **Key uniqueness** | ✅ Natural (separate streams) | ⚠️ Requires prefix/composite key |
-| **Troubleshooting** | ✅ Easier (source isolation) | ⚠️ Harder (mixed events) |
-| **Recommended for learning** | ✅ Yes | ❌ No (advanced pattern) |
+| **Independent schema evolution** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Yes | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> No (coordinated changes) |
+| **Traceability (which source?)** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Automatic (topic name) | <Icon name="warning" className="text-yellow-400 inline" size="1.2em" /> Requires metadata field |
+| **Consumer complexity** | <Icon name="warning" className="text-yellow-400 inline" size="1.2em" /> Multiple sources to join | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Single source |
+| **Key uniqueness** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Natural (separate streams) | <Icon name="warning" className="text-yellow-400 inline" size="1.2em" /> Requires prefix/composite key |
+| **Troubleshooting** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Easier (source isolation) | <Icon name="warning" className="text-yellow-400 inline" size="1.2em" /> Harder (mixed events) |
+| **Recommended for learning** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Yes | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> No (advanced pattern) |
 
 **Рекомендация для capstone:**
 

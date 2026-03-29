@@ -304,8 +304,8 @@ aws rds describe-db-clusters \
   --query 'DBClusters[0].BacktrackWindow'
 
 # Output:
-# 0  ✅ Можно включать Enhanced Binlog
-# > 0  ❌ НЕЛЬЗЯ включать Enhanced Binlog
+# 0  [OK] Можно включать Enhanced Binlog
+# > 0  [NO] НЕЛЬЗЯ включать Enhanced Binlog
 ```
 
 **Шаг 3: Убедиться, что Global Database не используется (или допустимо отсутствие binlog в secondary регионах)**
@@ -513,14 +513,14 @@ Debezium постепенно обновит данные без полного 
 
 | Use Case | Enhanced Binlog? | Rationale |
 |----------|------------------|-----------|
-| **Высокая write throughput, production CDC** | ✅ **Да** | 13% compute overhead vs 50%; 40% прирост throughput |
-| **Нужен backtrack для point-in-time testing** | ❌ **Нет** | Несовместимо — backtrack блокирует Enhanced Binlog |
-| **Aurora Global Database с cross-region failover** | ❌ **Нет** | Binlog не реплицируется в secondary регион, после failover требуется resnapshot |
-| **Нужен binlog в backups для disaster recovery** | ❌ **Нет** | Enhanced Binlog не включается в Aurora snapshots, после restore binlog теряется |
-| **Стандартная workload, простота важнее оптимизации** | ❌ **Нет** | Standard binlog проще, без ограничений backtrack/Global Database |
-| **Single-region Aurora, high concurrency, no backtrack** | ✅ **Да** | Ideal scenario для Enhanced Binlog |
-| **Development/testing окружение с frequent clones** | ❌ **Нет** | Clone не содержит Enhanced Binlog, каждый clone требует resnapshot |
-| **CDC + Aurora automated backups для DR** | ❌ **Нет** | После restore binlog позиция потеряна |
+| **Высокая write throughput, production CDC** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Да** | 13% compute overhead vs 50%; 40% прирост throughput |
+| **Нужен backtrack для point-in-time testing** | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Нет** | Несовместимо — backtrack блокирует Enhanced Binlog |
+| **Aurora Global Database с cross-region failover** | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Нет** | Binlog не реплицируется в secondary регион, после failover требуется resnapshot |
+| **Нужен binlog в backups для disaster recovery** | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Нет** | Enhanced Binlog не включается в Aurora snapshots, после restore binlog теряется |
+| **Стандартная workload, простота важнее оптимизации** | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Нет** | Standard binlog проще, без ограничений backtrack/Global Database |
+| **Single-region Aurora, high concurrency, no backtrack** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Да** | Ideal scenario для Enhanced Binlog |
+| **Development/testing окружение с frequent clones** | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Нет** | Clone не содержит Enhanced Binlog, каждый clone требует resnapshot |
+| **CDC + Aurora automated backups для DR** | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Нет** | После restore binlog позиция потеряна |
 
 ### Decision Flowchart
 
@@ -627,8 +627,8 @@ Debezium постепенно обновит данные, не останавл
    - **No Global Database replication** — secondary регионы не получают binlog файлы
 
 4. **Decision criteria:**
-   - ✅ Используйте: high write throughput, single-region, no backtrack, можете принять resnapshot после restore
-   - ❌ Не используйте: backtrack нужен, Global Database с cross-region CDC, binlog в backups критичен для DR
+   - <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Используйте: high write throughput, single-region, no backtrack, можете принять resnapshot после restore
+   - <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Не используйте: backtrack нужен, Global Database с cross-region CDC, binlog в backups критичен для DR
 
 5. **Aurora restore/clone стратегия обязательна**
    - Планируйте resnapshot процедуру заранее

@@ -9,6 +9,7 @@ prerequisites: ["module-5/03-pyflink-cdc-connector"]
 ---
 
 import {
+
   StatefulOperationsDiagram,
   OutOfOrderEventsSequenceDiagram,
   WatermarkProgressDiagram,
@@ -127,12 +128,12 @@ CREATE TABLE orders (
 ### Trade-off: Lateness vs Completeness
 
 **Маленький allowed lateness** (1 секунда):
-- ✅ Низкая latency (окна закрываются быстро)
-- ❌ Больше late events пропускается (data loss)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Низкая latency (окна закрываются быстро)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Больше late events пропускается (data loss)
 
 **Большой allowed lateness** (1 минута):
-- ✅ Меньше late events (больше полноты данных)
-- ❌ Высокая latency (ждём 1 минуту перед закрытием окна)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Меньше late events (больше полноты данных)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Высокая latency (ждём 1 минуту перед закрытием окна)
 
 > **Production рекомендация:** Для CDC pipeline используйте 5-10 секунд allowed lateness. Этого достаточно для network jitter, но не слишком много для latency.
 
@@ -570,13 +571,13 @@ env.set_state_backend(RocksDBStateBackend("file:///tmp/flink-checkpoints", True)
 
 **Плюсы:**
 
-- ✅ Поддерживает state размером в терабайты (ограничение = disk size)
-- ✅ Checkpoints быстрее (incremental checkpoints)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Поддерживает state размером в терабайты (ограничение = disk size)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Checkpoints быстрее (incremental checkpoints)
 
 **Минусы:**
 
-- ❌ Медленнее доступ (disk I/O вместо memory)
-- ❌ Больше CPU для serialization/deserialization
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Медленнее доступ (disk I/O вместо memory)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Больше CPU для serialization/deserialization
 
 ### Решение 3: Мониторинг State Size
 

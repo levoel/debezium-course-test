@@ -442,12 +442,12 @@ try:
 
             # Fatal errors
             if msg.error().fatal():
-                print(f"\n❌ FATAL ERROR: {msg.error()}")
+                print(f"\n[NO] FATAL ERROR: {msg.error()}")
                 print("Consumer останавливается из-за критической ошибки")
                 raise KafkaException(msg.error())
 
             # Non-fatal errors (сетевые проблемы и т.д.)
-            print(f"⚠️  Non-fatal error: {msg.error()}")
+            print(f"[WARN]  Non-fatal error: {msg.error()}")
             continue
 
         # ==============================================================================
@@ -469,16 +469,16 @@ try:
         except Exception as e:
             # Обработка не удалась - offset НЕ сохраняется
             # При перезапуске consumer повторит обработку этого сообщения
-            print(f"❌ Processing error: {e}")
+            print(f"[NO] Processing error: {e}")
             continue
 
 except KeyboardInterrupt:
-    print("\n\n🛑 Получен сигнал остановки")
+    print("\n\n[STOP] Получен сигнал остановки")
 finally:
     print(f"Всего обработано: {processed_count} сообщений")
     print("Закрытие consumer...")
     consumer.close()
-    print("✅ Consumer закрыт корректно")
+    print("[OK] Consumer закрыт корректно")
 ```
 
 ### Проверка работы

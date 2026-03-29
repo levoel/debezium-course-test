@@ -142,13 +142,13 @@ Debezium MySQL connector предоставляет три режима упра
 ```
 
 **Pros:**
-- ✅ Безопасно: schema чтение под блокировкой
-- ✅ Быстро: locks держатся минимальное время
-- ✅ Гарантия консистентности schema
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Безопасно: schema чтение под блокировкой
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Быстро: locks держатся минимальное время
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Гарантия консистентности schema
 
 **Cons:**
-- ❌ Кратковременные блокировки могут повлиять на concurrent writes
-- ❌ Для очень сложных schema (hundreds of columns) lock duration увеличивается
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Кратковременные блокировки могут повлиять на concurrent writes
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Для очень сложных schema (hundreds of columns) lock duration увеличивается
 
 ### 2. none (zero locks, требует schema freeze)
 
@@ -199,14 +199,14 @@ SHOW PROCESSLIST;
 </Callout>
 
 **Pros:**
-- ✅ Нет блокировок вообще
-- ✅ Подходит для больших таблиц
-- ✅ Minimal impact на production writes
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Нет блокировок вообще
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Подходит для больших таблиц
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Minimal impact на production writes
 
 **Cons:**
-- ❌ **Опасно:** schema change во время snapshot = data corruption
-- ❌ Требует coordination с командой разработки
-- ❌ Не обнаруживает schema changes автоматически
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Опасно:** schema change во время snapshot = data corruption
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Требует coordination с командой разработки
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Не обнаруживает schema changes автоматически
 
 ### 3. extended (НЕ работает на Aurora)
 
@@ -222,7 +222,7 @@ SHOW PROCESSLIST;
 ```json
 {
   "snapshot.mode": "initial",
-  "snapshot.locking.mode": "extended"  // ❌ Fails on Aurora
+  "snapshot.locking.mode": "extended"  // [NO] Fails on Aurora
 }
 ```
 
@@ -263,42 +263,42 @@ for this operation
       <td>Normal</td>
       <td>Не важно</td>
       <td><code>minimal</code></td>
-      <td>✅ Безопасный default, locks снимаются быстро</td>
+      <td>Да Безопасный default, locks снимаются быстро</td>
     </tr>
     <tr>
       <td>10-100 GB</td>
       <td>Normal</td>
       <td>Не важно</td>
       <td><code>minimal</code></td>
-      <td>⚠️ Мониторить lock duration (см. раздел 8)</td>
+      <td>⚠ Мониторить lock duration (см. раздел 8)</td>
     </tr>
     <tr>
       <td>10-100 GB</td>
       <td>Zero tolerance</td>
-      <td>✅ Да</td>
+      <td>Да Да</td>
       <td><code>none</code></td>
-      <td>⚠️ Обязательно: freeze schema changes</td>
+      <td>⚠ Обязательно: freeze schema changes</td>
     </tr>
     <tr>
       <td>&gt; 100 GB</td>
       <td>Zero tolerance</td>
-      <td>✅ Да</td>
+      <td>Да Да</td>
       <td><code>none</code></td>
-      <td>⚠️ Обязательно: freeze schema changes</td>
+      <td>⚠ Обязательно: freeze schema changes</td>
     </tr>
     <tr>
       <td>&gt; 100 GB</td>
       <td>Zero tolerance</td>
-      <td>❌ Нет</td>
+      <td>Нет Нет</td>
       <td><strong>Backup-based</strong></td>
       <td><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="inline w-4 h-4 mr-1"><path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/></svg> См. раздел 7 (Aurora snapshot + snapshot.mode=never)</td>
     </tr>
     <tr>
       <td>Any</td>
       <td>Cannot freeze schema</td>
-      <td>❌ Нет</td>
+      <td>Нет Нет</td>
       <td><code>minimal</code></td>
-      <td>✅ Принимаем кратковременные блокировки</td>
+      <td>Да Принимаем кратковременные блокировки</td>
     </tr>
     <tr>
       <td>Very large (500GB+)</td>
@@ -346,7 +346,7 @@ for this operation
 
     // Snapshot configuration (Aurora-specific)
     "snapshot.mode": "initial",
-    "snapshot.locking.mode": "minimal",  // ✅ Safe default for Aurora
+    "snapshot.locking.mode": "minimal",  // [OK] Safe default for Aurora
 
     // Schema history (infinite retention, per Phase 13 decision)
     "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
@@ -395,10 +395,10 @@ curl -s http://localhost:8083/connectors/aurora-mysql-small-tables/status | jq .
 
 **Перед использованием `snapshot.locking.mode=none` убедитесь:**
 
-1. ✅ **Schema freeze coordinated** с командой разработки
-2. ✅ **No DDL statements** планируются в течение snapshot window
-3. ✅ **Monitoring setup** для обнаружения DDL (см. раздел 8)
-4. ✅ **Rollback plan** если snapshot прерывается schema change
+1. <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Schema freeze coordinated** с командой разработки
+2. <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **No DDL statements** планируются в течение snapshot window
+3. <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Monitoring setup** для обнаружения DDL (см. раздел 8)
+4. <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Rollback plan** если snapshot прерывается schema change
 
 **Если НЕ можете гарантировать schema freeze:** Используйте backup-based approach (раздел 7).
 
@@ -424,7 +424,7 @@ curl -s http://localhost:8083/connectors/aurora-mysql-small-tables/status | jq .
 
     // NO LOCKS snapshot mode
     "snapshot.mode": "initial",
-    "snapshot.locking.mode": "none",  // ⚠️ Zero locks, ТРЕБУЕТ schema freeze
+    "snapshot.locking.mode": "none",  // [WARN] Zero locks, ТРЕБУЕТ schema freeze
 
     // Longer timeout for large table snapshot
     "snapshot.query.timeout.ms": "600000",  // 10 minutes per query
@@ -731,16 +731,16 @@ aws rds delete-db-cluster-snapshot \
 ### Backup-Based Approach: Pros & Cons
 
 **Pros:**
-- ✅ **No locks** на production database
-- ✅ **Faster bulk load** через JDBC (parallel tasks, optimized batch reads)
-- ✅ **No schema freeze** requirement
-- ✅ **Minimal impact** на production performance
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **No locks** на production database
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Faster bulk load** через JDBC (parallel tasks, optimized batch reads)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **No schema freeze** requirement
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Minimal impact** на production performance
 
 **Cons:**
-- ❌ **Complex setup** (Aurora snapshot + restore + JDBC connector + Debezium)
-- ❌ **Cost:** Temporary Aurora cluster может стоить сотни долларов в день
-- ❌ **Schema history management** требует manual steps или schema_only snapshot
-- ❌ **Time:** Snapshot creation (30-60 min) + restore (10-15 min) + bulk load (hours)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Complex setup** (Aurora snapshot + restore + JDBC connector + Debezium)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Cost:** Temporary Aurora cluster может стоить сотни долларов в день
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Schema history management** требует manual steps или schema_only snapshot
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> **Time:** Snapshot creation (30-60 min) + restore (10-15 min) + bulk load (hours)
 
 **Когда использовать:**
 - Таблицы **500GB+**
@@ -898,7 +898,7 @@ aws cloudwatch get-metric-statistics \
       </td>
       <td>Aurora не разрешает global lock (expected)</td>
       <td>
-        ✅ <strong>Это нормально!</strong><br/>
+        <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> <strong>Это нормально!</strong><br/>
         Debezium автоматически fallback на table locks.<br/>
         No action required.
       </td>
@@ -933,7 +933,7 @@ aws cloudwatch get-metric-statistics \
         но DDL выполнился во время snapshot
       </td>
       <td>
-        1. ❌ <strong>Restart snapshot</strong> (data inconsistency)<br/>
+        1. <Icon name="alert" className="text-red-400 inline" size="1.2em" /> <strong>Restart snapshot</strong> (data inconsistency)<br/>
         2. Используйте <code>minimal</code> mode (accept locks)<br/>
         3. Или implement schema freeze window
       </td>
@@ -1095,9 +1095,9 @@ Debezium **не поддерживает resumable snapshots** (кроме incre
 - Disaster recovery strategies
 
 **Модуль 8 roadmap:**
-- ✅ Lesson 1-6: MySQL binlog, GTID, retention, connector config
-- ✅ Lesson 7: Aurora parameter groups
-- ✅ Lesson 8: Enhanced Binlog architecture
-- ✅ **Lesson 9: Aurora snapshot modes** ← Вы здесь
-- 🔜 Lesson 10: Aurora production operations
-- 🔜 Lesson 11: MySQL/Aurora comparison & decision matrix
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Lesson 1-6: MySQL binlog, GTID, retention, connector config
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Lesson 7: Aurora parameter groups
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Lesson 8: Enhanced Binlog architecture
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Lesson 9: Aurora snapshot modes** ← Вы здесь
+- <Icon name="refresh" className="text-blue-400 inline" size="1.2em" /> Lesson 10: Aurora production operations
+- <Icon name="refresh" className="text-blue-400 inline" size="1.2em" /> Lesson 11: MySQL/Aurora comparison & decision matrix

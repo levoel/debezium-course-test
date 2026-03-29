@@ -84,8 +84,8 @@ Issue:
     </tr>
     <tr>
       <td><strong>Connector restart</strong></td>
-      <td>✅ Требуется</td>
-      <td>❌ Не требуется</td>
+      <td>Да Требуется</td>
+      <td>Нет Не требуется</td>
     </tr>
     <tr>
       <td><strong>Scope</strong></td>
@@ -99,8 +99,8 @@ Issue:
     </tr>
     <tr>
       <td><strong>Параллельность с CDC</strong></td>
-      <td>❌ Binlog streaming blocked до завершения snapshot</td>
-      <td>✅ Binlog streaming продолжается параллельно</td>
+      <td>Нет Binlog streaming blocked до завершения snapshot</td>
+      <td>Да Binlog streaming продолжается параллельно</td>
     </tr>
     <tr>
       <td><strong>Locks</strong></td>
@@ -109,8 +109,8 @@ Issue:
     </tr>
     <tr>
       <td><strong>Resume after failure</strong></td>
-      <td>❌ Restart from scratch</td>
-      <td>✅ Resume from last completed chunk</td>
+      <td>Нет Restart from scratch</td>
+      <td>Да Resume from last completed chunk</td>
     </tr>
     <tr>
       <td><strong>Use Case</strong></td>
@@ -188,9 +188,9 @@ ALTER TABLE debezium_signal ADD PRIMARY KEY (id);
 
 | Column | Type       | Required | Purpose                                      |
 |--------|------------|----------|----------------------------------------------|
-| `id`   | VARCHAR(36)| ✅       | Unique ID (рекомендуется UUID())             |
-| `type` | VARCHAR(32)| ✅       | Signal type: execute-snapshot, stop-snapshot |
-| `data` | TEXT       | ✅       | JSON payload (может быть NULL для некоторых signals) |
+| `id`   | VARCHAR(36)| Да       | Unique ID (рекомендуется UUID())             |
+| `type` | VARCHAR(32)| Да       | Signal type: execute-snapshot, stop-snapshot |
+| `data` | TEXT       | Да       | JSON payload (может быть NULL для некоторых signals) |
 
 **Создание signal table:**
 
@@ -352,7 +352,7 @@ Chunk Size = (Desired Memory per Chunk MB) / (Average Row Size KB) * 1024
 "signal.data.collection": "inventory.debezium_signal"
 ```
 
-Если `inventory` в `database.include.list` — ✅ работает.
+Если `inventory` в `database.include.list` — <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> работает.
 
 **НО если:**
 
@@ -757,7 +757,7 @@ docker compose exec kafka kafka-topics \
 **Вместо SQL INSERT:**
 
 ```sql
--- ❌ НЕ работает на read-only replica
+-- [NO] НЕ работает на read-only replica
 INSERT INTO debezium_signal (id, type, data) VALUES (...);
 ```
 
@@ -874,7 +874,7 @@ CREATE TABLE debezium_signal (
   id VARCHAR(36),
   type VARCHAR(32),
   data TEXT
-  -- ❌ NO PRIMARY KEY
+  -- [NO] NO PRIMARY KEY
 );
 ```
 
@@ -1309,7 +1309,7 @@ FROM (
 - Multi-region CDC challenges (Aurora Global Database)
 
 **Модуль 8 roadmap:**
-- ✅ Lesson 1-9: MySQL binlog, GTID, Aurora parameter groups, snapshot modes
-- ✅ **Lesson 12: Incremental snapshots** ← Вы здесь
-- 🔜 Lesson 13: Production troubleshooting
-- 🔜 Lesson 14: MySQL/Aurora decision matrix
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Lesson 1-9: MySQL binlog, GTID, Aurora parameter groups, snapshot modes
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Lesson 12: Incremental snapshots** ← Вы здесь
+- <Icon name="refresh" className="text-blue-400 inline" size="1.2em" /> Lesson 13: Production troubleshooting
+- <Icon name="refresh" className="text-blue-400 inline" size="1.2em" /> Lesson 14: MySQL/Aurora decision matrix

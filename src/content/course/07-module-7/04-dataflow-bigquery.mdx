@@ -513,6 +513,7 @@ Managed template упрощает deployment, но ограничивает ка
 
 ```python
 import apache_beam as beam
+
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io.gcp.pubsub import ReadFromPubSub
 from apache_beam.io.gcp.bigquery import WriteToBigQuery
@@ -604,10 +605,10 @@ python custom_cdc_pipeline.py \
 
 | Managed Template | Custom Pipeline |
 |-----------------|----------------|
-| ✅ Быстрый setup (одна команда) | ❌ Требует код, тестирование |
-| ✅ Автоматическое schema evolution | ✅ Полный контроль трансформаций |
-| ✅ Google поддерживает и обновляет | ❌ Поддержка на вашей команде |
-| ❌ Ограниченная кастомизация | ✅ Любые сложные transformations |
+| <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Быстрый setup (одна команда) | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Требует код, тестирование |
+| <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Автоматическое schema evolution | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Полный контроль трансформаций |
+| <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Google поддерживает и обновляет | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Поддержка на вашей команде |
+| <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Ограниченная кастомизация | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Любые сложные transformations |
 
 **Рекомендация:** Начните с managed template. Переходите на custom pipeline только если template не покрывает ваш use case.
 
@@ -624,37 +625,37 @@ python custom_cdc_pipeline.py \
 ### Checklist развертывания
 
 **1. Cloud SQL (Prerequisites)**
-- ✅ Logical replication enabled (`cloudsql.logical_decoding=on`)
-- ✅ Replication user created with SELECT permissions
-- ✅ Publication created for CDC tables
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Logical replication enabled (`cloudsql.logical_decoding=on`)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Replication user created with SELECT permissions
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Publication created for CDC tables
 
 **2. Debezium Server (Prerequisites)**
-- ✅ GKE cluster created with Workload Identity enabled
-- ✅ Kubernetes Service Account with annotation
-- ✅ GCP Service Account with `roles/pubsub.publisher`
-- ✅ Workload Identity binding configured
-- ✅ ConfigMap with `application.properties`
-- ✅ PersistentVolumeClaim for offset storage
-- ✅ Deployment running and publishing events
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> GKE cluster created with Workload Identity enabled
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Kubernetes Service Account with annotation
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> GCP Service Account with `roles/pubsub.publisher`
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Workload Identity binding configured
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> ConfigMap with `application.properties`
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> PersistentVolumeClaim for offset storage
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Deployment running and publishing events
 
 **3. Pub/Sub**
-- ✅ Topics created (one per table: `cdc.schema.table`)
-- ✅ Subscriptions created (`topic-name-sub`)
-- ✅ Dead Letter Queue configured
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Topics created (one per table: `cdc.schema.table`)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Subscriptions created (`topic-name-sub`)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Dead Letter Queue configured
 
 **4. BigQuery**
-- ✅ Datasets created (`cdc_staging`, `cdc_replica`)
-- ✅ Location matches Dataflow region
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Datasets created (`cdc_staging`, `cdc_replica`)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Location matches Dataflow region
 
 **5. Dataflow**
-- ✅ Service Account with required roles
-- ✅ Template launched with correct parameters
-- ✅ Job status: Running
-- ✅ System lag < 60 seconds
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Service Account with required roles
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Template launched with correct parameters
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Job status: Running
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> System lag < 60 seconds
 
 **6. Monitoring**
-- ✅ Cloud Monitoring alerts configured (system lag, errors)
-- ✅ Changelog and replica tables populated
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Cloud Monitoring alerts configured (system lag, errors)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Changelog and replica tables populated
 
 **Проверка end-to-end:**
 

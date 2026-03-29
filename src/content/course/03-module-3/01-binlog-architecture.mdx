@@ -127,7 +127,7 @@ INSERT INTO orders (id, created_at) VALUES (1, NOW());
 |----------------|-----|-----------|-------|
 | **Детерминизм** | Детерминированный | Недетерминированный | Переменный |
 | **Размер binlog** | Большой | Маленький | Переменный |
-| **CDC совместимость** | ✅ Да | ❌ Нет | ⚠️ Не рекомендуется |
+| **CDC совместимость** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Да | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Нет | <Icon name="warning" className="text-yellow-400 inline" size="1.2em" /> Не рекомендуется |
 | **Debezium поддержка** | Полная | Нет | Ограниченная |
 | **Рекомендация** | **Используйте для CDC** | Только legacy | Избегайте |
 

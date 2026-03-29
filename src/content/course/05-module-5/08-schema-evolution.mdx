@@ -9,6 +9,7 @@ prerequisites: ["module-4/07-schema-registry-avro"]
 ---
 
 import {
+
   SchemaCompatibilityDiagram,
   EvolutionDecisionTreeDiagram,
 } from '../../../components/diagrams/module5';
@@ -42,10 +43,10 @@ Schema Registry поддерживает несколько **compatibility mode
 
 | Mode | Old Consumer + New Data | New Consumer + Old Data | Safe Changes | Upgrade Order |
 |------|-------------------------|-------------------------|--------------|---------------|
-| **BACKWARD** | ✅ Compatible | ❌ May fail | Add optional field<br/>Remove field | Consumers first, then producers |
-| **FORWARD** | ❌ May fail | ✅ Compatible | Add field<br/>Remove optional field | Producers first, then consumers |
-| **FULL** | ✅ Compatible | ✅ Compatible | Add/remove optional fields | Any order |
-| **NONE** | ❌ No checks | ❌ No checks | Any change | Manual coordination |
+| **BACKWARD** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Compatible | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> May fail | Add optional field<br/>Remove field | Consumers first, then producers |
+| **FORWARD** | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> May fail | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Compatible | Add field<br/>Remove optional field | Producers first, then consumers |
+| **FULL** | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Compatible | <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Compatible | Add/remove optional fields | Any order |
+| **NONE** | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> No checks | <Icon name="alert" className="text-red-400 inline" size="1.2em" /> No checks | Any change | Manual coordination |
 
 ### BACKWARD (default) — Old consumer reads new data
 
@@ -58,13 +59,13 @@ Schema Registry поддерживает несколько **compatibility mode
 4. Затем вы обновляете consumers до v2
 
 **Safe changes:**
-- ✅ Add optional field (with default value)
-- ✅ Remove field (old consumer не ожидал его)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Add optional field (with default value)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Remove field (old consumer не ожидал его)
 
 **Unsafe changes:**
-- ❌ Add required field (old consumer не знает, как его заполнить)
-- ❌ Change field type (старый код ожидает другой тип)
-- ❌ Rename field (для старого кода это удаление + добавление)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Add required field (old consumer не знает, как его заполнить)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Change field type (старый код ожидает другой тип)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Rename field (для старого кода это удаление + добавление)
 
 **Пример:**
 
@@ -106,11 +107,11 @@ Schema Registry поддерживает несколько **compatibility mode
 4. Затем обновляете connector до v2
 
 **Safe changes:**
-- ✅ Add field (new consumer использует default для старых events)
-- ✅ Remove optional field (new consumer не ожидает его)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Add field (new consumer использует default для старых events)
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Remove optional field (new consumer не ожидает его)
 
 **Unsafe changes:**
-- ❌ Remove required field (новый consumer ожидает его)
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Remove required field (новый consumer ожидает его)
 
 **Когда использовать:** Редко. BACKWARD проще в управлении.
 
@@ -119,13 +120,13 @@ Schema Registry поддерживает несколько **compatibility mode
 **Гарантия:** И старые, и новые consumers могут читать любые данные.
 
 **Safe changes:**
-- ✅ Add optional field with default
-- ✅ Remove optional field
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Add optional field with default
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Remove optional field
 
 **Unsafe changes:**
-- ❌ Add required field
-- ❌ Remove required field
-- ❌ Change field type
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Add required field
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Remove required field
+- <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Change field type
 
 **Когда использовать:** Когда нет контроля над порядком deployment (producers и consumers обновляются независимо).
 
@@ -174,8 +175,8 @@ Schema Registry поддерживает несколько **compatibility mode
 
 | Change | BACKWARD | FORWARD | FULL |
 |--------|----------|---------|------|
-| Add optional field (with default) | ✅ | ✅ | ✅ |
-| Add required field | ❌ | ✅ | ❌ |
+| Add optional field (with default) | Да | Да | Да |
+| Add required field | Нет | Да | Нет |
 
 **Пример безопасного добавления:**
 
@@ -201,8 +202,8 @@ ALTER TABLE customers ADD COLUMN phone VARCHAR(20);
 
 | Change | BACKWARD | FORWARD | FULL |
 |--------|----------|---------|------|
-| Remove optional field | ✅ | ✅ | ✅ |
-| Remove required field | ✅ | ❌ | ❌ |
+| Remove optional field | Да | Да | Да |
+| Remove required field | Да | Нет | Нет |
 
 **Пример:**
 
@@ -219,7 +220,7 @@ ALTER TABLE customers DROP COLUMN middle_name;
 
 | Change | BACKWARD | FORWARD | FULL |
 |--------|----------|---------|------|
-| Any type change | ❌ | ❌ | ❌ |
+| Any type change | Нет | Нет | Нет |
 
 **Никогда не безопасно** ни для одного режима.
 
@@ -244,7 +245,7 @@ ALTER TABLE customers ALTER COLUMN email TYPE TEXT;
 
 | Change | BACKWARD | FORWARD | FULL |
 |--------|----------|---------|------|
-| Rename field | ❌ | ❌ | ❌ |
+| Rename field | Нет | Нет | Нет |
 
 **Avro воспринимает rename как DELETE + ADD**, что не проходит compatibility check.
 
@@ -261,7 +262,7 @@ ALTER TABLE customers ALTER COLUMN email TYPE TEXT;
 
 | Change | BACKWARD | FORWARD | FULL |
 |--------|----------|---------|------|
-| Change default | ✅ | ✅ | ✅ |
+| Change default | Да | Да | Да |
 
 **Безопасно** — default используется только при отсутствии значения.
 
@@ -400,8 +401,8 @@ ALTER TABLE customers ADD COLUMN phone VARCHAR(20);
 6. Debezium использует schema ID v2 для новых событий
 
 **Результат:**
-- ✅ Old consumers игнорируют `phone`
-- ✅ New consumers видят `phone = null` для старых records
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Old consumers игнорируют `phone`
+- <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> New consumers видят `phone = null` для старых records
 
 ### Сценарий 2: Добавление NOT NULL колонки (UNSAFE)
 
@@ -437,7 +438,7 @@ ALTER TABLE customers DROP COLUMN middle_name;
 **Debezium:**
 1. Новая schema больше не содержит `middle_name`
 2. Schema Registry проверяет BACKWARD compatibility
-3. ✅ OK — удаление поля разрешено
+3. <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> OK — удаление поля разрешено
 
 **Результат:**
 - Old consumers ожидают `middle_name` → Avro deserializer предоставит default value (null)
@@ -453,7 +454,7 @@ ALTER TABLE customers ALTER COLUMN customer_id TYPE BIGINT;
 **Проблема:**
 - Старая schema: `customer_id: int`
 - Новая schema: `customer_id: long`
-- Schema Registry: ❌ REJECTED (тип изменился)
+- Schema Registry: <Icon name="alert" className="text-red-400 inline" size="1.2em" /> REJECTED (тип изменился)
 
 **Решение:**
 1. Создайте новую колонку: `customer_id_v2 BIGINT`

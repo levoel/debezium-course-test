@@ -1165,18 +1165,18 @@ echo "[1/7] Pre-Failover Validation"
 echo "  → Checking connector status..."
 CONNECTOR_STATE=$(curl -s "$KAFKA_CONNECT_URL/connectors/$CONNECTOR_NAME/status" | jq -r '.connector.state')
 if [ "$CONNECTOR_STATE" != "RUNNING" ]; then
-  echo "  ✗ Connector not RUNNING (state: $CONNECTOR_STATE)"
+  echo "  [NO] Connector not RUNNING (state: $CONNECTOR_STATE)"
   echo "  ABORT: Fix connector before failover"
   exit 1
 fi
-echo "  ✓ Connector RUNNING"
+echo "  [OK] Connector RUNNING"
 
 # Record current GTID on primary
 echo "  → Recording current GTID on primary..."
 CURRENT_GTID=$(mysql -h "$CLUSTER_ID.cluster-xxxxx.us-east-1.rds.amazonaws.com" \
   -u admin -pPASSWORD \
   -sNe "SELECT @@global.gtid_executed")
-echo "  ✓ Current GTID: $CURRENT_GTID"
+echo "  [OK] Current GTID: $CURRENT_GTID"
 
 # Check lag
 echo "  → Checking connector lag..."
@@ -1185,12 +1185,12 @@ MAX_LAG=$(docker compose exec kafka kafka-consumer-groups \
   --group connect-$CONNECTOR_NAME \
   --describe | awk 'NR>1 {print $6}' | sort -n | tail -1)
 if [ "$MAX_LAG" -gt 1000 ]; then
-  echo "  ⚠ High lag: $MAX_LAG events"
+  echo "  [WARN] High lag: $MAX_LAG events"
   echo "  Recommendation: Wait for lag < 1000 before failover"
   read -p "  Continue anyway? (yes/no): " CONFIRM
   if [ "$CONFIRM" != "yes" ]; then exit 1; fi
 else
-  echo "  ✓ Lag acceptable: $MAX_LAG events"
+  echo "  [OK] Lag acceptable: $MAX_LAG events"
 fi
 
 # === FAILOVER EXECUTION ===
@@ -1221,7 +1221,7 @@ while true; do
   echo "  Cluster status: $STATUS"
 
   if [ "$STATUS" == "available" ]; then
-    echo "  ✓ Failover complete"
+    echo "  [OK] Failover complete"
     break
   fi
 
@@ -1237,7 +1237,7 @@ NEW_PRIMARY=$(aws rds describe-db-clusters \
   --query 'DBClusters[0].DBClusterMembers[?IsClusterWriter==`true`].DBInstanceIdentifier' \
   --output text)
 
-echo "  ✓ New primary: $NEW_PRIMARY"
+echo "  [OK] New primary: $NEW_PRIMARY"
 
 # Wait for DNS propagation
 echo "  → Waiting for DNS propagation (30s)..."
@@ -1252,7 +1252,7 @@ while [ $RETRY -lt 12 ]; do  # 2 minutes max
   TASK_STATE=$(curl -s "$KAFKA_CONNECT_URL/connectors/$CONNECTOR_NAME/status" | jq -r '.tasks[0].state')
 
   if [ "$TASK_STATE" == "RUNNING" ]; then
-    echo "  ✓ Connector task recovered"
+    echo "  [OK] Connector task recovered"
     break
   else
     echo "  Connector task state: $TASK_STATE (retry $RETRY/12)"
@@ -1262,7 +1262,7 @@ while [ $RETRY -lt 12 ]; do  # 2 minutes max
 done
 
 if [ $RETRY -eq 12 ]; then
-  echo "  ✗ Connector task not recovered after 2 minutes"
+  echo "  [NO] Connector task not recovered after 2 minutes"
   echo "  Manual intervention required"
 fi
 
@@ -1276,7 +1276,7 @@ NEW_GTID=$(mysql -h "$CLUSTER_ID.cluster-xxxxx.us-east-1.rds.amazonaws.com" \
 
 echo "  Old GTID: $CURRENT_GTID"
 echo "  New GTID: $NEW_GTID"
-echo "  ✓ GTID continuity (manual verification required)"
+echo "  [OK] GTID continuity (manual verification required)"
 
 # === TEST WRITE ===
 echo ""
@@ -1298,7 +1298,7 @@ docker compose exec kafka kafka-console-consumer \
   --topic mysql-server.inventory.customers \
   --from-beginning \
   --timeout-ms 5000 \
-  | grep -q "$TEST_EMAIL" && echo "  ✓ CDC event confirmed" || echo "  ✗ CDC event not found"
+  | grep -q "$TEST_EMAIL" && echo "  [OK] CDC event confirmed" || echo "  [NO] CDC event not found"
 
 echo ""
 echo "=== Failover Complete ==="

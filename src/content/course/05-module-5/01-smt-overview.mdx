@@ -9,6 +9,7 @@ prerequisites: ["module-3/07-disaster-recovery-procedures"]
 ---
 
 import {
+
   ConsumerComplexityDiagram,
   SmtSolutionDiagram,
   SmtExecutionModelDiagram,
@@ -268,7 +269,7 @@ Debezium 2.5.4 предоставляет набор production-ready SMT для
 
 ## Когда использовать SMT?
 
-### ✅ Good Use Cases
+### <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Good Use Cases
 
 | Сценарий | SMT | Обоснование |
 |---------|-----|-------------|
@@ -278,7 +279,7 @@ Debezium 2.5.4 предоставляет набор production-ready SMT для
 | Объединение shards | ByLogicalTableRouter | Логическая группировка таблиц |
 | Добавление timestamp | InsertField | Простая метаданные |
 
-### ❌ Anti-Patterns
+### <Icon name="alert" className="text-red-400 inline" size="1.2em" /> Anti-Patterns
 
 | Сценарий | Почему плохо | Альтернатива |
 |---------|--------------|--------------|

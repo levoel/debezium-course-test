@@ -728,7 +728,7 @@ SHOW MASTER STATUS;
 ### Pitfall Deep Dive: Connecting to Reader Endpoint
 
 ```json
-// ❌ НЕПРАВИЛЬНО: Debezium connector config
+// [NO] НЕПРАВИЛЬНО: Debezium connector config
 {
   "database.hostname": "my-aurora-cluster.cluster-ro-abc123.us-east-1.rds.amazonaws.com",  // Reader endpoint!
   "database.port": "3306",
@@ -744,7 +744,7 @@ SHOW MASTER STATUS;
 - Intermittent failures (если reader promoted to writer)
 
 ```json
-// ✅ ПРАВИЛЬНО: Use writer (cluster) endpoint
+// [OK] ПРАВИЛЬНО: Use writer (cluster) endpoint
 {
   "database.hostname": "my-aurora-cluster.cluster-abc123.us-east-1.rds.amazonaws.com",  // Cluster endpoint (writer)
   "database.port": "3306",

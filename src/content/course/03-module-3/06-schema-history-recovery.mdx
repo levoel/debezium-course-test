@@ -425,7 +425,7 @@ null    {"ddl":"ALTER TABLE `customers` ADD COLUMN `phone` VARCHAR(20)","positio
 
 Разберём типичные сценарии сбоев и процедуры восстановления.
 
-### Scenario A: Normal Connector Restart ✅
+### Scenario A: Normal Connector Restart <Icon name="check" className="text-emerald-400 inline" size="1.2em" />
 
 **Что происходит:**
 - Connector останавливается (deploy, reschedule, config update)
@@ -441,7 +441,7 @@ null    {"ddl":"ALTER TABLE `customers` ADD COLUMN `phone` VARCHAR(20)","positio
 
 ---
 
-### Scenario B: Schema History Topic Partially Purged ⚠️
+### Scenario B: Schema History Topic Partially Purged <Icon name="warning" className="text-yellow-400 inline" size="1.2em" />
 
 **Симптом:**
 ```
@@ -541,7 +541,7 @@ curl -X POST http://localhost:8083/connectors/mysql-inventory-connector/restart
 
 ---
 
-### Scenario C: Schema History Topic Corrupted 💥
+### Scenario C: Schema History Topic Corrupted <Icon name="alert" className="text-red-400 inline" size="1.2em" />
 
 **Симптом:**
 - Events содержат неправильные колонки
@@ -600,7 +600,7 @@ curl -X POST http://localhost:8083/connectors \
 
 ---
 
-### Scenario D: Multiple Connectors Sharing Topic 🚫
+### Scenario D: Multiple Connectors Sharing Topic <Icon name="alert" className="text-red-400 inline" size="1.2em" />
 
 <Callout type="danger">
 **Anti-pattern: Shared schema history topic**
@@ -629,7 +629,7 @@ ERROR: Column 'customer_id' doesn't exist in table 'products'
 {
   "name": "mysql-connector-a",
   "config": {
-    "schema.history.internal.kafka.topic": "schema-changes.shared"  // ❌ WRONG
+    "schema.history.internal.kafka.topic": "schema-changes.shared"  // [NO] WRONG
   }
 }
 
@@ -637,7 +637,7 @@ ERROR: Column 'customer_id' doesn't exist in table 'products'
 {
   "name": "mysql-connector-b",
   "config": {
-    "schema.history.internal.kafka.topic": "schema-changes.shared"  // ❌ WRONG
+    "schema.history.internal.kafka.topic": "schema-changes.shared"  // [NO] WRONG
   }
 }
 ```
@@ -649,7 +649,7 @@ ERROR: Column 'customer_id' doesn't exist in table 'products'
 {
   "name": "mysql-connector-a",
   "config": {
-    "schema.history.internal.kafka.topic": "schema-changes.mysql-connector-a"  // ✅ UNIQUE
+    "schema.history.internal.kafka.topic": "schema-changes.mysql-connector-a"  // [OK] UNIQUE
   }
 }
 
@@ -657,7 +657,7 @@ ERROR: Column 'customer_id' doesn't exist in table 'products'
 {
   "name": "mysql-connector-b",
   "config": {
-    "schema.history.internal.kafka.topic": "schema-changes.mysql-connector-b"  // ✅ UNIQUE
+    "schema.history.internal.kafka.topic": "schema-changes.mysql-connector-b"  // [OK] UNIQUE
   }
 }
 ```
@@ -890,14 +890,14 @@ Schema history topic name hardcoded в коннекторе. Если вы resto
 Эти DDL операции НЕ ломают CDC пайплайн:
 
 ```sql
--- ✅ ADD COLUMN (nullable или с default)
+-- [OK] ADD COLUMN (nullable или с default)
 ALTER TABLE customers ADD COLUMN phone VARCHAR(20);
 ALTER TABLE customers ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP;
 
--- ✅ ADD INDEX (не влияет на CDC)
+-- [OK] ADD INDEX (не влияет на CDC)
 CREATE INDEX idx_email ON customers(email);
 
--- ✅ RENAME COLUMN (Debezium видит новое имя)
+-- [OK] RENAME COLUMN (Debezium видит новое имя)
 ALTER TABLE customers RENAME COLUMN name TO full_name;
 ```
 
@@ -914,13 +914,13 @@ ALTER TABLE customers RENAME COLUMN name TO full_name;
 Эти DDL операции могут сломать consumers:
 
 ```sql
--- ⚠️ DROP COLUMN
+-- [WARN] DROP COLUMN
 ALTER TABLE customers DROP COLUMN email;
 
--- ⚠️ CHANGE COLUMN TYPE
+-- [WARN] CHANGE COLUMN TYPE
 ALTER TABLE customers MODIFY COLUMN id BIGINT;
 
--- ⚠️ RENAME TABLE
+-- [WARN] RENAME TABLE
 RENAME TABLE customers TO users;
 ```
 

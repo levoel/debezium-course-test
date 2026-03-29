@@ -9,6 +9,7 @@ prerequisites: ["module-4/05-outbox-pattern-theory"]
 ---
 
 import {
+
   OutboxEventRouterSmtDiagram,
 } from '../../../components/diagrams/module5';
 
@@ -230,6 +231,7 @@ WHERE created_at < NOW() - INTERVAL '1 hour';
 import psycopg2
 import json
 import uuid
+
 from datetime import datetime
 
 def approve_order(order_id: str, amount: float):
@@ -406,7 +408,7 @@ def handle_order_approved(event):
     order_id = event['orderId']
     amount = event['amount']
 
-    print(f"✅ Order {order_id} approved for ${amount}")
+    print(f"[OK] Order {order_id} approved for ${amount}")
 
     # Send notification email, update analytics, etc.
     # This code MUST be idempotent (safe to execute multiple times)
@@ -414,7 +416,7 @@ def handle_order_approved(event):
 def handle_order_cancelled(event):
     """Process OrderCancelled event (idempotent)"""
     order_id = event['orderId']
-    print(f"❌ Order {order_id} cancelled")
+    print(f"[NO] Order {order_id} cancelled")
 ```
 
 ### Production Deduplication: Database
@@ -615,7 +617,7 @@ id:550e8400-e29b-41d4-a716-446655440000,type:OrderApproved    order-123    {"ord
 - **Key:** `order-123` (aggregateid)
 - **Value:** Clean JSON payload
 
-✅ **Success!** Outbox Event Router преобразовал CDC event в domain event.
+<Icon name="check" className="text-emerald-400 inline" size="1.2em" /> **Success!** Outbox Event Router преобразовал CDC event в domain event.
 
 ### Шаг 6: Проверьте Cleanup
 
