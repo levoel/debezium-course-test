@@ -455,7 +455,7 @@ CREATE TABLE orders (
 
 ### 5. Missing Idempotency
 
-**Ошибка:** Downstream consumers используют INSERT вместо UPSERT — at-least-once delivery приводит к duplicates.
+**Ошибка:** Downstream consumers используют INSERT вместо UPSERT — at-least-once delivery (default для Debezium) приводит к duplicates.
 
 **Симптомы:**
 - После connector restart BigQuery содержит duplicate rows
@@ -467,7 +467,7 @@ CREATE TABLE orders (
 - PyFlink: `table.exec.source.cdc-events-duplicate=true`
 - Design all operations to be idempotent
 
-**Prevention:** Default to at-least-once + idempotency, not exactly-once.
+**Prevention:** Default to at-least-once + idempotency. Для пайплайнов, где идемпотентность невозможна, можно включить exactly-once source semantics в Debezium 3.3+ через worker-настройку Kafka Connect 3.3+ `exactly.once.source.support=enabled` (требуется distributed mode и transactional producer). EOS убирает дубликаты на стороне Kafka, но downstream sinks (BigQuery, S3) всё равно нуждаются в idempotent writes.
 
 <KnowledgeCheck
   question={'Какой scoring level получит capstone проект, в котором pipeline работает end-to-end, connector restart протестирован, но Grafana dashboard отсутствует и нет runbook?'}
@@ -656,7 +656,7 @@ CREATE TABLE orders (
 
 1. **Production readiness** — это не просто "код работает", а возможность deploy, monitor, debug, и scale систему
 2. **Four Golden Signals** (latency, traffic, errors, saturation) — foundation для monitoring любой distributed системы
-3. **Fault tolerance** критична: at-least-once delivery + idempotency = no data loss, no duplicates
+3. **Fault tolerance** критична: at-least-once delivery + idempotency = no data loss, no duplicates. Альтернатива в Debezium 3.3+ — exactly-once source semantics для всех core connectors (`exactly.once.source.support=enabled` в Kafka Connect 3.3+)
 4. **Checklist** — learning tool для self-directed improvement, не strict exam
 5. **Common mistakes:** replication slot exhaustion, missing REPLICA IDENTITY FULL, BigQuery primary key issues, snapshot mode misunderstanding
 6. **Monitoring** — first-class deliverable: dashboard + alerts обязательны для production

@@ -327,7 +327,7 @@ conn.commit()
 
 ## Consumer Idempotency Pattern
 
-Outbox Pattern гарантирует **at-least-once delivery** → consumers должны обрабатывать duplicate events.
+По умолчанию Outbox Pattern гарантирует **at-least-once delivery** → consumers должны обрабатывать duplicate events. (В Debezium 3.3+ для всех core connectors можно включить exactly-once source semantics через `exactly.once.source.support=enabled` в Kafka Connect 3.3+, тогда дубликаты на стороне Kafka исключаются — но идемпотентность downstream остаётся хорошей практикой.)
 
 ### Python Consumer с Deduplication
 

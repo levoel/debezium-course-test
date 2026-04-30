@@ -36,7 +36,7 @@ import { DetailedArchitectureComparisonDiagram, EventFormatComparisonDiagram, Re
 |--------|----------------|--------------|
 | **Изначальное назначение** | Crash recovery (durability) | Replication (data distribution) |
 | **Формат данных** | Физический (блоки страниц) | Логический (row changes) |
-| **CDC механизм** | Logical decoding (pgoutput/wal2json) | Прямое чтение (binlog уже логический) |
+| **CDC механизм** | Logical decoding (pgoutput; wal2json — discontinued) | Прямое чтение (binlog уже логический) |
 | **Position tracking** | Server-side (replication slots) | Client-side (Kafka Connect offsets) |
 | **Position формат** | LSN (hexadecimal, 0/16B374D8) | GTID (uuid:sequence) или file:offset |
 | **DDL tracking** | Implicit (в WAL messages) | Explicit (schema.history.internal.kafka.topic) |
@@ -307,7 +307,7 @@ kafka-topics --bootstrap-server kafka:9092 \
 
 | PostgreSQL Only | MySQL Only |
 |-----------------|------------|
-| `plugin.name` (pgoutput/wal2json) | `database.server.id` (cluster member ID) |
+| `plugin.name` (pgoutput; wal2json — discontinued) | `database.server.id` (cluster member ID) |
 | `slot.name` (replication slot) | `schema.history.internal.*` (DDL tracking) |
 | `publication.name` (table filter) | `gtid.source.includes` (GTID filtering) |
 | `slot.drop.on.stop` (cleanup control) | `binlog.buffer.size` (event buffering) |

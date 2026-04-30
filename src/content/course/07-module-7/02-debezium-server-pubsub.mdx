@@ -293,7 +293,7 @@ version: '3.8'
 
 services:
   debezium-server:
-    image: debezium/server:2.5
+    image: debezium/server:3.4
     container_name: debezium-server
     volumes:
       - ./config:/debezium/conf
@@ -321,7 +321,7 @@ docker run -d \
   -v $(pwd)/secrets:/secrets \
   -e GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-key.json \
   -p 8080:8080 \
-  debezium/server:2.5
+  debezium/server:3.4
 ```
 
 ### Health Check
@@ -394,7 +394,7 @@ spec:
     spec:
       containers:
       - name: server
-        image: debezium/server:2.5
+        image: debezium/server:3.4
         volumeMounts:
         - name: offset-storage
           mountPath: /debezium/data
@@ -475,7 +475,7 @@ gcloud pubsub subscriptions pull test-orders-sub \
     "created_at": "2026-02-01T12:34:56Z"
   },
   "source": {
-    "version": "2.5.4.Final",
+    "version": "3.4.0.Final",
     "connector": "postgresql",
     "name": "cdc",
     "ts_ms": 1738413296000,

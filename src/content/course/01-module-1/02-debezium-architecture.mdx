@@ -187,12 +187,12 @@ curl -X DELETE http://localhost:8083/connectors/postgres-connector
 
 | Компонент | Версия | Почему |
 |-----------|--------|--------|
-| **Debezium** | 2.5.4 | Стабильная версия, совместимость с ARM64 |
+| **Debezium** | 3.4.0 | Актуальная стабильная версия (декабрь 2025), Kafka 4.1, EOS support |
 | **Kafka** | 7.8.1 (Confluent) | KRaft mode (без ZooKeeper), production-ready |
 | **PostgreSQL** | 15+ | Встроенный pgoutput, логическая репликация |
 | **Python** | confluent-kafka | Нативная производительность через librdkafka |
 
-> **Примечание:** Debezium 3.x пока не используется из-за проблем с Java 21 на ARM64 (Apple Silicon). Версия 2.5.x полностью стабильна и поддерживает все необходимые функции.
+> **Примечание:** Курс использует Debezium 3.4.0.Final — актуальную стабильную линейку Debezium 3.x (3.4 GA в декабре 2025). Линейка 3.x базируется на Kafka 4.1, требует Java 17+, добавляет per-table метрики (3.0+), exactly-once semantics для всех core connectors (3.3+) и parallel chunked snapshot (3.5+).
 
 ## Выбор режима развертывания
 

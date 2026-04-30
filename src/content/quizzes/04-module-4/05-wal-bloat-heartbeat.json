@@ -114,15 +114,15 @@
     {
       "id": "dbz-m04-05-code-1",
       "type": "code-challenge",
-      "question": "Напишите YAML-конфигурацию Docker Compose для Debezium Connect с настройками heartbeat. Укажите образ (quay.io/debezium/connect:2.5), порт 8083, и переменные окружения: BOOTSTRAP_SERVERS, GROUP_ID, CONNECT_HEARTBEAT_INTERVAL_MS (10000), CONNECT_HEARTBEAT_ACTION_QUERY.",
+      "question": "Напишите YAML-конфигурацию Docker Compose для Debezium Connect с настройками heartbeat. Укажите образ (quay.io/debezium/connect:3.4), порт 8083, и переменные окружения: BOOTSTRAP_SERVERS, GROUP_ID, CONNECT_HEARTBEAT_INTERVAL_MS (10000), CONNECT_HEARTBEAT_ACTION_QUERY.",
       "language": "yaml",
       "starterCode": "version: '3'\nservices:\n  connect:\n    image: # образ Debezium Connect\n    ports:\n      # порт REST API\n    environment:\n      # Kafka и heartbeat настройки\n",
-      "solutionCode": "version: '3'\nservices:\n  connect:\n    image: quay.io/debezium/connect:2.5\n    ports:\n      - '8083:8083'\n    environment:\n      BOOTSTRAP_SERVERS: kafka:9092\n      GROUP_ID: 1\n      CONNECT_HEARTBEAT_INTERVAL_MS: 10000\n      CONNECT_HEARTBEAT_ACTION_QUERY: \"SELECT pg_logical_emit_message(false, 'heartbeat', now()::varchar)\"\n",
+      "solutionCode": "version: '3'\nservices:\n  connect:\n    image: quay.io/debezium/connect:3.4\n    ports:\n      - '8083:8083'\n    environment:\n      BOOTSTRAP_SERVERS: kafka:9092\n      GROUP_ID: 1\n      CONNECT_HEARTBEAT_INTERVAL_MS: 10000\n      CONNECT_HEARTBEAT_ACTION_QUERY: \"SELECT pg_logical_emit_message(false, 'heartbeat', now()::varchar)\"\n",
       "testCases": [
         {
           "id": "tc1",
           "description": "Docker Compose с heartbeat конфигурацией",
-          "expectedOutput": "{\"version\":\"3\",\"services\":{\"connect\":{\"image\":\"quay.io/debezium/connect:2.5\",\"ports\":[\"8083:8083\"],\"environment\":{\"BOOTSTRAP_SERVERS\":\"kafka:9092\",\"GROUP_ID\":1,\"CONNECT_HEARTBEAT_INTERVAL_MS\":10000,\"CONNECT_HEARTBEAT_ACTION_QUERY\":\"SELECT pg_logical_emit_message(false, 'heartbeat', now()::varchar)\"}}}}",
+          "expectedOutput": "{\"version\":\"3\",\"services\":{\"connect\":{\"image\":\"quay.io/debezium/connect:3.4\",\"ports\":[\"8083:8083\"],\"environment\":{\"BOOTSTRAP_SERVERS\":\"kafka:9092\",\"GROUP_ID\":1,\"CONNECT_HEARTBEAT_INTERVAL_MS\":10000,\"CONNECT_HEARTBEAT_ACTION_QUERY\":\"SELECT pg_logical_emit_message(false, 'heartbeat', now()::varchar)\"}}}}",
           "hidden": false
         }
       ],

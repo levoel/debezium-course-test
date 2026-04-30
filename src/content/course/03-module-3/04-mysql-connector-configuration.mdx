@@ -199,7 +199,7 @@ Topic: schema-changes.mysql-server	PartitionCount: 1	ReplicationFactor: 1	Config
 
 **Что это**: Java класс, реализующий MySQL CDC connector.
 
-**Где находится**: Bundled в Debezium Connect Docker image (`quay.io/debezium/connect:2.5`).
+**Где находится**: Bundled в Debezium Connect Docker image (`quay.io/debezium/connect:3.4`).
 
 **Альтернативы**:
 - `io.debezium.connector.postgresql.PostgresConnector` (для PostgreSQL)
@@ -571,7 +571,7 @@ docker compose exec kafka kafka-console-consumer \
       "email": "sally.thomas@example.com"
     },
     "source": {
-      "version": "2.5.0.Final",
+      "version": "3.4.0.Final",
       "connector": "mysql",
       "name": "mysql-server",
       "ts_ms": 1738406400000,

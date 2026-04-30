@@ -511,7 +511,7 @@ table_env.get_config().set("execution.checkpointing.interval", "60000")
 
 ### <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Pattern 2: At-least-once delivery с idempotency
 
-**Зачем:** CDC дает at-least-once; downstream должен быть idempotent.
+**Зачем:** По умолчанию CDC дает at-least-once; downstream должен быть idempotent.
 
 ```python
 # PyFlink config
@@ -519,6 +519,8 @@ table_env.get_config().set("table.exec.source.cdc-events-duplicate", "true")
 
 # BigQuery uses PRIMARY KEY for automatic UPSERT
 ```
+
+> **Debezium 3.3+ exactly-once semantics.** С версии 3.3 (октябрь 2025) Debezium поддерживает exactly-once source semantics для всех core connectors (PostgreSQL, MySQL, MariaDB, MongoDB, Oracle, SQL Server). Включается на уровне Kafka Connect 3.3+ через worker-настройку `exactly.once.source.support=enabled` (плюс distributed mode и transactional producer). Это убирает дубликаты на стороне Kafka, но не отменяет требование идемпотентности downstream при доставке в системы за пределами Kafka (BigQuery, S3, Pub/Sub) — там EOS зависит от sink-коннектора.
 
 ### <Icon name="check" className="text-emerald-400 inline" size="1.2em" /> Pattern 3: Monitoring Four Golden Signals
 
@@ -559,7 +561,7 @@ table_env.get_config().set("table.exec.source.cdc-events-duplicate", "true")
 7. **BigQuery CDC требует PRIMARY KEY (NOT ENFORCED)** для UPSERT/DELETE
 8. **Monitoring = Four Golden Signals:** Latency, Traffic, Errors, Saturation
 9. **Anti-patterns избегать:** No REPLICA IDENTITY, no primary key, snapshot.mode=always, hardcoded credentials
-10. **Production patterns:** Heartbeat, at-least-once + idempotency, monitoring, runbook
+10. **Production patterns:** Heartbeat, at-least-once + idempotency (или exactly-once через `exactly.once.source.support=enabled` в Debezium 3.3+/Kafka Connect 3.3+), monitoring, runbook
 
 ## Что дальше?
 

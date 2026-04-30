@@ -57,7 +57,7 @@
         {
           "term": "pgoutput",
           "termEn": "Плагин pgoutput",
-          "definition": "Встроенный плагин PostgreSQL для logical decoding (с версии 10+). pgoutput — нативный плагин, который не требует отдельной установки, в отличие от wal2json или decoderbufs. Debezium по умолчанию использует pgoutput для максимальной совместимости.",
+          "definition": "Встроенный плагин PostgreSQL для logical decoding (с версии 10+). pgoutput — нативный плагин, который не требует отдельной установки, в отличие от decoderbufs (или discontinued wal2json). Debezium по умолчанию использует pgoutput для максимальной совместимости.",
           "example": "-- PostgreSQL config для pgoutput\nwal_level = logical\nmax_replication_slots = 4\nmax_wal_senders = 4\n\n-- Connector config\n{\n  \"plugin.name\": \"pgoutput\",\n  \"publication.name\": \"dbz_publication\"\n}\n\n-- Проверка использования pgoutput\nSELECT slot_name, plugin\nFROM pg_replication_slots;\n-- Результат: debezium | pgoutput",
           "relatedLessons": [
             { "title": "WAL Configuration", "slug": "02-module-2/03-wal-configuration-tuning" },
@@ -252,7 +252,7 @@
           "term": "CDC",
           "termEn": "Change Data Capture",
           "definition": "Паттерн захвата изменений данных в реальном времени. Вместо опроса (polling) базы данных, CDC читает журналы транзакций (WAL, binlog) для получения событий INSERT, UPDATE, DELETE с минимальной задержкой и нагрузкой.",
-          "example": "// CDC Event Structure (Debezium JSON)\n{\n  \"before\": null,  // Состояние до изменения\n  \"after\": {       // Новое состояние\n    \"id\": 1001,\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\"\n  },\n  \"source\": {\n    \"version\": \"2.1.0.Final\",\n    \"connector\": \"postgresql\",\n    \"name\": \"dbserver1\",\n    \"ts_ms\": 1486500577691,\n    \"db\": \"inventory\",\n    \"schema\": \"public\",\n    \"table\": \"customers\",\n    \"lsn\": 33023704\n  },\n  \"op\": \"c\",  // c=create, u=update, d=delete, r=read\n  \"ts_ms\": 1486500584591\n}",
+          "example": "// CDC Event Structure (Debezium JSON)\n{\n  \"before\": null,  // Состояние до изменения\n  \"after\": {       // Новое состояние\n    \"id\": 1001,\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\"\n  },\n  \"source\": {\n    \"version\": \"3.4.0.Final\",\n    \"connector\": \"postgresql\",\n    \"name\": \"dbserver1\",\n    \"ts_ms\": 1486500577691,\n    \"db\": \"inventory\",\n    \"schema\": \"public\",\n    \"table\": \"customers\",\n    \"lsn\": 33023704\n  },\n  \"op\": \"c\",  // c=create, u=update, d=delete, r=read\n  \"ts_ms\": 1486500584591\n}",
           "relatedLessons": [
             { "title": "CDC Fundamentals", "slug": "01-module-1/01-cdc-fundamentals" },
             { "title": "Event Structure", "slug": "05-module-5/01-event-structure" }
@@ -281,7 +281,7 @@
         {
           "term": "Exactly-Once",
           "termEn": "Ровно один раз",
-          "definition": "Гарантия доставки сообщения, при которой каждое событие обрабатывается ровно один раз без потерь и дубликатов. В Kafka достигается через idempotent producer и transactional API. Debezium + Kafka обеспечивают at-least-once, exactly-once требует idempotent consumer.",
+          "definition": "Гарантия доставки сообщения, при которой каждое событие обрабатывается ровно один раз без потерь и дубликатов. В Kafka достигается через idempotent producer и transactional API. По умолчанию Debezium + Kafka обеспечивают at-least-once, и тогда exactly-once требует idempotent consumer. Начиная с Debezium 3.3 (октябрь 2025) для всех core connectors (PostgreSQL, MySQL, MariaDB, MongoDB, Oracle, SQL Server) доступна exactly-once source semantics — включается через worker-настройку Kafka Connect 3.3+ `exactly.once.source.support=enabled`.",
           "example": "// Kafka Streams - exactly-once\nProperties props = new Properties();\nprops.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,\n  StreamsConfig.EXACTLY_ONCE_V2);\n\n// Debezium config - основа для exactly-once\n{\n  // Kafka producer идемпотентность\n  \"producer.enable.idempotence\": true,\n\n  // Consumer должен сам обеспечить идемпотентность\n  // через deduplication или event_id tracking\n}\n\n// Consumer pattern - deduplication\nSET processed_events = new Set();\nfor (event in stream) {\n  if (!processed_events.has(event.id)) {\n    process(event);\n    processed_events.add(event.id);\n  }\n}",
           "relatedLessons": [
             { "title": "Delivery Semantics", "slug": "03-module-3/07-delivery-semantics" },

@@ -30,7 +30,7 @@ gcloud iam service-accounts keys create key.json \
 # Затем монтировать key.json в контейнер
 docker run -v $(pwd)/key.json:/app/key.json \
   -e GOOGLE_APPLICATION_CREDENTIALS=/app/key.json \
-  debezium/server:2.5
+  debezium/server:3.4
 ```
 
 **Почему это опасно:**
@@ -183,7 +183,7 @@ spec:
       serviceAccountName: debezium-server
       containers:
       - name: server
-        image: debezium/server:2.5
+        image: debezium/server:3.4
         env:
         # Workload Identity НЕ требует GOOGLE_APPLICATION_CREDENTIALS
         # GKE Metadata Server автоматически предоставляет токены
@@ -365,7 +365,7 @@ spec:
       serviceAccountName: debezium-server
       containers:
       - name: server
-        image: debezium/server:2.5
+        image: debezium/server:3.4
         env:
         - name: DB_USERNAME
           valueFrom:
@@ -599,7 +599,7 @@ spec:
       serviceAccountName: debezium-server
       containers:
       - name: server
-        image: debezium/server:2.5
+        image: debezium/server:3.4
         resources:
           requests:
             memory: "512Mi"

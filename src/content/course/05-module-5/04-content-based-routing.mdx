@@ -144,13 +144,13 @@ import {
 
 ### Установка Groovy в Debezium
 
-ContentBasedRouter требует **JSR 223 scripting engine** (Groovy). В Debezium 2.5.4 Groovy **не включен по умолчанию**.
+ContentBasedRouter требует **JSR 223 scripting engine** (Groovy). В Debezium 3.4 Groovy **не включен по умолчанию**.
 
 **Добавление Groovy в Docker-образ:**
 
 ```dockerfile
 # labs/Dockerfile.debezium-with-groovy
-FROM quay.io/debezium/connect:2.5.4.Final
+FROM quay.io/debezium/connect:3.4.0.Final
 
 # Download Groovy JSR 223 engine
 USER root
@@ -432,7 +432,7 @@ consumer.subscribe(['orders-us'])
 
 ContentBasedRouter выполняет Groovy expression для **каждого события**. Сложные expressions добавляют latency.
 
-**Бенчмарк (Debezium 2.5.4, 10K events/sec):**
+**Бенчмарк (Debezium 3.4, 10K events/sec):**
 - Простое expression (`value.region == 'EU'`) — +1-2ms overhead
 - Сложное expression (несколько условий, функции) — +5-10ms overhead
 

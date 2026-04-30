@@ -62,15 +62,15 @@
     {
       "id": "dbz-m01-03-code-1",
       "type": "code-challenge",
-      "question": "Напишите Docker Compose сервис для Debezium Connect. Укажите образ (quay.io/debezium/connect:2.5), порт REST API (8083) и минимальные переменные окружения (BOOTSTRAP_SERVERS, GROUP_ID).",
+      "question": "Напишите Docker Compose сервис для Debezium Connect. Укажите образ (quay.io/debezium/connect:3.4), порт REST API (8083) и минимальные переменные окружения (BOOTSTRAP_SERVERS, GROUP_ID).",
       "language": "yaml",
       "starterCode": "version: '3'\nservices:\n  connect:\n    image: # укажите образ Debezium Connect\n    ports:\n      # проброс порта 8083\n    environment:\n      # BOOTSTRAP_SERVERS и GROUP_ID\n",
-      "solutionCode": "version: '3'\nservices:\n  connect:\n    image: quay.io/debezium/connect:2.5\n    ports:\n      - '8083:8083'\n    environment:\n      BOOTSTRAP_SERVERS: kafka:9092\n      GROUP_ID: 1\n",
+      "solutionCode": "version: '3'\nservices:\n  connect:\n    image: quay.io/debezium/connect:3.4\n    ports:\n      - '8083:8083'\n    environment:\n      BOOTSTRAP_SERVERS: kafka:9092\n      GROUP_ID: 1\n",
       "testCases": [
         {
           "id": "tc1",
           "description": "Docker Compose с сервисом Debezium Connect",
-          "expectedOutput": "{\"version\":\"3\",\"services\":{\"connect\":{\"image\":\"quay.io/debezium/connect:2.5\",\"ports\":[\"8083:8083\"],\"environment\":{\"BOOTSTRAP_SERVERS\":\"kafka:9092\",\"GROUP_ID\":1}}}}",
+          "expectedOutput": "{\"version\":\"3\",\"services\":{\"connect\":{\"image\":\"quay.io/debezium/connect:3.4\",\"ports\":[\"8083:8083\"],\"environment\":{\"BOOTSTRAP_SERVERS\":\"kafka:9092\",\"GROUP_ID\":1}}}}",
           "hidden": false
         }
       ],

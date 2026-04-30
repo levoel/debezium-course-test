@@ -73,7 +73,7 @@ import {
 
 ## Встроенные Debezium SMTs
 
-Debezium 2.5.4 предоставляет набор production-ready SMT для типичных сценариев.
+Debezium 3.4 предоставляет набор production-ready SMT для типичных сценариев.
 
 ### 1. ExtractNewRecordState — Event Flattening
 
@@ -308,7 +308,7 @@ SMT выполняются **синхронно** в потоке Kafka Connect.
 
 ### Мониторинг SMT Performance
 
-Debezium 2.5.4 **не предоставляет** метрики per-SMT. Но вы можете измерить общий impact:
+Debezium 3.4 **не предоставляет** метрики per-SMT. Но вы можете измерить общий impact:
 
 ```promql
 # Lag метрика (включает SMT processing)
@@ -369,7 +369,7 @@ SMT — это не универсальный инструмент. Есть з
 
 ## Полный каталог Debezium SMT
 
-Для справки — все SMT, доступные в Debezium 2.5.4:
+Для справки — все SMT, доступные в Debezium 3.4:
 
 | SMT | Класс | Назначение |
 |-----|-------|------------|
@@ -397,7 +397,7 @@ SMT — это не универсальный инструмент. Есть з
 ## Ключевые выводы
 
 1. **SMT** — это механизм inline трансформации событий в Kafka Connect до публикации в Kafka
-2. **Дебейзиум 2.5.4** включает 6 production-ready SMT: Filter, Unwrap, Router (2 типа), Outbox, PartitionRouting
+2. **Debezium 3.4** включает 6 production-ready SMT: Filter, Unwrap, Router (2 типа), Outbox, PartitionRouting
 3. **SMT chaining** позволяет комбинировать трансформации; порядок имеет значение
 4. **Стандартный порядок:** Filter → Unwrap → Route → Mask
 5. SMT подходит для **простых stateless операций** с overhead менее 10ms

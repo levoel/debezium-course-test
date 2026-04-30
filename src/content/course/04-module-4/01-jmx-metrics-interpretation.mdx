@@ -248,17 +248,16 @@ Queue utilization % = 100 * (1 - QueueRemainingCapacity / QueueTotalCapacity)
   answer="Bottleneck в записи в Kafka. QueueRemainingCapacity близок к нулю означает, что очередь почти заполнена — WAL reader помещает события в очередь быстрее, чем Kafka writer их забирает. Нужно проверить Kafka broker latency и network."
 />
 
-## Особенности метрик в Debezium 2.5.4
+## Особенности метрик в Debezium 3.4
 
-Наша lab-среда использует Debezium 2.5.4 (project standard). Важные ограничения:
+Наша lab-среда использует Debezium 3.4.0.Final (project standard). Что это даёт:
 
-**Отсутствуют per-table метрики.** Метрики агрегированы на уровне коннектора. Вы не можете увидеть lag отдельно для таблицы `orders` vs `customers`.
+**Доступны per-table метрики (Debezium 3.0+).** Метрики можно фильтровать на уровне отдельной таблицы — вы можете увидеть lag и event counts отдельно для `orders` vs `customers`:
 
-**Per-table метрики появились в Debezium 3.0+:**
 - `debezium_metrics_TotalNumberOfCreateEventsSeen{table="orders"}`
 - `debezium_metrics_TotalNumberOfUpdateEventsSeen{table="orders"}`
 
-Для Debezium 2.x, если нужна per-table granularity — используйте отдельные коннекторы для разных наборов таблиц.
+В legacy-окружениях с Debezium 2.x per-table granularity недоступна — там приходилось разносить таблицы по отдельным коннекторам.
 
 ## Lab: Просмотр метрик через JMX Exporter
 
@@ -354,6 +353,6 @@ rate(debezium_metrics_TotalNumberOfEventsSeen[5m])
 3. **QueueRemainingCapacity** — индикатор backpressure к Kafka
 4. **Connected** — базовый health check соединения с БД
 5. Метрики обновляются только при получении событий — используйте heartbeat
-6. Debezium 2.5.4 не имеет per-table метрик (появились в 3.0+)
+6. Debezium 3.4 поддерживает per-table метрики (появились в 3.0+) — фильтруйте `{table="..."}` для гранулярного мониторинга
 7. Нормальный lag 50-500ms, alert при sustained >5s
 8. Алерты с duration (not instantaneous) предотвращают ложные срабатывания

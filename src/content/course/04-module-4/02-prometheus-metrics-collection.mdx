@@ -38,7 +38,7 @@ JMX Exporter — это Java agent, который читает JMX MBeans и э
 ```yaml
 # labs/docker-compose.yml (фрагмент)
 connect:
-  image: quay.io/debezium/connect:2.5.4
+  image: quay.io/debezium/connect:3.4.0.Final
   ports:
     - "8083:8083"    # Kafka Connect REST API
     - "9404:9404"    # JMX Exporter HTTP endpoint

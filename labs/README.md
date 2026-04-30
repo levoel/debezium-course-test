@@ -245,7 +245,7 @@ labs/
 |-----------|--------|------------|
 | PostgreSQL | 15 | С поддержкой logical replication |
 | Kafka | 7.8.1 (Confluent) | KRaft mode, без ZooKeeper |
-| Debezium Connect | 2.5.4.Final | Java 17 для ARM64 совместимости |
+| Debezium Connect | 3.4.0.Final | Актуальная стабильная версия (декабрь 2025) |
 | Schema Registry | 7.8.1 (Confluent) | Avro schema management |
 | Prometheus | latest | Сбор JMX метрик |
 | Grafana | latest | Визуализация метрик |

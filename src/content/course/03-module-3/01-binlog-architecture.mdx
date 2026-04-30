@@ -433,7 +433,7 @@ SET GLOBAL binlog_expire_logs_seconds = 604800;
 |--------|-----------------------------------|------------------|
 | **Формат по умолчанию** | Физический (блоки страниц) | Логический (ROW/STATEMENT) |
 | **Включение CDC** | `wal_level=logical` | `binlog_format=ROW` |
-| **Плагин декодирования** | pgoutput (или wal2json) | Не требуется |
+| **Плагин декодирования** | pgoutput (wal2json — discontinued) | Не требуется |
 | **Replication Slot** | Обязателен для CDC | Не используется (position tracking) |
 | **Publications** | Фильтрация таблиц | `binlog-do-db` / `binlog-ignore-db` |
 | **REPLICA IDENTITY** | DEFAULT / FULL / INDEX | Всегда полные данные в ROW |
