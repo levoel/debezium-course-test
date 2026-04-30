@@ -137,6 +137,13 @@ try (DebeziumEngine<ChangeEvent<String, String>> engine =
 - `connect-offsets` — позиции чтения (где остановились в WAL)
 - `connect-status` — статусы коннекторов и tasks
 
+<CrossCourseRef
+  courseId="kafka-course"
+  lessonSlug="05-kafka-connect/01-connect-architecture"
+  label="Kafka Connect: архитектура фреймворка"
+  preview="Глубокий разбор Kafka Connect — workers, tasks, internal topics, distributed mode и rebalance протокол. Debezium опирается на этот фреймворк."
+/>
+
 ### REST API для управления
 
 Kafka Connect предоставляет REST API на порту 8083:
