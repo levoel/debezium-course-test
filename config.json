@@ -52,6 +52,12 @@
     "mysql",
     "gcp"
   ],
+  "prerequisites": {
+    "courses": [
+      {"slug": "kafka-course", "level": "required"}
+    ],
+    "external": ["Postgres / MySQL administration (logical replication, binlog, GTID)"]
+  },
   "estimatedHours": 25,
   "pricing": {
     "type": "free"
