@@ -1,0 +1,315 @@
+---
+title: "Debezium 3.x Platform: Management UI, WASM SMT, OpenLineage"
+description: "Новая Debezium Management Platform для Kubernetes, WebAssembly transformations через TinyGo + Chicory, OpenLineage 3.3 интеграция и cost analysis production CDC pipeline"
+order: 8
+difficulty: "advanced"
+estimatedTime: 40
+topics: ["debezium-3", "management-platform", "wasm-smt", "openlineage", "cost-analysis"]
+prerequisites: ["module-4/07-disaster-recovery-procedures"]
+---
+
+# Debezium 3.x Platform: Management UI, WASM SMT, OpenLineage
+
+К началу 2026 Debezium прошёл серьёзную эволюцию. **3.4 GA** (декабрь 2025) -- та версия, на которой построен наш лабораторный стенд, -- принесла зрелую Management Platform, поддержку WebAssembly SMT, расширенную OpenLineage интеграцию и базу под Aurora DSQL CDC. Этот урок -- обзор экосистемы 3.x: что появилось, как это вписывается в production-операции, и сколько это стоит на практике.
+
+## Debezium Management Platform
+
+До 3.x операционная модель Debezium выглядела так: REST API на порту 8083, Kafka Connect конфиг-токены в JSON, никакой UI. Команды строили собственные дашборды поверх Connect REST API, рисовали лаги в Grafana. **Debezium Management Platform** (DMP) -- попытка community построить нативный operational layer для Debezium-deployments на Kubernetes.
+
+### Архитектура DMP
+
+```
++-------------------------------------------------+
+|              Debezium Management Platform        |
+|  +-------------+  +----------+  +-------------+ |
+|  |   React UI   |  |REST API  |  | Operator    | |
+|  | (configs,    |->|/api/v1/* |->| (K8s CRDs:  | |
+|  |  topology,   |  |          |  |  Connector, | |
+|  |  health)     |  |          |  |  TaskScale) | |
+|  +-------------+  +----------+  +-------------+ |
+|                       |                          |
+|                       v                          |
+|     +-----------------------------------+        |
+|     |  State storage (PostgreSQL)       |        |
+|     |  - registered connectors           |        |
+|     |  - templates / blueprints          |        |
+|     |  - audit log                       |        |
+|     +-----------------------------------+        |
++-------------------------------------------------+
+                        |
+                        v
+        +-------------------------------+
+        | Kafka Connect cluster (existing) |
+        | - Workers, REST API :8083        |
+        +-------------------------------+
+```
+
+DMP **не заменяет** Kafka Connect -- он управляет им сверху. Идея: декларативно описать "я хочу 3 Postgres-коннектора в namespace `cdc`, со SMT chain и heartbeats" -- DMP конвертирует это в конкретные Connect-конфиги, развёртывает, мониторит drift между желаемым и фактическим состоянием.
+
+### Что DMP даёт по сравнению с raw Connect
+
+| Возможность | Raw REST API | Management Platform |
+|------------|--------------|---------------------|
+| Создание connector | curl + JSON | UI form с validation, autocomplete для plugin params |
+| Templates | Свои Helm-чарты | Built-in blueprints (Postgres-Outbox, MySQL-CDC-to-S3) |
+| Restart task | curl /tasks/N/restart | UI + bulk operations |
+| Drift detection | Нет | DMP сравнивает CRD vs running state |
+| Audit log | Connect logs | Структурированный audit (кто менял что и когда) |
+| Multi-tenant | Нет | Namespaced views, per-team RBAC |
+
+**Когда стоит DMP, а когда нет:**
+
+```
+DMP "за":
+  - 5+ команд деплоят коннекторы в одну Connect-инфраструктуру
+  - Compliance требует аудит изменений
+  - Хотите GitOps без писания собственного Helm/operator
+
+DMP "против":
+  - Один коннектор, одна команда -- overhead не оправдан
+  - Используете Confluent Cloud (там свой UI)
+  - На раннем этапе (DMP -- молодой проект, breaking changes ожидаемы)
+```
+
+## WebAssembly SMT и Go SMT
+
+Single Message Transformations (SMT) -- ключевой механизм inline-обработки CDC событий. Исторически SMT писались **только на Java**: компилируется JAR, кладётся в plugin path, регистрируется по класс-имени. Это создавало два неудобства: команды на Python/Go должны были изучать Java, а compiled JAR-зависимости периодически конфликтовали между собой.
+
+### TinyGo + WebAssembly + Chicory engine
+
+Debezium 3.0+ поставляется со **scripting transformation**, которая исполняет user-defined code в **WebAssembly песочнице**. Конкретно:
+
+```
+Workflow:
+  1. Разработчик пишет SMT на Go (subset, поддерживаемый TinyGo)
+  2. tinygo build -target=wasi -o my_smt.wasm transform.go
+  3. Регистрирует .wasm как SMT в connector config
+  4. Connect worker исполняет .wasm через Chicory
+     (pure-Java WASM runtime от Roastedroot)
+```
+
+`Chicory` важна: это JIT-free, embedded WASM-движок, написанный на Java -- значит он работает там же, где Connect, без сторонних бинарников или JNI. К Debezium 3.3 Chicory поддерживает работу со Struct/Map/Array Kafka-схемами напрямую -- это критично, потому что без этого WASM-SMT мог только читать byte arrays.
+
+### Пример: Go SMT для PII redaction
+
+```go
+// transform.go -- masks email field in payload
+package main
+
+import (
+    "github.com/debezium/wasm-sdk/record"
+    "strings"
+)
+
+//export transform
+func transform(rec *record.Record) *record.Record {
+    after := rec.Value.GetStruct("after")
+    if after == nil {
+        return rec
+    }
+    email, ok := after.GetString("email")
+    if !ok {
+        return rec
+    }
+    // mask everything before @
+    parts := strings.SplitN(email, "@", 2)
+    if len(parts) == 2 {
+        after.SetString("email", "***@"+parts[1])
+    }
+    return rec
+}
+
+func main() {} // required by TinyGo
+
+// build:
+//   tinygo build -target=wasi -o pii_mask.wasm transform.go
+```
+
+Регистрация в connector config:
+
+```json
+{
+  "transforms": "mask",
+  "transforms.mask.type": "io.debezium.transforms.scripting.WasmTransform",
+  "transforms.mask.runtime": "chicory",
+  "transforms.mask.module.path": "/etc/connect/wasm/pii_mask.wasm",
+  "transforms.mask.function": "transform"
+}
+```
+
+### Когда WASM SMT, когда Java SMT
+
+| Критерий | Java SMT | WASM SMT |
+|---------|----------|----------|
+| Производительность | Native JVM, faster | ~1.5-3x медленнее (WASM overhead) |
+| Cold start | Загрузка class | Загрузка .wasm модуля |
+| Sandboxing | Полный JVM-доступ (риск) | Изолированная linear memory |
+| Multi-tenant safe | Нет | Да (можно ограничить fuel) |
+| Языки | Только Java/Kotlin/Scala | Go, Rust, AssemblyScript |
+| Упаковка | JAR + dependencies | Один .wasm file |
+
+> **Production-rule of thumb:** для high-throughput нагрузки (>10K events/sec на task) Java SMT остаётся быстрее. Для multi-tenant платформы, где разные команды поставляют свои трансформации, WASM даёт изоляцию -- ошибочный SMT не уронит весь Connect worker.
+
+## OpenLineage 3.3: data lineage из коробки
+
+Кто и когда писал в эту BigQuery таблицу? Какой именно Debezium connector породил эту запись в Kafka? До OpenLineage эти вопросы отвечались offline через метаданные в BI или через ручной audit. **OpenLineage** (open-source spec от LF AI & Data) -- стандартизированный способ публиковать события "job X started/completed, читал из A, писал в B".
+
+### Что Debezium 3.3 эмитит
+
+```json
+{
+  "eventType": "COMPLETE",
+  "eventTime": "2026-04-30T10:00:01Z",
+  "run": { "runId": "uuid-..." },
+  "job": {
+    "namespace": "debezium",
+    "name": "inventory-connector"
+  },
+  "inputs": [
+    {
+      "namespace": "postgres://aurora-prod:5432",
+      "name": "inventory.public.orders",
+      "facets": {
+        "schema": { "fields": [...] }
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "namespace": "kafka://msk-cluster:9092",
+      "name": "inventory.public.orders"
+    }
+  ]
+}
+```
+
+В 3.3 OpenLineage покрытие расширили на **JDBC и MongoDB sink connectors** -- то есть полный путь "Postgres -> Kafka -> JDBC sink в Snowflake" виден как граф. Дополнительно добавлен флаг `extended.headers.enabled=false`, который убирает OpenLineage-context из Kafka-headers (если для downstream это шум).
+
+### Куда отправлять события
+
+```
+options:
+  - Marquez (open-source UI + storage для OpenLineage)
+  - DataHub (LinkedIn) -- понимает OpenLineage events
+  - Snowflake Horizon Catalog (через нативный connector)
+  - Custom HTTP endpoint -- для своих data catalog
+```
+
+Конфиг:
+
+```json
+{
+  "openlineage.integration.enabled": "true",
+  "openlineage.integration.config.file.path": "/etc/openlineage/openlineage.yml",
+  "openlineage.integration.job.namespace": "debezium-prod",
+  "openlineage.integration.job.owners": "data-platform-team@example.com"
+}
+```
+
+## Cost Analysis: сколько стоит self-hosted CDC
+
+К 2026 ясно, что "Debezium бесплатный" -- лозунг с большой звёздочкой. Реальные расходы на production-pipeline (10K events/sec, 99.9% SLA, 3 environments):
+
+### Compute
+
+```
+Kafka cluster (MSK, 3 brokers, m5.xlarge):     ~$1 200/month
+Kafka Connect cluster (3 workers, m5.large):   ~$  600/month
+Schema Registry (1 t3.medium HA pair):         ~$  150/month
+Debezium Management Platform (если есть):     ~$  100/month
+Postgres replication user impact:              ~10-15% базы (учтено в RDS bill)
+==============================================================
+Compute baseline:                              ~$2 050/month
+```
+
+### Network egress
+
+Часто недооценивают. CDC events идут multi-hop: DB -> Connect -> Kafka -> Sink. Если кросс-AZ или кросс-region -- counter включается:
+
+```
+10K events/sec * 1KB avg * 86400s = ~864 GB/day
+Cross-AZ egress:  $0.01/GB ~ $260/month
+Cross-region:     $0.02/GB ~ $520/month
+К Kafka clients (consumers) - умножается на их количество
+```
+
+### Storage
+
+```
+Kafka topics retention 7 days * 864 GB/day = ~6 TB
+EBS gp3 storage: $0.08/GB-month -> ~$480/month
+Schema Registry topic / connect-offsets / connect-configs: <1 GB
+Snapshots, dead-letter-queues: ~50-200 GB
+```
+
+### Cost optimization: heartbeats vs WAL bloat trade-off
+
+```
+Без heartbeat:
+  Low-traffic table -> slot не продвигается
+  WAL accumulates от всех транзакций в БД
+  За неделю downtime коннектора WAL может вырасти на 50-200 GB
+  EBS storage fee + риск disk-full -> outage cost (мы знаем!)
+
+С heartbeat каждые 10s:
+  3.6M heartbeat events/day -> overhead Kafka storage <1 GB/day
+  WAL retention bounded by max_slot_wal_keep_size
+  
+Net saving: $50-300/month + предотвращённый outage
+```
+
+### Snapshot strategy cost
+
+```
+Initial snapshot большой таблицы (1 TB):
+  - "snapshot.mode = always": каждый restart connector делает re-snapshot
+    -> network egress в Kafka 1 TB * количество restart'ов
+    -> длительный freeze read-replica на источнике
+  - "snapshot.mode = initial": один раз на жизненный цикл коннектора
+  - "incremental snapshot" (3.x): chunked, можно остановить и продолжить
+    -> снижает peak load в N раз, ценой увеличения total runtime
+
+Production-rule: для tables >100 GB всегда incremental snapshot
+```
+
+### People cost
+
+```
+Self-hosted Debezium на production требует:
+  - 0.3-0.5 FTE platform engineer (мониторинг, upgrades, runbooks)
+  - on-call rotation (3-5 человек, 1-2 incidents/month)
+  - $150K * 0.4 = $60K/year minimum, чаще $100-150K
+  
+Это часто превышает infrastructure cost в 3-5x.
+```
+
+### Когда переходить на managed (Confluent Cloud, Streamkap, Estuary)
+
+```
+Self-hosted выгоден если:
+  - >50K events/sec (managed pricing scales linearly)
+  - Multi-region active-active (managed может не покрывать)
+  - Compliance запрещает outbound data flow
+
+Managed выгоден если:
+  - <10K events/sec
+  - Команда <5 data engineers
+  - Меньше 3 коннекторов
+  - Нужно <1 неделя time-to-production
+```
+
+<KnowledgeCheck
+  question="Почему Chicory engine критичен для WebAssembly SMT в Debezium, и что изменилось в 3.3?"
+  answer="Chicory -- pure-Java WASM runtime от Roastedroot, который позволяет исполнять .wasm модули внутри JVM Connect worker без JNI и без сторонних бинарников. Альтернативы (Wasmtime через JNI) требовали бы native libraries в каждом deploy. В Debezium 3.3 Chicory расширили поддержкой Struct/Map/Array Kafka schemas -- WASM-SMT теперь могут читать и модифицировать сложные типы напрямую, а не только byte arrays, что делает WASM-SMT практически применимыми для production CDC."
+/>
+
+## Что дальше: Aurora DSQL CDC
+
+К 2026 Amazon выкатил **Aurora DSQL** -- distributed SQL с serverless архитектурой и multi-region active-active. CDC для DSQL пока в early stage: AWS предоставляет managed change-stream API, а Debezium community работает над connector. Для нашего курса DSQL остаётся outlook -- стенд использует Aurora PostgreSQL Compatible с logical decoding.
+
+## Ключевые выводы
+
+1. **Debezium Management Platform** -- декларативный operational layer для K8s. Не нужен для одного коннектора, критичен для платформенных команд с 5+ командами-потребителями.
+2. **WASM SMT через TinyGo + Chicory** -- multi-language трансформации с sandboxing. Для high-throughput оставайтесь на Java SMT, для multi-tenant используйте WASM.
+3. **OpenLineage 3.3** -- data lineage из коробки для Source, JDBC sink, MongoDB sink. Снижает MTTR при инцидентах "откуда взялись эти данные".
+4. **Cost reality:** $2-3K/month compute + $1-2K network/storage + 0.4 FTE platform engineer -- это minimum для production self-hosted. Heartbeats и incremental snapshots окупаются на первой же длительной аварии.

@@ -704,3 +704,186 @@ kubectl logs -n cdc deployment/debezium-server -f
 ## Что дальше?
 
 В следующем уроке мы развернем **Dataflow template для репликации CDC событий в BigQuery** с использованием настроенной аутентификации.
+
+---
+
+## Cross-cloud security: TLS, AWS IAM, Vault, least-privilege
+
+Принципы безопасности CDC одинаковы для всех cloud-провайдеров: encryption in transit, identity-based auth, secret-management, least-privilege replication users. Этот раздел покрывает AWS-эквиваленты и cloud-agnostic подходы.
+
+### TLS termination между Debezium и Kafka
+
+CDC events часто содержат **PII или критичные бизнес-данные** -- они не должны идти plain-text между Connect worker и Kafka brokers.
+
+```properties
+# Connect worker config -- TLS до Kafka
+bootstrap.servers=b-1.msk.amazonaws.com:9094,b-2.msk.amazonaws.com:9094
+security.protocol=SSL
+ssl.truststore.location=/etc/kafka/truststore.jks
+ssl.truststore.password=${file:/etc/kafka/secrets:truststore-pass}
+ssl.endpoint.identification.algorithm=https
+
+# для mTLS (обязательно для production):
+ssl.keystore.location=/etc/kafka/keystore.jks
+ssl.keystore.password=${file:/etc/kafka/secrets:keystore-pass}
+ssl.key.password=${file:/etc/kafka/secrets:key-pass}
+```
+
+**Важно:** `ssl.endpoint.identification.algorithm=https` включает hostname verification -- без неё mTLS не защищает от MITM в случае compromise CA.
+
+### Source DB -> Debezium TLS
+
+```properties
+# PostgreSQL connector -- TLS до Aurora
+database.hostname=aurora-cluster.cluster-xxx.us-east-1.rds.amazonaws.com
+database.port=5432
+database.sslmode=verify-full
+database.sslrootcert=/etc/postgres/rds-ca-2019-root.pem
+
+# sslmode levels (от слабого к сильному):
+#   disable      -- БЕЗОПАСНО только в local dev
+#   require      -- TLS, но не валидирует сертификат (vulnerable к MITM!)
+#   verify-ca    -- валидирует CA, но не hostname
+#   verify-full  -- полная валидация (PRODUCTION default)
+```
+
+### AWS IAM authentication для Aurora
+
+AWS Aurora поддерживает **IAM-token-based authentication**, заменяющий пароль временным токеном (TTL 15 минут). Это убирает класс рисков "украденный пароль".
+
+```python
+# Псевдокод -- получение IAM auth token
+import boto3
+client = boto3.client('rds')
+
+token = client.generate_db_auth_token(
+    DBHostname='aurora-cluster.cluster-xxx.us-east-1.rds.amazonaws.com',
+    Port=5432,
+    DBUsername='debezium_iam_user',
+    Region='us-east-1'
+)
+# token действителен 15 минут
+```
+
+В Debezium connector config IAM token подставляется через config provider. Для постоянного rotating без рестарта используется `DatabaseConfigProvider`:
+
+```json
+{
+  "database.user": "debezium_iam_user",
+  "database.password": "${iam:debezium_iam_user@aurora-cluster}",
+  "config.providers": "iam",
+  "config.providers.iam.class": "com.example.IamRdsTokenProvider"
+}
+```
+
+Custom config provider обновляет токен каждые 10-12 минут. Это не included в Debezium core -- надо либо найти community provider, либо написать (~100 строк Java).
+
+### AWS MSK + IAM auth для Kafka
+
+Аналогично, AWS MSK поддерживает IAM аутентификацию для Kafka -- никаких static credentials. Connect worker добавляет:
+
+```properties
+security.protocol=SASL_SSL
+sasl.mechanism=AWS_MSK_IAM
+sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;
+sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler
+```
+
+Worker наследует IAM identity от EC2 instance profile / IRSA (IAM Roles for Service Accounts) на EKS. Никаких ключей в config.
+
+### HashiCorp Vault для on-prem / multi-cloud
+
+Если вы не AWS-only, Vault -- стандарт для secrets management. Debezium интегрируется через `FileConfigProvider`, который читает значения из файла, который **Vault Agent** обновляет:
+
+```
+Vault Agent (sidecar) -> writes /run/secrets/db_password every 5min
+                                      |
+Debezium connector config:            v
+  "database.password": "${file:/run/secrets:db_password}"
+```
+
+Преимущества Vault:
+- Dynamic secrets: Vault генерирует временный DB account для Debezium с TTL
+- Audit log: каждое чтение secret логируется
+- Cross-cloud: один control plane на all environments
+
+### Least-privilege для replication user
+
+Debezium **не нуждается в superuser**. Минимальные права:
+
+```sql
+-- PostgreSQL
+CREATE USER debezium_user WITH REPLICATION ENCRYPTED PASSWORD 'xxx';
+GRANT CONNECT ON DATABASE production TO debezium_user;
+GRANT USAGE ON SCHEMA public TO debezium_user;
+
+-- ТОЛЬКО SELECT на конкретные таблицы (не GRANT ALL!)
+GRANT SELECT ON public.orders, public.customers TO debezium_user;
+
+-- для CREATE PUBLICATION (если pgoutput):
+ALTER ROLE debezium_user WITH SUPERUSER;  -- только на момент CREATE
+CREATE PUBLICATION debezium_pub FOR TABLE public.orders, public.customers;
+ALTER ROLE debezium_user WITH NOSUPERUSER; -- сразу убрать!
+
+-- Для Aurora: rds_replication вместо superuser
+GRANT rds_replication TO debezium_user;
+
+-- Heartbeat table (если используется):
+GRANT SELECT, UPDATE ON public.heartbeat TO debezium_user;
+```
+
+**Anti-pattern:** `GRANT ALL PRIVILEGES ON DATABASE` -- даёт DELETE/TRUNCATE/DROP, чего Debezium никогда не должно мочь.
+
+### MySQL / MariaDB
+
+```sql
+CREATE USER 'debezium'@'%' IDENTIFIED BY 'xxx';
+GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT
+  ON *.* TO 'debezium'@'%';
+
+-- LOCK TABLES нужен ТОЛЬКО для consistent snapshot
+-- Production: используйте snapshot.mode = schema_only_recovery + initial один раз
+```
+
+### Network-level isolation
+
+```
+Layer-defence stack:
+  1. Debezium Connect worker -- private subnet, no public IP
+  2. SecurityGroup: outbound only к DB port (5432) + Kafka port
+  3. NACL: deny inbound from 0.0.0.0/0 на data plane
+  4. VPC peering / PrivateLink для cross-account доступа к источнику
+  5. CloudTrail / Cloud Audit Logs -- запись всех IAM API calls
+```
+
+### Security checklist для Production CDC
+
+```
+Source DB:
+  [+] TLS verify-full между connector и DB
+  [+] Replication user с минимальными правами (REPLICATION + SELECT)
+  [+] IAM auth (Aurora) или Vault dynamic secrets
+  [+] Audit log для DDL и schema changes
+  [+] Network: private subnet, security group ingress только из Connect
+
+Connect cluster:
+  [+] mTLS до Kafka brokers
+  [+] hostname verification включён
+  [+] Secrets через config provider (file/iam/vault), не в JSON config
+  [+] Connect REST API за authentication proxy (basic auth недостаточно)
+  [+] Per-connector role (если на EKS -- IRSA)
+
+Kafka cluster:
+  [+] SASL/SSL для всех клиентов
+  [+] ACL на topics: каждый connector имеет write только на свои topics
+  [+] Schema Registry с auth -- защита от schema poisoning
+  [+] At-rest encryption (KMS / customer keys)
+
+Operations:
+  [+] Rotation: passwords каждые 90d (или dynamic secrets с TTL)
+  [+] Monitoring: alert on unusual connection patterns
+  [+] Disaster: revoke replication user -> stop connector behavior tested
+  [+] Compliance: audit log of "кто читал какие таблицы"
+```
+
+> **Production-rule:** Если вы можете описать, что произойдёт при компрометации каждого компонента (DB user, IAM role, Kafka client) и каков blast radius -- security model правильный. Если "не знаем" -- продолжайте сужать privileges, пока не сможете.

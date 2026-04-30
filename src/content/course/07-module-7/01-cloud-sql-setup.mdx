@@ -301,3 +301,83 @@ gcloud sql instances patch your-instance-name \
 ## Что дальше?
 
 В следующем уроке мы развернем **Debezium Server** с **Pub/Sub sink** — Kafka-less архитектуру CDC, которая публикует события напрямую в Google Cloud Pub/Sub, минуя Kafka Connect.
+
+---
+
+## Bonus: AWS DMS vs Debezium на Aurora
+
+Аналог Cloud SQL CDC в AWS экосистеме -- **Database Migration Service (DMS)**. Если вы делаете архитектурный выбор между managed CDC и self-hosted Debezium, эти отличия критичны.
+
+### Когда DMS, когда Debezium
+
+```
+AWS DMS (включая DMS Serverless с 2023):
+  + Полностью managed: AWS провижит и масштабирует replication instance
+  + Tight integration с Aurora, RDS, Redshift, S3, Kinesis
+  + DMS Serverless: автоматическое scaling capacity по нагрузке
+  + Time to production: часы
+  - Только в AWS (lock-in)
+  - SKIP tables без primary key в CDC mode (data gaps!)
+  - Schema changes -- сложно: нет нативного DDL streaming
+  - Дороже на устойчивой нагрузке: $0.40-1.20/hour replication instance
+
+Debezium (self-hosted на MSK + Connect):
+  + Cross-cloud: тот же стек на AWS, GCP, on-prem
+  + Полный контроль над schema evolution и SMT chain
+  + Эффективная цена на 10K+ events/sec
+  + Поддерживает таблицы без PK (с tradeoff'ами)
+  - Требует команду: 0.3-0.5 FTE platform engineer
+  - Time to production: недели
+  - Self-hosted Kafka cluster + Connect cluster
+```
+
+### Schema replication strategy
+
+```
+DMS:
+  Source schema -> CloudFormation/JSON mapping rules
+  SchemaConversionTool (SCT) для cross-engine migrations
+  DDL changes: некоторые автоматически, остальное -- ручная пересинхронизация
+  Поведение: SKIP tables без PK при ongoing replication (важно для CDC!)
+
+Debezium:
+  Source schema -> Kafka schema (Avro / JSON Schema через Schema Registry)
+  Schema changes streaming через DDL events на отдельный topic
+  table.include.list / column.include.list -- fine-grained контроль
+  Tables без PK: использует ROW IDENTITY FULL и full-row image как ключ
+```
+
+### Cost models (10K events/sec, Aurora source)
+
+```
+DMS Serverless:
+  ~10 DCU baseline, scaling to 30 DCU peak
+  $0.20/DCU-hour -> $0.20 * 15 avg * 730 = ~$2 200/month
+  + S3 storage если есть staging
+  + cross-region transfer
+
+Self-hosted Debezium на MSK:
+  3-broker MSK kafka.m5.large = $1 200/month
+  3 Connect workers m5.large = $600/month
+  Schema Registry HA pair = $150/month
+  Storage 7d retention ~ $480/month
+  Total compute = ~$2 430/month
+  + 0.4 FTE engineer ~ $5 000/month "true cost"
+```
+
+DMS выглядит дешевле на голом инфра-уровне для среднего workload, но переход на >50K events/sec обычно делает self-hosted экономичнее. Главное правило: для AWS-only стартапов с командой <10 человек -- DMS; для multi-cloud / data-platform-team -- Debezium.
+
+### Гибридные подходы
+
+```
+DMS для миграции (one-shot snapshot + первые недели CDC)
+  -> переключение на Debezium когда команда выросла
+  
+Debezium для critical/high-throughput streams
+  -> DMS для низкочастотных reference-таблиц
+  
+DMS на Aurora Postgres -> Kinesis -> Lambda
+  Debezium на самописном MySQL -> MSK -> Flink
+```
+
+> **Aurora-specific gotcha:** DMS без force-clean настройки оставляет slots в `restart_lsn` без heartbeat. То же самое, что мы решали через `pg_logical_emit_message` для Debezium -- DMS делает это другим механизмом, но WAL-bloat закончится одинаково.

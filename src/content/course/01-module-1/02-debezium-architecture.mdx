@@ -229,3 +229,100 @@ curl -X DELETE http://localhost:8083/connectors/postgres-connector
 4. **Embedded Engine** — для максимального контроля в Java-приложениях
 5. **pgoutput** — встроенный плагин PostgreSQL, не требует установки
 6. **REST API** — управление коннекторами через HTTP запросы
+
+---
+
+## CDC Landscape 2025-2026: альтернативы Debezium
+
+Debezium -- **самая распространённая open-source CDC платформа**, но это не единственный игрок. К 2026 рынок CDC-инструментов разросся: managed SaaS, новые open-source проекты, специализированные решения. Этот раздел -- быстрая навигация по экосистеме, чтобы при архитектурных решениях вы понимали реальные альтернативы.
+
+### Семь главных платформ (Q1 2026)
+
+| Платформа | Тип | Когда использовать |
+|-----------|-----|--------------------|
+| **Debezium** | Open-source, self-hosted | Фундаментальный выбор для команд с data-platform-инженерами |
+| **AWS DMS** | Managed, AWS-only | AWS-first стартапы, миграции и средние workloads |
+| **Confluent Cloud (managed Debezium)** | Managed Kafka + Debezium | Команды на Confluent stack без желания self-host |
+| **Streamkap** | Managed CDC SaaS | Sub-second latency, 0-config, любая cloud |
+| **Estuary Flow** | Real-time ETL platform | Unified batch+stream + transformations через TypeScript |
+| **Fivetran** | Batch ETL (с CDC connectors) | Enterprise, готовые коннекторы для SaaS-источников |
+| **Airbyte** | Open-source ETL | Альтернатива Fivetran, гибрид connector framework |
+
+### Conduit (Meroxa)
+
+**Conduit** -- open-source data streaming platform от Meroxa, написана на Go (в отличие от JVM-based Debezium). Цели:
+- Lighter-weight: одна Go-бинарная, не требует Kafka Connect framework
+- Pluggable: connectors можно писать на любом языке через WASM или standalone
+- Pipeline-as-code: YAML/HCL описание потоков
+
+Когда выбрать Conduit:
+- Команды на Go-stack без Java-экспертизы
+- Малые-средние нагрузки, где Kafka Connect overhead не оправдан
+- Прототипы и edge-кейсы (Conduit запускается на одном Go-binary без JVM)
+
+Когда не выбрать:
+- Production-grade Postgres CDC с complex schema evolution -- Debezium тут зрелее
+- MongoDB Oplog, SQL Server CDC -- покрытие коннекторов ниже
+
+### Estuary Flow
+
+**Estuary** -- managed real-time ETL platform с built-in CDC. Ключевые отличия от Debezium:
+
+```
+Debezium:                     Estuary Flow:
++----------+                  +-------------------+
+| Postgres |->Connect->Kafka  | Postgres -> Flow  |
++----------+                  | (managed runtime) |
+                              | -> derivations    |
+                              | -> materializations
+                              +-------------------+
+```
+
+Estuary продаёт **unified batch+stream** -- та же pipeline обрабатывает и historical backfill, и live CDC. Transformations пишутся на TypeScript ("derivations"). У Estuary шире SaaS-connector library (Salesforce, Stripe, etc.), но native support для exotic СУБД (Vitess, Cassandra) меньше.
+
+### Streamkap
+
+Позиционирование: **sub-second latency CDC managed service**. Цели:
+- Replace batch ETL (Fivetran 5-15min lag -> sub-second)
+- 0-config: Streamkap сама управляет slots, heartbeats, snapshot strategies
+- Pricing per row vs per-hour инфры
+
+Streamkap часто строится на Debezium under the hood -- они managed-обёртка с своим control plane. Это делает их хорошим выбором для команд, которым нравится Debezium semantics, но не хочется операционной нагрузки.
+
+### Decodable
+
+Real-time data platform с фокусом на Apache Flink + CDC (часто через Debezium). Fit:
+- Complex stream processing (joins, windowed aggregations) inline
+- SQL-first interface для data engineers, которые не хотят Java/Scala
+
+### Comparison matrix
+
+| Critterion | Debezium | Conduit | Estuary | Streamkap |
+|-----------|----------|---------|---------|-----------|
+| Лицензия | Apache 2.0 | Apache 2.0 | Proprietary (managed) | Proprietary (managed) |
+| Hosting | Self / Confluent Cloud | Self | Managed | Managed |
+| Source coverage | 10+ DBs (best) | 5-7 | 30+ (вкл SaaS) | 15+ |
+| Sink coverage | Через Kafka -> любой sink | Native sinks | Native materializations | Native sinks |
+| EOS / exactly-once | 3.3+ для core connectors | Limited | Yes | Yes |
+| Schema evolution | Manual через Schema Registry | Auto-mapping | Auto + manual | Auto |
+| Latency p99 | 1-5 sec | 1-5 sec | менее 500 ms | менее 500 ms |
+| Cost model | Infra + people | Infra + people | Per-task pricing | Per-row pricing |
+| Production-readiness | Очень высокая | Средняя (молодой проект) | Высокая | Высокая |
+
+### Рамки выбора
+
+```
+Question: Self-host или managed?
+  >50K events/sec, есть platform team -> self-host (Debezium / Conduit)
+  <10K events/sec, маленькая команда   -> managed (Streamkap / Estuary)
+
+Question: Multi-cloud или single?
+  AWS-only      -> рассмотреть AWS DMS
+  Multi-cloud   -> Debezium (open-source, portable)
+
+Question: Нужны transformations inline?
+  Простые SMT -> Debezium SMT chain
+  Сложные joins/aggregations -> Decodable / Estuary derivations
+```
+
+> **Не путайте CDC tool с data platform.** Debezium -- это движок чтения transaction log. Estuary, Streamkap и т. д. -- это полные платформы, которые включают CDC. Сравнение "Debezium vs Estuary" корректно только в контексте "что мы хотим, движок или платформу".
