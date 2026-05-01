@@ -21,10 +21,10 @@ export function LabSetupDiagram() {
     <div className="flex flex-col gap-6">
       {/* Title */}
       <div className="text-center">
-        <h3 className="text-lg font-semibold text-gray-200">
+        <h3 className="text-lg font-semibold text-[var(--ink-default)]">
           Docker Compose Stack
         </h3>
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-[var(--ink-muted)]">
           Полная среда для практических работ
         </p>
       </div>
@@ -113,11 +113,11 @@ export function LabSetupDiagram() {
       </div>
 
       {/* Data Flow Legend */}
-      <div className="mt-4 p-4 rounded-lg bg-gray-500/10 border border-gray-400/30">
-        <h4 className="text-sm font-semibold text-gray-300 mb-3">
+      <div className="mt-4 p-4 rounded-lg bg-[var(--bg-deep)] border border-[var(--line-medium)]">
+        <h4 className="text-sm font-semibold text-[var(--ink-default)] mb-3">
           Основные потоки данных:
         </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-400">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-[var(--ink-muted)]">
           <div className="flex items-center gap-2">
             <Arrow direction="right" />
             <span>PostgreSQL → Debezium Connect (WAL)</span>
@@ -151,10 +151,10 @@ export function LabSetupDiagram() {
 
       {/* Quick Reference */}
       <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-400/30">
-        <h4 className="text-sm font-semibold text-emerald-300 mb-2">
+        <h4 className="text-sm font-semibold text-emerald-700 mb-2">
           Быстрый старт:
         </h4>
-        <ul className="text-xs text-gray-300 space-y-1">
+        <ul className="text-xs text-[var(--ink-default)] space-y-1">
           <li><code className="text-emerald-400">docker compose up -d</code> — запустить всё окружение</li>
           <li><code className="text-emerald-400">localhost:8888</code> — JupyterLab для упражнений</li>
           <li><code className="text-emerald-400">localhost:8083</code> — Kafka Connect REST API</li>

@@ -76,14 +76,14 @@ export function WalRetentionDiagram() {
       {/* Legend */}
       <div className="flex flex-col sm:flex-row gap-4 justify-center">
         <DiagramContainer title="Можно удалить" color="rose" className="flex-1 max-w-xs">
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             Сегменты до restart_lsn<br />
             Уже прочитаны слотом
           </div>
         </DiagramContainer>
 
         <DiagramContainer title="Сохранено для слота" color="emerald" className="flex-1 max-w-xs">
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             Сегменты после restart_lsn<br />
             Ожидают чтения Debezium
           </div>
@@ -131,11 +131,11 @@ export function SlotLifecycleDiagram() {
         <div className="flex items-center justify-center gap-6 my-2">
           <div className="flex flex-col items-center">
             <Arrow direction="down" />
-            <span className="text-xs text-gray-400">Отключение</span>
+            <span className="text-xs text-[var(--ink-muted)]">Отключение</span>
           </div>
           <div className="flex flex-col items-center">
             <Arrow direction="up" />
-            <span className="text-xs text-gray-400">Переподключение</span>
+            <span className="text-xs text-[var(--ink-muted)]">Переподключение</span>
           </div>
         </div>
 
@@ -152,7 +152,7 @@ export function SlotLifecycleDiagram() {
         {/* Abandoned path */}
         <DiagramContainer title="Опасный путь" color="rose" className="flex-1 max-w-md">
           <div className="flex flex-col items-center gap-4">
-            <div className="text-xs text-gray-400 text-center mb-2">
+            <div className="text-xs text-[var(--ink-muted)] text-center mb-2">
               Если коннектор удален, а слот остался...
             </div>
 
@@ -175,11 +175,11 @@ export function SlotLifecycleDiagram() {
         {/* Safe path */}
         <DiagramContainer title="Безопасный путь" color="emerald" className="flex-1 max-w-md">
           <div className="flex flex-col items-center gap-4">
-            <div className="text-xs text-gray-400 text-center mb-2">
+            <div className="text-xs text-[var(--ink-muted)] text-center mb-2">
               Корректное удаление слота
             </div>
 
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               1. Удалить коннектор в Kafka Connect<br />
               2. Проверить что коннектор не нужен<br />
               3. pg_drop_replication_slot()

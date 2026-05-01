@@ -40,8 +40,8 @@ export function OutboxEventRouterSmtDiagram() {
               }
             >
               <div className="text-sm font-mono border-l-2 border-rose-400 pl-2" tabIndex={0}>
-                <span className="text-rose-300">id:</span>
-                <span className="text-gray-300 ml-2">'550e8400-...'</span>
+                <span className="text-rose-700">id:</span>
+                <span className="text-[var(--ink-default)] ml-2">'550e8400-...'</span>
               </div>
             </DiagramTooltip>
 
@@ -53,15 +53,15 @@ export function OutboxEventRouterSmtDiagram() {
                     Тип агрегата (Order, Payment, User). Определяет имя топика
                     в Kafka: outbox.event.{'{aggregatetype}'}.
                   </p>
-                  <p className="mt-2 text-rose-300">
+                  <p className="mt-2 text-rose-700">
                     КРИТИЧНО: Outbox Event Router использует это поле для routing
                   </p>
                 </div>
               }
             >
               <div className="text-sm font-mono border-l-2 border-rose-400 pl-2" tabIndex={0}>
-                <span className="text-rose-300">aggregatetype:</span>
-                <span className="text-gray-300 ml-2">'Order'</span>
+                <span className="text-rose-700">aggregatetype:</span>
+                <span className="text-[var(--ink-default)] ml-2">'Order'</span>
               </div>
             </DiagramTooltip>
 
@@ -73,15 +73,15 @@ export function OutboxEventRouterSmtDiagram() {
                     Идентификатор конкретного агрегата (order-123, payment-456).
                     Становится Kafka key для partition affinity.
                   </p>
-                  <p className="mt-2 text-rose-300">
+                  <p className="mt-2 text-rose-700">
                     Гарантия: Все события одного агрегата попадут в одну partition
                   </p>
                 </div>
               }
             >
               <div className="text-sm font-mono border-l-2 border-rose-400 pl-2" tabIndex={0}>
-                <span className="text-rose-300">aggregateid:</span>
-                <span className="text-gray-300 ml-2">'order-123'</span>
+                <span className="text-rose-700">aggregateid:</span>
+                <span className="text-[var(--ink-default)] ml-2">'order-123'</span>
               </div>
             </DiagramTooltip>
 
@@ -97,8 +97,8 @@ export function OutboxEventRouterSmtDiagram() {
               }
             >
               <div className="text-sm font-mono border-l-2 border-rose-400 pl-2" tabIndex={0}>
-                <span className="text-rose-300">type:</span>
-                <span className="text-gray-300 ml-2">'OrderApproved'</span>
+                <span className="text-rose-700">type:</span>
+                <span className="text-[var(--ink-default)] ml-2">'OrderApproved'</span>
               </div>
             </DiagramTooltip>
 
@@ -114,8 +114,8 @@ export function OutboxEventRouterSmtDiagram() {
               }
             >
               <div className="text-sm font-mono border-l-2 border-rose-400 pl-2" tabIndex={0}>
-                <span className="text-rose-300">payload:</span>
-                <div className="text-gray-300 ml-2">
+                <span className="text-rose-700">payload:</span>
+                <div className="text-[var(--ink-default)] ml-2">
                   {'{'}
                   <div className="ml-4">orderId: '123',</div>
                   <div className="ml-4">amount: 299.99,</div>
@@ -125,7 +125,7 @@ export function OutboxEventRouterSmtDiagram() {
               </div>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-500 mt-2">
+            <div className="text-xs text-[var(--ink-subtle)] mt-2">
               + CDC metadata (before, after, op, source)
             </div>
           </div>
@@ -154,7 +154,7 @@ export function OutboxEventRouterSmtDiagram() {
             }
           >
             <div
-              className="text-xs text-purple-300 font-semibold text-center px-3 py-1 border border-purple-400 rounded bg-purple-500/20"
+              className="text-xs text-purple-700 font-semibold text-center px-3 py-1 border border-purple-400 rounded bg-purple-500/20"
               tabIndex={0}
             >
               Outbox Event
@@ -179,15 +179,15 @@ export function OutboxEventRouterSmtDiagram() {
                     Формируется из aggregatetype с префиксом outbox.event.
                     Каждый aggregate type получает свой топик.
                   </p>
-                  <p className="mt-2 text-emerald-300">
+                  <p className="mt-2 text-emerald-700">
                     Пример: aggregatetype = 'Order' → topic = 'outbox.event.Order'
                   </p>
                 </div>
               }
             >
               <div className="text-sm font-mono border-l-2 border-emerald-400 pl-2" tabIndex={0}>
-                <span className="text-emerald-300">Topic:</span>
-                <span className="text-gray-300 ml-2">outbox.event.Order</span>
+                <span className="text-emerald-700">Topic:</span>
+                <span className="text-[var(--ink-default)] ml-2">outbox.event.Order</span>
               </div>
             </DiagramTooltip>
 
@@ -199,15 +199,15 @@ export function OutboxEventRouterSmtDiagram() {
                     Берется из aggregateid. Гарантирует, что все события одного
                     агрегата попадут в одну Kafka partition.
                   </p>
-                  <p className="mt-2 text-emerald-300">
+                  <p className="mt-2 text-emerald-700">
                     Partition affinity: order-123 всегда в partition N
                   </p>
                 </div>
               }
             >
               <div className="text-sm font-mono border-l-2 border-emerald-400 pl-2" tabIndex={0}>
-                <span className="text-emerald-300">Key:</span>
-                <span className="text-gray-300 ml-2">'order-123'</span>
+                <span className="text-emerald-700">Key:</span>
+                <span className="text-[var(--ink-default)] ml-2">'order-123'</span>
               </div>
             </DiagramTooltip>
 
@@ -219,15 +219,15 @@ export function OutboxEventRouterSmtDiagram() {
                     Чистый payload из outbox-таблицы. Никакого CDC metadata,
                     только бизнес-данные.
                   </p>
-                  <p className="mt-2 text-emerald-300">
+                  <p className="mt-2 text-emerald-700">
                     Consumer получает clean domain event
                   </p>
                 </div>
               }
             >
               <div className="text-sm font-mono border-l-2 border-emerald-400 pl-2" tabIndex={0}>
-                <span className="text-emerald-300">Value:</span>
-                <div className="text-gray-300 ml-2">
+                <span className="text-emerald-700">Value:</span>
+                <div className="text-[var(--ink-default)] ml-2">
                   {'{'}
                   <div className="ml-4">orderId: '123',</div>
                   <div className="ml-4">amount: 299.99,</div>
@@ -248,15 +248,15 @@ export function OutboxEventRouterSmtDiagram() {
                     <li>id: UUID для deduplication</li>
                     <li>type: Event type для фильтрации</li>
                   </ul>
-                  <p className="mt-2 text-emerald-300">
+                  <p className="mt-2 text-emerald-700">
                     Consumer может фильтровать по type без десериализации value
                   </p>
                 </div>
               }
             >
               <div className="text-sm font-mono border-l-2 border-emerald-400 pl-2" tabIndex={0}>
-                <span className="text-emerald-300">Headers:</span>
-                <div className="text-gray-300 ml-2">
+                <span className="text-emerald-700">Headers:</span>
+                <div className="text-[var(--ink-default)] ml-2">
                   <div>id: '550e8400-...'</div>
                   <div>type: 'OrderApproved'</div>
                 </div>
@@ -267,26 +267,26 @@ export function OutboxEventRouterSmtDiagram() {
       </div>
 
       {/* Mapping Summary */}
-      <div className="mt-6 text-sm border-t border-gray-700 pt-4">
-        <div className="font-semibold text-purple-300 mb-2">
+      <div className="mt-6 text-sm border-t border-[var(--line-thin)] pt-4">
+        <div className="font-semibold text-purple-700 mb-2">
           Mapping Summary:
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="border-l-2 border-purple-400 pl-2">
-            <div className="text-xs text-gray-500">aggregatetype</div>
-            <div className="text-purple-300">→ Topic Name</div>
+            <div className="text-xs text-[var(--ink-subtle)]">aggregatetype</div>
+            <div className="text-purple-700">→ Topic Name</div>
           </div>
           <div className="border-l-2 border-blue-400 pl-2">
-            <div className="text-xs text-gray-500">aggregateid</div>
-            <div className="text-blue-300">→ Kafka Key</div>
+            <div className="text-xs text-[var(--ink-subtle)]">aggregateid</div>
+            <div className="text-blue-700">→ Kafka Key</div>
           </div>
           <div className="border-l-2 border-amber-400 pl-2">
-            <div className="text-xs text-gray-500">type</div>
-            <div className="text-amber-300">→ Message Header</div>
+            <div className="text-xs text-[var(--ink-subtle)]">type</div>
+            <div className="text-amber-700">→ Message Header</div>
           </div>
           <div className="border-l-2 border-emerald-400 pl-2">
-            <div className="text-xs text-gray-500">payload</div>
-            <div className="text-emerald-300">→ Message Value</div>
+            <div className="text-xs text-[var(--ink-subtle)]">payload</div>
+            <div className="text-emerald-700">→ Message Value</div>
           </div>
         </div>
       </div>
@@ -294,7 +294,7 @@ export function OutboxEventRouterSmtDiagram() {
       {/* Key Benefits */}
       <div className="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
         <strong>Преимущества трансформации:</strong>
-        <ul className="mt-1 text-gray-300 list-disc list-inside">
+        <ul className="mt-1 text-[var(--ink-default)] list-disc list-inside">
           <li>
             <strong>Clean events:</strong> Consumer получает domain события без
             CDC metadata

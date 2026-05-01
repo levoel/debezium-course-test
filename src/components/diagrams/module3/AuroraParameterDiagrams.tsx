@@ -34,7 +34,7 @@ export function ParameterHierarchyDiagram() {
 
           <div className="flex items-center gap-2">
             <Arrow direction="down" label="Inherits" />
-            <div className="text-xs text-gray-400">(binlog, replication params)</div>
+            <div className="text-xs text-[var(--ink-muted)]">(binlog, replication params)</div>
           </div>
 
           {/* Instance Level */}
@@ -80,7 +80,7 @@ export function ParameterHierarchyDiagram() {
         >
           <div className="space-y-3">
             <DiagramTooltip content="Cluster parameters применяются ко всем инстансам кластера одновременно. Изменения требуют reboot ВСЕХ инстансов (Aurora 2.10+ — вручную каждый).">
-              <div className="text-xs text-gray-400 text-center mb-3 cursor-help underline decoration-dotted">
+              <div className="text-xs text-[var(--ink-muted)] text-center mb-3 cursor-help underline decoration-dotted">
                 Применяется ко ВСЕМ инстансам
               </div>
             </DiagramTooltip>
@@ -121,7 +121,7 @@ export function ParameterHierarchyDiagram() {
         >
           <div className="space-y-3">
             <DiagramTooltip content="Instance parameters применяются к конкретному инстансу. Используются для performance tuning. binlog параметры здесь НЕ доступны!">
-              <div className="text-xs text-gray-400 text-center mb-3 cursor-help underline decoration-dotted">
+              <div className="text-xs text-[var(--ink-muted)] text-center mb-3 cursor-help underline decoration-dotted">
                 Применяется к конкретному инстансу
               </div>
             </DiagramTooltip>
@@ -151,13 +151,13 @@ export function ParameterHierarchyDiagram() {
 
       {/* Critical Warning */}
       <DiagramContainer title="Критическая ошибка" color="rose" className="max-w-2xl mx-auto">
-        <div className="text-sm text-gray-300 text-center space-y-2">
+        <div className="text-sm text-[var(--ink-default)] text-center space-y-2">
           <DiagramTooltip content="binlog_format, gtid_mode и другие replication параметры доступны ТОЛЬКО в DB Cluster Parameter Group. Попытка установить их в DB Parameter Group приведёт к ошибке или игнорированию.">
-            <div className="font-semibold text-rose-300 cursor-help underline decoration-dotted">
+            <div className="font-semibold text-rose-700 cursor-help underline decoration-dotted">
               Не пытайтесь настроить binlog в Instance Parameter Group!
             </div>
           </DiagramTooltip>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[var(--ink-muted)]">
             AWS вернёт ошибку "parameter not applicable"<br />
             или изменение будет молча проигнорировано.
           </div>
@@ -243,7 +243,7 @@ export function AuroraSetupProcessDiagram() {
         <div className="space-y-4">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 text-center">
-              <div className="text-sm text-gray-300 mb-2">Aurora &lt; 2.10</div>
+              <div className="text-sm text-[var(--ink-default)] mb-2">Aurora &lt; 2.10</div>
               <DiagramTooltip content="В старых версиях Aurora reboot writer автоматически перезагружал все readers. Одна команда — все инстансы обновлены.">
                 <FlowNode variant="connector" tabIndex={0} size="sm" className="mx-auto">
                   Reboot Writer &rarr; All Rebooted
@@ -252,7 +252,7 @@ export function AuroraSetupProcessDiagram() {
             </div>
 
             <div className="flex-1 text-center">
-              <div className="text-sm text-gray-300 mb-2">Aurora 2.10+</div>
+              <div className="text-sm text-[var(--ink-default)] mb-2">Aurora 2.10+</div>
               <DiagramTooltip content="КРИТИЧНО: Readers НЕ перезагружаются автоматически! После reboot writer нужно вручную перезагрузить каждый reader. Иначе readers будут показывать старые параметры.">
                 <FlowNode variant="target" tabIndex={0} size="sm" className="mx-auto border-2 border-rose-400">
                   Reboot Writer + Each Reader
@@ -261,9 +261,9 @@ export function AuroraSetupProcessDiagram() {
             </div>
           </div>
 
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             Проверьте binlog_format на КАЖДОМ инстансе после reboot!<br />
-            <code className="bg-gray-800 px-1 rounded">SHOW VARIABLES LIKE 'binlog_format';</code> должен показать ROW на всех.
+            <code className="bg-[var(--bg-sunken)] px-1 rounded">SHOW VARIABLES LIKE 'binlog_format';</code> должен показать ROW на всех.
           </div>
         </div>
       </DiagramContainer>
@@ -271,18 +271,18 @@ export function AuroraSetupProcessDiagram() {
       {/* Binlog Retention */}
       <DiagramContainer title="Binlog Retention через Stored Procedure" color="amber" className="max-w-2xl mx-auto">
         <div className="space-y-3">
-          <div className="text-sm text-gray-300 text-center">
+          <div className="text-sm text-[var(--ink-default)] text-center">
             Aurora НЕ поддерживает binlog_expire_logs_seconds.<br />
             Используйте stored procedure:
           </div>
 
           <DiagramTooltip content="mysql.rds_set_configuration — Aurora-специфичная процедура для настройки retention. Максимум 2160 часов (90 дней) для Aurora 3.x. Выполняйте только на Writer instance.">
-            <div className="bg-gray-800/50 rounded-lg p-3 font-mono text-xs text-center">
+            <div className="bg-[var(--bg-sunken)] rounded-lg p-3 font-mono text-xs text-center">
               CALL mysql.rds_set_configuration('binlog retention hours', 168);
             </div>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             168 часов = 7 дней (рекомендуется для CDC)
           </div>
         </div>
@@ -290,7 +290,7 @@ export function AuroraSetupProcessDiagram() {
 
       {/* Verification Checklist */}
       <DiagramContainer title="Чеклист проверки после настройки" color="emerald" className="max-w-lg mx-auto">
-        <div className="text-xs text-gray-400 space-y-2 font-mono">
+        <div className="text-xs text-[var(--ink-muted)] space-y-2 font-mono">
           <DiagramTooltip content="Проверяет формат binlog. Должен быть ROW для CDC.">
             <div className="cursor-help">SHOW VARIABLES LIKE 'binlog_format'; -- ROW</div>
           </DiagramTooltip>

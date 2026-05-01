@@ -57,11 +57,11 @@ export function CdcEventStructureDiagram() {
               <FlowNode
                 variant="app"
                 size="sm"
-                className="bg-gray-500/20 border-gray-400/30 text-gray-200"
+                className="bg-[var(--bg-deep)] border-[var(--line-medium)] text-[var(--ink-default)]"
                 tabIndex={0}
               >
                 schema
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   (описание структуры)
                 </span>
               </FlowNode>
@@ -82,11 +82,11 @@ export function CdcEventStructureDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                 tabIndex={0}
               >
                 payload
-                <span className="block text-xs text-gray-400 mt-1">(данные события)</span>
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">(данные события)</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -120,7 +120,7 @@ export function CdcEventStructureDiagram() {
                     <FlowNode
                       variant="app"
                       size="sm"
-                      className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                      className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                       tabIndex={0}
                     >
                       before: &#123;...&#125;
@@ -129,7 +129,7 @@ export function CdcEventStructureDiagram() {
 
                   <Arrow direction="right" />
 
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-[var(--ink-muted)]">
                     <DiagramTooltip
                       content={
                         <div>
@@ -146,7 +146,7 @@ export function CdcEventStructureDiagram() {
                         </div>
                       }
                     >
-                      <span className="cursor-pointer hover:text-emerald-300" tabIndex={0}>
+                      <span className="cursor-pointer hover:text-emerald-700" tabIndex={0}>
                         id, customer_id, total, ...
                       </span>
                     </DiagramTooltip>
@@ -174,7 +174,7 @@ export function CdcEventStructureDiagram() {
                     <FlowNode
                       variant="app"
                       size="sm"
-                      className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                      className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                       tabIndex={0}
                     >
                       after: &#123;...&#125;
@@ -183,7 +183,7 @@ export function CdcEventStructureDiagram() {
 
                   <Arrow direction="right" />
 
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-[var(--ink-muted)]">
                     <DiagramTooltip
                       content={
                         <div>
@@ -200,7 +200,7 @@ export function CdcEventStructureDiagram() {
                         </div>
                       }
                     >
-                      <span className="cursor-pointer hover:text-emerald-300" tabIndex={0}>
+                      <span className="cursor-pointer hover:text-emerald-700" tabIndex={0}>
                         id, customer_id, total, ...
                       </span>
                     </DiagramTooltip>
@@ -234,18 +234,18 @@ export function CdcEventStructureDiagram() {
                     <FlowNode
                       variant="app"
                       size="sm"
-                      className="bg-rose-500/20 border-rose-400/30 text-rose-200"
+                      className="bg-rose-500/20 border-rose-400/30 text-rose-700"
                       tabIndex={0}
                     >
                       op: 'c'|'u'|'d'|'r'
                     </FlowNode>
                   </DiagramTooltip>
 
-                  <div className="text-xs text-gray-400 flex gap-2">
-                    <span className="text-rose-300">c=INSERT</span>
-                    <span className="text-blue-300">u=UPDATE</span>
-                    <span className="text-amber-300">d=DELETE</span>
-                    <span className="text-emerald-300">r=READ</span>
+                  <div className="text-xs text-[var(--ink-muted)] flex gap-2">
+                    <span className="text-rose-700">c=INSERT</span>
+                    <span className="text-blue-700">u=UPDATE</span>
+                    <span className="text-amber-700">d=DELETE</span>
+                    <span className="text-emerald-700">r=READ</span>
                   </div>
                 </div>
 
@@ -273,14 +273,14 @@ export function CdcEventStructureDiagram() {
                     <FlowNode
                       variant="app"
                       size="sm"
-                      className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+                      className="bg-amber-500/20 border-amber-400/30 text-amber-700"
                       tabIndex={0}
                     >
                       ts_ms: 1738425600000
                     </FlowNode>
                   </DiagramTooltip>
 
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-[var(--ink-muted)]">
                     (epoch millis)
                   </div>
                 </div>
@@ -307,7 +307,7 @@ export function CdcEventStructureDiagram() {
                     <FlowNode
                       variant="app"
                       size="sm"
-                      className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                      className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                       tabIndex={0}
                     >
                       source: &#123;...&#125;
@@ -316,7 +316,7 @@ export function CdcEventStructureDiagram() {
 
                   <Arrow direction="right" />
 
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-[var(--ink-muted)]">
                     <DiagramTooltip
                       content={
                         <div>
@@ -340,7 +340,7 @@ export function CdcEventStructureDiagram() {
                         </div>
                       }
                     >
-                      <span className="cursor-pointer hover:text-purple-300" tabIndex={0}>
+                      <span className="cursor-pointer hover:text-purple-700" tabIndex={0}>
                         db, table, lsn, connector, ...
                       </span>
                     </DiagramTooltip>
@@ -352,8 +352,8 @@ export function CdcEventStructureDiagram() {
         </div>
 
         {/* Summary note */}
-        <div className="mt-4 text-xs text-gray-400 max-w-2xl">
-          <div className="font-semibold text-blue-300 mb-2">
+        <div className="mt-4 text-xs text-[var(--ink-muted)] max-w-2xl">
+          <div className="font-semibold text-blue-700 mb-2">
             Критически важно для Pandas обработки:
           </div>
           <ul className="list-disc list-inside space-y-1">

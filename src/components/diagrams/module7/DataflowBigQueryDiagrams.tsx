@@ -62,7 +62,7 @@ export function CdcToBigQueryDiagram() {
                   Dataflow Job
                 </FlowNode>
               </DiagramTooltip>
-              <div className="text-xs text-emerald-200/70 text-center">
+              <div className="text-xs text-emerald-700/70 text-center">
                 MERGE каждые 60s
               </div>
             </div>
@@ -102,7 +102,7 @@ export function CdcToBigQueryDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-blue-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-blue-700/70">
         <p>updateFrequencySecs=60 определяет частоту MERGE (каждую минуту)</p>
         <p className="mt-1">At-least-once достаточно для CDC: MERGE по PK идемпотентен</p>
       </div>
@@ -192,20 +192,20 @@ export function DataflowEndToEndWorkflowDiagram() {
               <DiagramTooltip content="Все события записываются для аудита">
                 <FlowNode variant="gcp-storage" size="sm" tabIndex={0}>Changelog Table</FlowNode>
               </DiagramTooltip>
-              <div className="text-xs text-blue-200/70">Append-only</div>
+              <div className="text-xs text-blue-700/70">Append-only</div>
             </div>
             <Arrow direction="right" label="MERGE" />
             <div className="flex flex-col gap-2">
               <DiagramTooltip content="MERGE ON primary_key WHEN MATCHED THEN UPDATE/DELETE">
                 <FlowNode variant="gcp-storage" size="sm" tabIndex={0}>Replica Table</FlowNode>
               </DiagramTooltip>
-              <div className="text-xs text-blue-200/70">Current state</div>
+              <div className="text-xs text-blue-700/70">Current state</div>
             </div>
           </div>
         </DiagramContainer>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-purple-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-purple-700/70">
         <p className="font-semibold mb-1">Key Points:</p>
         <ul className="space-y-1">
           <li>• Latency: ~60-90 секунд от INSERT в Cloud SQL до Replica в BigQuery</li>

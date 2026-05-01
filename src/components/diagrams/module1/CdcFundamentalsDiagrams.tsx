@@ -45,7 +45,7 @@ export function CdcComparisonDiagram() {
           <Arrow direction="up" label="ResultSet" />
 
           {/* Back to APP */}
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             ↑ Обработка в приложении
           </div>
         </div>

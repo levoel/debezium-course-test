@@ -50,7 +50,7 @@ export function BatchFeaturesProblemDiagram() {
                 Batch ETL job запускается по расписанию (например, в 2am).
                 Читает полный dump базы и вычисляет features.
               </p>
-              <p className="mt-2 text-amber-300">
+              <p className="mt-2 text-amber-700">
                 Проблема: к моменту запуска данные уже устаревшие.
               </p>
             </div>
@@ -58,11 +58,11 @@ export function BatchFeaturesProblemDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+            className="bg-amber-500/20 border-amber-400/30 text-amber-700"
             tabIndex={0}
           >
             ETL Job
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Runs at 2am
             </span>
           </FlowNode>
@@ -96,7 +96,7 @@ export function BatchFeaturesProblemDiagram() {
                 сутки. К моменту prediction могут быть устаревшими на 12-24
                 часа.
               </p>
-              <p className="mt-2 text-amber-300">
+              <p className="mt-2 text-amber-700">
                 Staleness: features могут быть old на 12-24 часа.
               </p>
             </div>
@@ -104,7 +104,7 @@ export function BatchFeaturesProblemDiagram() {
         >
           <FlowNode
             variant="cluster"
-            className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+            className="bg-amber-500/20 border-amber-400/30 text-amber-700"
             tabIndex={0}
           >
             Feature Store
@@ -121,7 +121,7 @@ export function BatchFeaturesProblemDiagram() {
                 ML модель использует features для prediction. Получает stale
                 features (устаревшие на 12-24 часа).
               </p>
-              <p className="mt-2 text-rose-300">
+              <p className="mt-2 text-rose-700">
                 Риск: fraud detection — мошенник совершает 50 транзакций, пока
                 features обновятся.
               </p>
@@ -130,7 +130,7 @@ export function BatchFeaturesProblemDiagram() {
         >
           <FlowNode variant="app" size="sm" tabIndex={0}>
             ML Model
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Features (12h old)
             </span>
           </FlowNode>
@@ -139,7 +139,7 @@ export function BatchFeaturesProblemDiagram() {
 
       <div className="mt-4 text-sm text-amber-400 border-l-2 border-amber-400 pl-3">
         <strong>Проблема:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           Features обновляются раз в сутки. К моменту prediction могут быть
           устаревшими на 12-24 часа. Fraud detection: мошенник успеет совершить
           50 транзакций, пока features обновятся.
@@ -186,7 +186,7 @@ export function RealTimeFeaturesPipelineDiagram() {
                 Debezium публикует CDC события в Kafka. Latency в миллисекундах
                 вместо часов.
               </p>
-              <p className="mt-2 text-emerald-300">
+              <p className="mt-2 text-emerald-700">
                 Преимущество: continuous stream изменений, не batch dumps.
               </p>
             </div>
@@ -194,7 +194,7 @@ export function RealTimeFeaturesPipelineDiagram() {
         >
           <FlowNode variant="cluster" size="sm" tabIndex={0}>
             Kafka
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               ms latency
             </span>
           </FlowNode>
@@ -210,7 +210,7 @@ export function RealTimeFeaturesPipelineDiagram() {
                 PySpark Structured Streaming вычисляет features из CDC событий
                 в real-time. Window aggregations с watermark.
               </p>
-              <p className="mt-2 text-emerald-300">
+              <p className="mt-2 text-emerald-700">
                 Features обновляются при каждом CDC событии. Latency в
                 секундах, не часах.
               </p>
@@ -219,11 +219,11 @@ export function RealTimeFeaturesPipelineDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
             tabIndex={0}
           >
             PySpark
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Feature Computation
             </span>
           </FlowNode>
@@ -244,12 +244,12 @@ export function RealTimeFeaturesPipelineDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
             size="sm"
             tabIndex={0}
           >
             Fresh features
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               seconds old
             </span>
           </FlowNode>
@@ -265,7 +265,7 @@ export function RealTimeFeaturesPipelineDiagram() {
                 Redis — online feature store для low-latency lookups (μs).
                 Features обновляются при каждом CDC событии.
               </p>
-              <p className="mt-2 text-emerald-300">
+              <p className="mt-2 text-emerald-700">
                 Real-time inference: модель видит последние транзакции клиента.
               </p>
             </div>
@@ -273,11 +273,11 @@ export function RealTimeFeaturesPipelineDiagram() {
         >
           <FlowNode
             variant="cluster"
-            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
             tabIndex={0}
           >
             Feature Store
-            <span className="block text-xs text-gray-400 mt-1">Redis</span>
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">Redis</span>
           </FlowNode>
         </DiagramTooltip>
 
@@ -291,7 +291,7 @@ export function RealTimeFeaturesPipelineDiagram() {
                 ML модель использует fresh features для prediction. Видит
                 последние транзакции клиента в real-time.
               </p>
-              <p className="mt-2 text-emerald-300">
+              <p className="mt-2 text-emerald-700">
                 Fraud detection: модель обнаруживает anomalies в течение
                 секунд, не часов.
               </p>
@@ -306,7 +306,7 @@ export function RealTimeFeaturesPipelineDiagram() {
 
       <div className="mt-4 text-sm text-emerald-400 border-l-2 border-emerald-400 pl-3">
         <strong>Преимущество:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           Features обновляются при каждом CDC событии. Latency в секундах, не
           часах. Fraud detection: модель видит последние транзакции клиента в
           реальном времени.
@@ -347,7 +347,7 @@ export function CustomerBehaviorFeaturesDiagram() {
             >
               <FlowNode variant="database" tabIndex={0}>
                 orders table
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   PostgreSQL
                 </span>
               </FlowNode>
@@ -397,7 +397,7 @@ export function CustomerBehaviorFeaturesDiagram() {
             >
               <FlowNode variant="cluster" tabIndex={0}>
                 Kafka Topic
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   dbserver1.public.orders
                 </span>
               </FlowNode>
@@ -432,11 +432,11 @@ export function CustomerBehaviorFeaturesDiagram() {
             >
               <FlowNode
                 variant="connector"
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 tabIndex={0}
               >
                 PySpark Streaming
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Window aggregations
                 </span>
               </FlowNode>
@@ -450,7 +450,7 @@ export function CustomerBehaviorFeaturesDiagram() {
                     Watermark позволяет обрабатывать late-arriving events
                     (события с опозданием до 1 часа).
                   </p>
-                  <p className="mt-2 text-purple-300">
+                  <p className="mt-2 text-purple-700">
                     Events старше 1 часа от watermark будут dropped.
                   </p>
                 </div>
@@ -458,12 +458,12 @@ export function CustomerBehaviorFeaturesDiagram() {
             >
               <FlowNode
                 variant="connector"
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 size="sm"
                 tabIndex={0}
               >
                 Watermark
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   1 hour late data
                 </span>
               </FlowNode>
@@ -490,7 +490,7 @@ export function CustomerBehaviorFeaturesDiagram() {
                     Redis — online feature store для real-time inference. Low
                     latency reads (μs). Point lookups по customer_id.
                   </p>
-                  <p className="mt-2 text-emerald-300">
+                  <p className="mt-2 text-emerald-700">
                     Use case: Real-time ML model serving.
                   </p>
                 </div>
@@ -498,11 +498,11 @@ export function CustomerBehaviorFeaturesDiagram() {
             >
               <FlowNode
                 variant="cluster"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 Redis
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Online Store
                 </span>
               </FlowNode>
@@ -516,7 +516,7 @@ export function CustomerBehaviorFeaturesDiagram() {
                     Parquet files в data lake — offline feature store для batch
                     training. Historical features для model training.
                   </p>
-                  <p className="mt-2 text-blue-300">
+                  <p className="mt-2 text-blue-700">
                     Use case: Model training, feature drift analysis.
                   </p>
                 </div>
@@ -524,11 +524,11 @@ export function CustomerBehaviorFeaturesDiagram() {
             >
               <FlowNode
                 variant="sink"
-                className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                 tabIndex={0}
               >
                 Parquet
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Offline Store
                 </span>
               </FlowNode>
@@ -539,7 +539,7 @@ export function CustomerBehaviorFeaturesDiagram() {
 
       <div className="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
         <strong>Multi-layer architecture:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           4-слойная архитектура разделяет concerns: source → CDC → computation
           → store. CDC Layer обеспечивает real-time capture. Computation Layer
           вычисляет features. Store Layer обеспечивает dual write: Redis для
@@ -577,11 +577,11 @@ export function FeatureStoreArchitectureDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             Feature Computation
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               PySpark Streaming
             </span>
           </FlowNode>
@@ -611,24 +611,24 @@ export function FeatureStoreArchitectureDiagram() {
                 >
                   <FlowNode
                     variant="cluster"
-                    className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                    className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                     tabIndex={0}
                   >
                     Redis
-                    <span className="block text-xs text-gray-400 mt-1">
+                    <span className="block text-xs text-[var(--ink-muted)] mt-1">
                       customer:123:features
                     </span>
                   </FlowNode>
                 </DiagramTooltip>
 
-                <div className="text-sm text-gray-300 space-y-2">
+                <div className="text-sm text-[var(--ink-default)] space-y-2">
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5" />
                     <div>
-                      <div className="font-medium text-emerald-300">
+                      <div className="font-medium text-emerald-700">
                         Low latency reads (ms)
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-[var(--ink-muted)]">
                         Point lookups by key
                       </div>
                     </div>
@@ -637,10 +637,10 @@ export function FeatureStoreArchitectureDiagram() {
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5" />
                     <div>
-                      <div className="font-medium text-emerald-300">
+                      <div className="font-medium text-emerald-700">
                         Last N values per entity
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-[var(--ink-muted)]">
                         Recent features only
                       </div>
                     </div>
@@ -649,10 +649,10 @@ export function FeatureStoreArchitectureDiagram() {
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5" />
                     <div>
-                      <div className="font-medium text-emerald-300">
+                      <div className="font-medium text-emerald-700">
                         Use case: Real-time inference
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-[var(--ink-muted)]">
                         ML model serving
                       </div>
                     </div>
@@ -685,24 +685,24 @@ export function FeatureStoreArchitectureDiagram() {
                 >
                   <FlowNode
                     variant="sink"
-                    className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                    className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                     tabIndex={0}
                   >
                     Parquet Files
-                    <span className="block text-xs text-gray-400 mt-1">
+                    <span className="block text-xs text-[var(--ink-muted)] mt-1">
                       S3 / Data Lake
                     </span>
                   </FlowNode>
                 </DiagramTooltip>
 
-                <div className="text-sm text-gray-300 space-y-2">
+                <div className="text-sm text-[var(--ink-default)] space-y-2">
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 rounded-full bg-blue-400 mt-1.5" />
                     <div>
-                      <div className="font-medium text-blue-300">
+                      <div className="font-medium text-blue-700">
                         Batch reads for training
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-[var(--ink-muted)]">
                         Historical point-in-time
                       </div>
                     </div>
@@ -711,10 +711,10 @@ export function FeatureStoreArchitectureDiagram() {
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 rounded-full bg-blue-400 mt-1.5" />
                     <div>
-                      <div className="font-medium text-blue-300">
+                      <div className="font-medium text-blue-700">
                         Historical features
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-[var(--ink-muted)]">
                         All history retained
                       </div>
                     </div>
@@ -723,10 +723,10 @@ export function FeatureStoreArchitectureDiagram() {
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 rounded-full bg-blue-400 mt-1.5" />
                     <div>
-                      <div className="font-medium text-blue-300">
+                      <div className="font-medium text-blue-700">
                         Use case: Feature drift analysis
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-[var(--ink-muted)]">
                         Model training
                       </div>
                     </div>
@@ -738,9 +738,9 @@ export function FeatureStoreArchitectureDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 text-sm text-gray-400 border-l-2 border-gray-400 pl-3">
+      <div className="mt-4 text-sm text-[var(--ink-muted)] border-l-2 border-[var(--line-medium)] pl-3">
         <strong>Dual-write pattern essential:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           Один feature computation → два outputs. Online Store (Redis) для
           real-time inference с low latency. Offline Store (Parquet) для batch
           training с historical features. Dual-write обеспечивает consistency

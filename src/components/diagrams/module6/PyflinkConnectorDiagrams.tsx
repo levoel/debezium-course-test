@@ -96,9 +96,9 @@ export function PandasVsPyflinkComparisonDiagram() {
           </DiagramTooltip>
 
           <Arrow direction="down" dashed />
-          <span className="text-xs text-gray-400">Цикл повторяется</span>
+          <span className="text-xs text-[var(--ink-muted)]">Цикл повторяется</span>
 
-          <div className="mt-2 text-sm text-amber-300 font-semibold">
+          <div className="mt-2 text-sm text-amber-700 font-semibold">
             Latency: минуты/часы
           </div>
         </div>
@@ -164,7 +164,7 @@ export function PandasVsPyflinkComparisonDiagram() {
               variant="database"
               size="sm"
               tabIndex={0}
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             >
               Stateful агрегации
             </FlowNode>
@@ -189,9 +189,9 @@ export function PandasVsPyflinkComparisonDiagram() {
           </DiagramTooltip>
 
           <Arrow direction="down" dashed />
-          <span className="text-xs text-gray-400">Поток продолжается</span>
+          <span className="text-xs text-[var(--ink-muted)]">Поток продолжается</span>
 
-          <div className="mt-2 text-sm text-emerald-300 font-semibold">
+          <div className="mt-2 text-sm text-emerald-700 font-semibold">
             Latency: миллисекунды/секунды
           </div>
         </div>
@@ -232,7 +232,7 @@ export function PyflinkCdcArchitectureDiagram() {
             >
               <FlowNode variant="database" tabIndex={0}>
                 PostgreSQL
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   orders table
                 </span>
               </FlowNode>
@@ -283,10 +283,10 @@ export function PyflinkCdcArchitectureDiagram() {
                 variant="cluster"
                 size="sm"
                 tabIndex={0}
-                className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                className="bg-blue-500/20 border-blue-400/30 text-blue-700"
               >
                 Kafka Topic
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   dbserver1.public.orders
                 </span>
               </FlowNode>
@@ -338,7 +338,7 @@ export function PyflinkCdcArchitectureDiagram() {
                 variant="database"
                 size="sm"
                 tabIndex={0}
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               >
                 VIEW orders_current
               </FlowNode>
@@ -362,7 +362,7 @@ export function PyflinkCdcArchitectureDiagram() {
                 variant="app"
                 size="sm"
                 tabIndex={0}
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               >
                 SQL Query
               </FlowNode>
@@ -403,7 +403,7 @@ export function PyflinkCdcArchitectureDiagram() {
 
         <div className="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
           <strong>Ключевое преимущество PyFlink:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             Distributed stream processing с stateful operations. Масштабируется
             горизонтально (кластер из N TaskManagers). Fault tolerance через
             checkpoints и state recovery.

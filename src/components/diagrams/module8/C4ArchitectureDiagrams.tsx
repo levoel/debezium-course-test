@@ -52,7 +52,7 @@ export function SystemContextDiagram() {
           }>
             <FlowNode variant="connector" className="text-lg font-bold w-full">
               CDC Pipeline
-              <div className="text-xs font-normal text-gray-400 mt-1">
+              <div className="text-xs font-normal text-[var(--ink-muted)] mt-1">
                 Captures and streams changes from Aurora to BigQuery
               </div>
             </FlowNode>
@@ -73,7 +73,7 @@ export function SystemContextDiagram() {
             }>
               <FlowNode variant="sink" className="border-dashed">
                 E-commerce Application
-                <div className="text-xs text-gray-400 mt-1">[System_Ext]</div>
+                <div className="text-xs text-[var(--ink-muted)] mt-1">[System_Ext]</div>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -90,19 +90,19 @@ export function SystemContextDiagram() {
             }>
               <FlowNode variant="sink" className="border-dashed">
                 BigQuery
-                <div className="text-xs text-gray-400 mt-1">[System_Ext]</div>
+                <div className="text-xs text-[var(--ink-muted)] mt-1">[System_Ext]</div>
               </FlowNode>
             </DiagramTooltip>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-400">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-[var(--ink-muted)]">
         <p className="font-semibold mb-1">C4 System Context показывает:</p>
         <ul className="space-y-1">
-          <li><span className="text-blue-300">Person</span> (rounded node) - внешний актер, взаимодействующий с системой</li>
-          <li><span className="text-blue-300">System</span> (solid border) - наша система, которую документируем</li>
-          <li><span className="text-blue-300">System_Ext</span> (dashed border) - внешние системы вне нашего контроля</li>
+          <li><span className="text-blue-700">Person</span> (rounded node) - внешний актер, взаимодействующий с системой</li>
+          <li><span className="text-blue-700">System</span> (solid border) - наша система, которую документируем</li>
+          <li><span className="text-blue-700">System_Ext</span> (dashed border) - внешние системы вне нашего контроля</li>
         </ul>
       </div>
     </DiagramContainer>
@@ -134,7 +134,7 @@ export function ContainerDiagram() {
             }>
               <FlowNode variant="database">
                 Aurora PostgreSQL
-                <div className="text-xs text-gray-400 mt-1">Database</div>
+                <div className="text-xs text-[var(--ink-muted)] mt-1">Database</div>
               </FlowNode>
             </DiagramTooltip>
             <DiagramTooltip content={
@@ -147,7 +147,7 @@ export function ContainerDiagram() {
             }>
               <FlowNode variant="connector">
                 Outbox Table
-                <div className="text-xs text-gray-400 mt-1">PostgreSQL Table</div>
+                <div className="text-xs text-[var(--ink-muted)] mt-1">PostgreSQL Table</div>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -166,7 +166,7 @@ export function ContainerDiagram() {
             }>
               <FlowNode variant="connector">
                 Debezium Connector
-                <div className="text-xs text-gray-400 mt-1">Kafka Connect</div>
+                <div className="text-xs text-[var(--ink-muted)] mt-1">Kafka Connect</div>
               </FlowNode>
             </DiagramTooltip>
             <DiagramTooltip content={
@@ -179,7 +179,7 @@ export function ContainerDiagram() {
             }>
               <FlowNode variant="cluster">
                 Kafka
-                <div className="text-xs text-gray-400 mt-1">Event Streaming</div>
+                <div className="text-xs text-[var(--ink-muted)] mt-1">Event Streaming</div>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -197,7 +197,7 @@ export function ContainerDiagram() {
           }>
             <FlowNode variant="connector">
               PyFlink Job
-              <div className="text-xs text-gray-400 mt-1">Python/Flink</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">Python/Flink</div>
             </FlowNode>
           </DiagramTooltip>
         </DiagramContainer>
@@ -214,7 +214,7 @@ export function ContainerDiagram() {
           }>
             <FlowNode variant="sink">
               BigQuery
-              <div className="text-xs text-gray-400 mt-1">Data Warehouse</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">Data Warehouse</div>
             </FlowNode>
           </DiagramTooltip>
         </DiagramContainer>
@@ -232,7 +232,7 @@ export function ContainerDiagram() {
             }>
               <FlowNode variant="sink">
                 Prometheus
-                <div className="text-xs text-gray-400 mt-1">Metrics DB</div>
+                <div className="text-xs text-[var(--ink-muted)] mt-1">Metrics DB</div>
               </FlowNode>
             </DiagramTooltip>
             <DiagramTooltip content={
@@ -245,20 +245,20 @@ export function ContainerDiagram() {
             }>
               <FlowNode variant="connector">
                 Grafana
-                <div className="text-xs text-gray-400 mt-1">Dashboards</div>
+                <div className="text-xs text-[var(--ink-muted)] mt-1">Dashboards</div>
               </FlowNode>
             </DiagramTooltip>
           </div>
         </DiagramContainer>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-400">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-[var(--ink-muted)]">
         <p className="font-semibold mb-1">C4 Container Diagram показывает:</p>
         <ul className="space-y-1">
-          <li><span className="text-blue-300">Container_Boundary</span> - границы подсистем (DiagramContainer)</li>
-          <li><span className="text-blue-300">ContainerDb</span> - database компоненты (variant="database")</li>
-          <li><span className="text-blue-300">Container</span> - application компоненты (variant="connector")</li>
-          <li><span className="text-blue-300">ContainerQueue</span> - messaging компоненты (variant="cluster")</li>
+          <li><span className="text-blue-700">Container_Boundary</span> - границы подсистем (DiagramContainer)</li>
+          <li><span className="text-blue-700">ContainerDb</span> - database компоненты (variant="database")</li>
+          <li><span className="text-blue-700">Container</span> - application компоненты (variant="connector")</li>
+          <li><span className="text-blue-700">ContainerQueue</span> - messaging компоненты (variant="cluster")</li>
           <li>Технология указана под каждым компонентом</li>
         </ul>
       </div>
@@ -323,9 +323,9 @@ export function CapstoneProjectStructureDiagram() {
     return (
       <div key={node.name}>
         <div className="flex items-center gap-2" style={{ paddingLeft: `${depth * 16}px` }}>
-          <span className="text-gray-500 select-none text-xs">{isDir ? '📁' : '📄'}</span>
-          <span className={`text-xs ${isDir ? 'text-gray-300 font-medium' : 'text-gray-400 font-mono'}`}>{node.name}</span>
-          {node.comment && <span className="text-[10px] text-gray-600 ml-1">{'// ' + node.comment}</span>}
+          <span className="text-[var(--ink-subtle)] select-none text-xs">{isDir ? '📁' : '📄'}</span>
+          <span className={`text-xs ${isDir ? 'text-[var(--ink-default)] font-medium' : 'text-[var(--ink-muted)] font-mono'}`}>{node.name}</span>
+          {node.comment && <span className="text-[10px] text-[var(--ink-subtle)] ml-1">{'// ' + node.comment}</span>}
         </div>
         {node.children?.map((c) => renderNode(c, depth + 1))}
       </div>

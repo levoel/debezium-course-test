@@ -36,7 +36,7 @@ export function ContentBasedRouterDiagram() {
         >
           <FlowNode variant="database" tabIndex={0}>
             customers
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               region: 'EU' | 'US'
             </span>
           </FlowNode>
@@ -70,7 +70,7 @@ export function ContentBasedRouterDiagram() {
                 Использует Groovy expression для вычисления имени топика на основе
                 значения поля. Имеет доступ к value.after.* для чтения полей.
               </p>
-              <p className="mt-2 text-purple-300">
+              <p className="mt-2 text-purple-700">
                 topic.expression: value.after.region == 'EU' ? 'events-eu' : 'events-us'
               </p>
             </div>
@@ -78,11 +78,11 @@ export function ContentBasedRouterDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             ContentBasedRouter
-            <span className="block text-xs text-gray-400 mt-2 font-mono">
+            <span className="block text-xs text-[var(--ink-muted)] mt-2 font-mono">
               if (region == 'EU')
               <br />
               → events-eu
@@ -106,7 +106,7 @@ export function ContentBasedRouterDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                 tabIndex={0}
               >
                 events-eu
@@ -129,7 +129,7 @@ export function ContentBasedRouterDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 tabIndex={0}
               >
                 events-us
@@ -166,7 +166,7 @@ export function MultiTenantRoutingDiagram() {
         >
           <FlowNode variant="database" tabIndex={0}>
             orders (multi-tenant)
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               tenant_id: 'acme' | 'globex'
             </span>
           </FlowNode>
@@ -183,7 +183,7 @@ export function MultiTenantRoutingDiagram() {
                 Каждый tenant получает изолированный топик для безопасности
                 и compliance.
               </p>
-              <p className="mt-2 text-blue-300">
+              <p className="mt-2 text-blue-700">
                 topic.expression: 'orders-' + value.after.tenant_id
               </p>
             </div>
@@ -191,11 +191,11 @@ export function MultiTenantRoutingDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             ContentBasedRouter
-            <span className="block text-xs text-gray-400 mt-2">
+            <span className="block text-xs text-[var(--ink-muted)] mt-2">
               Route by tenant_id
             </span>
           </FlowNode>
@@ -212,7 +212,7 @@ export function MultiTenantRoutingDiagram() {
                     Топик для tenant Acme. Consumer подписывается только на
                     этот топик и видит только события своего tenant.
                   </p>
-                  <p className="mt-2 text-blue-300">
+                  <p className="mt-2 text-blue-700">
                     Преимущество: Изоляция данных без фильтрации в consumer
                   </p>
                 </div>
@@ -220,7 +220,7 @@ export function MultiTenantRoutingDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                 tabIndex={0}
               >
                 orders-acme
@@ -238,7 +238,7 @@ export function MultiTenantRoutingDiagram() {
                     Топик для tenant Globex. Физическая изоляция на уровне Kafka
                     гарантирует безопасность данных.
                   </p>
-                  <p className="mt-2 text-purple-300">
+                  <p className="mt-2 text-purple-700">
                     Альтернатива: Один топик + фильтрация в consumer (неэффективно)
                   </p>
                 </div>
@@ -246,7 +246,7 @@ export function MultiTenantRoutingDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 tabIndex={0}
               >
                 orders-globex
@@ -283,7 +283,7 @@ export function RegionBasedRoutingDiagram() {
         >
           <FlowNode variant="database" tabIndex={0}>
             users
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               region: 'EU' | 'US' | 'APAC'
             </span>
           </FlowNode>
@@ -299,7 +299,7 @@ export function RegionBasedRoutingDiagram() {
                 ContentBasedRouter SMT с Groovy expression для определения
                 региона. События маршрутизируются в региональные топики.
               </p>
-              <p className="mt-2 text-emerald-300">
+              <p className="mt-2 text-emerald-700">
                 Критично для GDPR: EU данные остаются в EU Kafka cluster
               </p>
             </div>
@@ -307,11 +307,11 @@ export function RegionBasedRoutingDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             RegionRouter
-            <span className="block text-xs text-gray-400 mt-2">
+            <span className="block text-xs text-[var(--ink-muted)] mt-2">
               Route by region field
             </span>
           </FlowNode>
@@ -328,7 +328,7 @@ export function RegionBasedRoutingDiagram() {
                     Топик для EU данных. Может находиться в EU Kafka cluster
                     для полного compliance с GDPR.
                   </p>
-                  <p className="mt-2 text-blue-300">
+                  <p className="mt-2 text-blue-700">
                     Персональные данные EU граждан не покидают EU
                   </p>
                 </div>
@@ -336,7 +336,7 @@ export function RegionBasedRoutingDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                 tabIndex={0}
               >
                 users-eu
@@ -359,7 +359,7 @@ export function RegionBasedRoutingDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 tabIndex={0}
               >
                 users-us
@@ -382,7 +382,7 @@ export function RegionBasedRoutingDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+                className="bg-amber-500/20 border-amber-400/30 text-amber-700"
                 tabIndex={0}
               >
                 users-apac
@@ -391,8 +391,8 @@ export function RegionBasedRoutingDiagram() {
           </div>
         </div>
 
-        <div className="mt-4 text-sm text-gray-400 border-l-2 border-emerald-400 pl-3">
-          <strong className="text-emerald-300">Когда использовать?</strong>
+        <div className="mt-4 text-sm text-[var(--ink-muted)] border-l-2 border-emerald-400 pl-3">
+          <strong className="text-emerald-700">Когда использовать?</strong>
           <ul className="mt-1 list-disc list-inside">
             <li>GDPR compliance (EU data residency)</li>
             <li>Региональная изоляция для latency optimization</li>

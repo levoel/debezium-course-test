@@ -108,12 +108,12 @@ export function FailoverWithoutGtidSequence() {
       <SequenceDiagram actors={actors} messages={messages} messageSpacing={50} />
 
       <DiagramContainer title="Результат без GTID" color="rose">
-        <div className="text-sm text-gray-300 space-y-2">
+        <div className="text-sm text-[var(--ink-default)] space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-rose-400 font-bold">ПРОБЛЕМА:</span>
             <span>File:position бессмысленна на новом primary.</span>
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[var(--ink-muted)]">
             Binlog файлы на replica имеют ДРУГИЕ имена и смещения. Позиция mysql-bin.000015:2548 не существует на новом сервере.
             <br />
             Требуется ручное вмешательство или FULL RESNAPSHOT (часы/дни).
@@ -214,12 +214,12 @@ export function FailoverWithGtidSequence() {
       <SequenceDiagram actors={actors} messages={messages} messageSpacing={50} />
 
       <DiagramContainer title="Результат с GTID" color="emerald">
-        <div className="text-sm text-gray-300 space-y-2">
+        <div className="text-sm text-[var(--ink-default)] space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-emerald-400 font-bold">УСПЕХ:</span>
             <span>CDC продолжается БЕЗ MANUAL INTERVENTION.</span>
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[var(--ink-muted)]">
             GTID глобально уникален — одинаков на всех серверах в топологии.
             <br />
             Debezium может продолжить с той же позиции на любом сервере. Автоматическое восстановление за 30-60 секунд.
@@ -291,7 +291,7 @@ export function FailoverDecisionDiagram() {
                 <div className="text-xs text-amber-400 text-center">Часы работы</div>
               </div>
 
-              <div className="text-xs text-gray-400">или</div>
+              <div className="text-xs text-[var(--ink-muted)]">или</div>
 
               <div className="flex flex-col items-center gap-2">
                 <DiagramTooltip content="Вариант 2: Полный resnapshot базы данных. Гарантирует консистентность, но занимает часы/дни для больших баз.">
@@ -308,9 +308,9 @@ export function FailoverDecisionDiagram() {
 
       {/* Recommendation */}
       <DiagramContainer title="Рекомендация для Production" color="emerald" recommended>
-        <div className="text-sm text-gray-300">
+        <div className="text-sm text-[var(--ink-default)]">
           <span className="text-emerald-400 font-bold">Всегда включайте GTID mode</span> для Aurora MySQL и self-hosted MySQL:
-          <div className="mt-2 font-mono text-xs bg-gray-800/50 p-2 rounded">
+          <div className="mt-2 font-mono text-xs bg-[var(--bg-sunken)] p-2 rounded">
             gtid_mode = ON
             <br />
             enforce_gtid_consistency = ON
@@ -335,13 +335,13 @@ export function GtidSetComparisonDiagram() {
               <FlowNode variant="database" tabIndex={0}>
                 Primary
                 <br />
-                <span className="text-xs text-gray-400">UUID: 3e11fa47...</span>
+                <span className="text-xs text-[var(--ink-muted)]">UUID: 3e11fa47...</span>
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="font-mono text-xs bg-gray-800/50 p-3 rounded text-center">
+            <div className="font-mono text-xs bg-[var(--bg-sunken)] p-3 rounded text-center">
               <div className="text-blue-400">gtid_executed:</div>
-              <div className="text-gray-300">3e11fa47-...:1-10000</div>
+              <div className="text-[var(--ink-default)]">3e11fa47-...:1-10000</div>
             </div>
 
             <Arrow direction="down" dashed label="replication" />
@@ -350,13 +350,13 @@ export function GtidSetComparisonDiagram() {
               <FlowNode variant="database" tabIndex={0}>
                 Replica
                 <br />
-                <span className="text-xs text-gray-400">UUID: 4f22gb58...</span>
+                <span className="text-xs text-[var(--ink-muted)]">UUID: 4f22gb58...</span>
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="font-mono text-xs bg-gray-800/50 p-3 rounded text-center">
+            <div className="font-mono text-xs bg-[var(--bg-sunken)] p-3 rounded text-center">
               <div className="text-blue-400">gtid_executed:</div>
-              <div className="text-gray-300">3e11fa47-...:1-10000</div>
+              <div className="text-[var(--ink-default)]">3e11fa47-...:1-10000</div>
             </div>
           </div>
         </DiagramContainer>
@@ -373,17 +373,17 @@ export function GtidSetComparisonDiagram() {
               <FlowNode variant="database" tabIndex={0} className="border-2 border-emerald-400">
                 New Primary
                 <br />
-                <span className="text-xs text-gray-400">UUID: 4f22gb58...</span>
+                <span className="text-xs text-[var(--ink-muted)]">UUID: 4f22gb58...</span>
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="font-mono text-xs bg-gray-800/50 p-3 rounded text-center">
+            <div className="font-mono text-xs bg-[var(--bg-sunken)] p-3 rounded text-center">
               <div className="text-emerald-400">gtid_executed:</div>
-              <div className="text-gray-300">3e11fa47-...:1-10000,</div>
-              <div className="text-emerald-300">4f22gb58-...:1-50</div>
+              <div className="text-[var(--ink-default)]">3e11fa47-...:1-10000,</div>
+              <div className="text-emerald-700">4f22gb58-...:1-50</div>
             </div>
 
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               + 50 новых транзакций с новым UUID
             </div>
           </div>
@@ -392,7 +392,7 @@ export function GtidSetComparisonDiagram() {
 
       {/* Explanation */}
       <DiagramContainer title="Merge GTID Sets" color="neutral">
-        <div className="text-sm text-gray-300 space-y-2">
+        <div className="text-sm text-[var(--ink-default)] space-y-2">
           <div className="flex items-start gap-2">
             <span className="text-blue-400 font-bold">1.</span>
             <span>Старые GTID (от primary): 3e11fa47-...:1-10000 — сохраняются</span>
@@ -479,27 +479,27 @@ export function ReplicaPromotionDiagram() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
           <div className="flex flex-col items-center">
             <div className="text-rose-400 font-bold">0s</div>
-            <div className="text-gray-400">Failure</div>
+            <div className="text-[var(--ink-muted)]">Failure</div>
           </div>
           <Arrow direction="right" />
           <div className="flex flex-col items-center">
             <div className="text-amber-400 font-bold">30-60s</div>
-            <div className="text-gray-400">Detection</div>
+            <div className="text-[var(--ink-muted)]">Detection</div>
           </div>
           <Arrow direction="right" />
           <div className="flex flex-col items-center">
             <div className="text-blue-400 font-bold">60-90s</div>
-            <div className="text-gray-400">Promotion</div>
+            <div className="text-[var(--ink-muted)]">Promotion</div>
           </div>
           <Arrow direction="right" />
           <div className="flex flex-col items-center">
             <div className="text-purple-400 font-bold">90-120s</div>
-            <div className="text-gray-400">DNS Update</div>
+            <div className="text-[var(--ink-muted)]">DNS Update</div>
           </div>
           <Arrow direction="right" />
           <div className="flex flex-col items-center">
             <div className="text-emerald-400 font-bold">~2 min</div>
-            <div className="text-gray-400">Recovery</div>
+            <div className="text-[var(--ink-muted)]">Recovery</div>
           </div>
         </div>
       </DiagramContainer>
@@ -523,7 +523,7 @@ export function ConnectorReconfigurationDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="font-mono text-xs bg-gray-800/50 p-2 rounded">
+            <div className="font-mono text-xs bg-[var(--bg-sunken)] p-2 rounded">
               POST /connectors/mysql/stop
             </div>
           </div>
@@ -536,11 +536,11 @@ export function ConnectorReconfigurationDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="font-mono text-xs bg-gray-800/50 p-2 rounded text-left">
+            <div className="font-mono text-xs bg-[var(--bg-sunken)] p-2 rounded text-left">
               <div className="text-amber-400">// Если используете cluster endpoint:</div>
-              <div className="text-gray-400">// Изменения не нужны</div>
+              <div className="text-[var(--ink-muted)]">// Изменения не нужны</div>
               <div className="text-emerald-400 mt-2">// Если прямой endpoint:</div>
-              <div className="text-gray-300">database.hostname: new-primary</div>
+              <div className="text-[var(--ink-default)]">database.hostname: new-primary</div>
             </div>
           </div>
 
@@ -552,7 +552,7 @@ export function ConnectorReconfigurationDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="font-mono text-xs bg-gray-800/50 p-2 rounded">
+            <div className="font-mono text-xs bg-[var(--bg-sunken)] p-2 rounded">
               POST /connectors/mysql/restart
             </div>
           </div>
@@ -565,8 +565,8 @@ export function ConnectorReconfigurationDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="font-mono text-xs bg-gray-800/50 p-2 rounded text-left">
-              <div className="text-gray-300">GET /connectors/mysql/status</div>
+            <div className="font-mono text-xs bg-[var(--bg-sunken)] p-2 rounded text-left">
+              <div className="text-[var(--ink-default)]">GET /connectors/mysql/status</div>
               <div className="text-emerald-400">state: RUNNING</div>
             </div>
           </div>
@@ -576,11 +576,11 @@ export function ConnectorReconfigurationDiagram() {
       {/* Key configs */}
       <div className="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="gtid.source.includes" color="emerald" className="flex-1">
-          <div className="text-xs text-gray-300">
-            <div className="font-mono bg-gray-800/50 p-2 rounded mb-2">
+          <div className="text-xs text-[var(--ink-default)]">
+            <div className="font-mono bg-[var(--bg-sunken)] p-2 rounded mb-2">
               "gtid.source.includes": ".*"
             </div>
-            <div className="text-gray-400">
+            <div className="text-[var(--ink-muted)]">
               Рекомендуется ".*" для включения всех server UUIDs.
               После failover новый primary может иметь другой UUID.
             </div>
@@ -588,11 +588,11 @@ export function ConnectorReconfigurationDiagram() {
         </DiagramContainer>
 
         <DiagramContainer title="snapshot.mode" color="blue" className="flex-1">
-          <div className="text-xs text-gray-300">
-            <div className="font-mono bg-gray-800/50 p-2 rounded mb-2">
+          <div className="text-xs text-[var(--ink-default)]">
+            <div className="font-mono bg-[var(--bg-sunken)] p-2 rounded mb-2">
               "snapshot.mode": "when_needed"
             </div>
-            <div className="text-gray-400">
+            <div className="text-[var(--ink-muted)]">
               Позволяет connector resume с GTID offset без resnapshot.
               Snapshot только если offset невалиден.
             </div>
@@ -614,7 +614,7 @@ export function FailoverTimelineDiagram() {
           {/* Timeline visualization */}
           <div className="relative">
             {/* Timeline line */}
-            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-600 transform -translate-x-1/2" />
+            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-[var(--bg-deep)] transform -translate-x-1/2" />
 
             {/* Events */}
             <div className="flex flex-col gap-8">
@@ -628,7 +628,7 @@ export function FailoverTimelineDiagram() {
                   </DiagramTooltip>
                 </div>
                 <div className="w-4 h-4 bg-rose-400 rounded-full z-10" />
-                <div className="flex-1 text-xs text-gray-400">
+                <div className="flex-1 text-xs text-[var(--ink-muted)]">
                   <span className="text-rose-400 font-bold">T+0s</span>
                   <br />
                   Connection lost
@@ -637,7 +637,7 @@ export function FailoverTimelineDiagram() {
 
               {/* Event 2: Detection */}
               <div className="flex items-center gap-4">
-                <div className="flex-1 text-right text-xs text-gray-400">
+                <div className="flex-1 text-right text-xs text-[var(--ink-muted)]">
                   <span className="text-amber-400 font-bold">T+30-60s</span>
                   <br />
                   Health checks failing
@@ -662,7 +662,7 @@ export function FailoverTimelineDiagram() {
                   </DiagramTooltip>
                 </div>
                 <div className="w-4 h-4 bg-emerald-400 rounded-full z-10" />
-                <div className="flex-1 text-xs text-gray-400">
+                <div className="flex-1 text-xs text-[var(--ink-muted)]">
                   <span className="text-emerald-400 font-bold">T+60-90s</span>
                   <br />
                   New primary ready
@@ -671,7 +671,7 @@ export function FailoverTimelineDiagram() {
 
               {/* Event 4: DNS */}
               <div className="flex items-center gap-4">
-                <div className="flex-1 text-right text-xs text-gray-400">
+                <div className="flex-1 text-right text-xs text-[var(--ink-muted)]">
                   <span className="text-blue-400 font-bold">T+90-120s</span>
                   <br />
                   TTL 5s propagation
@@ -696,7 +696,7 @@ export function FailoverTimelineDiagram() {
                   </DiagramTooltip>
                 </div>
                 <div className="w-4 h-4 bg-purple-400 rounded-full z-10" />
-                <div className="flex-1 text-xs text-gray-400">
+                <div className="flex-1 text-xs text-[var(--ink-muted)]">
                   <span className="text-purple-400 font-bold">T+~2min</span>
                   <br />
                   CDC restored
@@ -710,18 +710,18 @@ export function FailoverTimelineDiagram() {
       {/* Time estimates */}
       <div className="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="Aurora Multi-AZ" color="emerald" className="flex-1">
-          <div className="text-xs text-gray-300">
+          <div className="text-xs text-[var(--ink-default)]">
             <span className="text-emerald-400 font-bold">1-2 минуты</span> total recovery
             <br />
-            <span className="text-gray-400">Automatic failover, no manual intervention</span>
+            <span className="text-[var(--ink-muted)]">Automatic failover, no manual intervention</span>
           </div>
         </DiagramContainer>
 
         <DiagramContainer title="Self-Hosted MySQL" color="amber" className="flex-1">
-          <div className="text-xs text-gray-300">
+          <div className="text-xs text-[var(--ink-default)]">
             <span className="text-amber-400 font-bold">5-30 минут</span> total recovery
             <br />
-            <span className="text-gray-400">Depends on orchestration (Orchestrator, ProxySQL)</span>
+            <span className="text-[var(--ink-muted)]">Depends on orchestration (Orchestrator, ProxySQL)</span>
           </div>
         </DiagramContainer>
       </div>

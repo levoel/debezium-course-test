@@ -28,7 +28,7 @@ export function AuroraParameterGroupDiagram() {
         >
           <div className="space-y-3">
             <DiagramTooltip content="DB Cluster Parameter Group применяется ко ВСЕМУ кластеру Aurora. Здесь настраивается rds.logical_replication=1 для CDC. Это критически важный тип группы для Debezium!">
-              <div className="text-xs text-gray-400 text-center mb-3 cursor-help underline decoration-dotted">
+              <div className="text-xs text-[var(--ink-muted)] text-center mb-3 cursor-help underline decoration-dotted">
                 Применяется ко ВСЕМ инстансам кластера
               </div>
             </DiagramTooltip>
@@ -63,7 +63,7 @@ export function AuroraParameterGroupDiagram() {
         >
           <div className="space-y-3">
             <DiagramTooltip content="DB Instance Parameter Group применяется к конкретному инстансу. Используется для memory tuning, не для репликации. rds.logical_replication здесь НЕ доступен!">
-              <div className="text-xs text-gray-400 text-center mb-3 cursor-help underline decoration-dotted">
+              <div className="text-xs text-[var(--ink-muted)] text-center mb-3 cursor-help underline decoration-dotted">
                 Применяется к конкретному инстансу
               </div>
             </DiagramTooltip>
@@ -93,7 +93,7 @@ export function AuroraParameterGroupDiagram() {
 
       {/* Aurora Instances */}
       <div className="flex flex-col items-center gap-4">
-        <div className="text-sm text-gray-400 text-center">
+        <div className="text-sm text-[var(--ink-muted)] text-center">
           Aurora Cluster Instances
         </div>
 
@@ -117,7 +117,7 @@ export function AuroraParameterGroupDiagram() {
           </DiagramTooltip>
         </div>
 
-        <div className="text-xs text-gray-500 text-center">
+        <div className="text-xs text-[var(--ink-subtle)] text-center">
           Cluster Parameter Group применяется ко ВСЕМ инстансам
         </div>
       </div>
@@ -194,14 +194,14 @@ export function AuroraSetupProcessDiagram() {
 
       {/* Critical warning */}
       <DiagramContainer title="Критическое предупреждение" color="rose" className="max-w-2xl mx-auto">
-        <div className="text-sm text-gray-300 text-center space-y-2">
-          <div className="font-semibold text-rose-300">
+        <div className="text-sm text-[var(--ink-default)] text-center space-y-2">
+          <div className="font-semibold text-rose-700">
             Шаг 4 (Reboot) обязателен!
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[var(--ink-muted)]">
             Без reboot Writer Instance параметры НЕ применяются.
             <br />
-            <code className="bg-gray-800 px-1 rounded text-[11px]">SHOW wal_level;</code> покажет <code className="bg-gray-800 px-1 rounded text-[11px]">replica</code> вместо <code className="bg-gray-800 px-1 rounded text-[11px]">logical</code>
+            <code className="bg-[var(--bg-sunken)] px-1 rounded text-[11px]">SHOW wal_level;</code> покажет <code className="bg-[var(--bg-sunken)] px-1 rounded text-[11px]">replica</code> вместо <code className="bg-[var(--bg-sunken)] px-1 rounded text-[11px]">logical</code>
             <br />
             Debezium выдаст ошибку: "wal_level must be logical to use logical replication"
           </div>
@@ -210,7 +210,7 @@ export function AuroraSetupProcessDiagram() {
 
       {/* Verification checklist */}
       <DiagramContainer title="Проверка после настройки" color="emerald" className="max-w-lg mx-auto">
-        <div className="text-[11px] text-gray-400 space-y-1 font-mono">
+        <div className="text-[11px] text-[var(--ink-muted)] space-y-1 font-mono">
           <div>SHOW wal_level; -- должен быть 'logical'</div>
           <div>SHOW rds.logical_replication; -- должен быть 'on'</div>
           <div>SHOW max_replication_slots; -- минимум 10</div>

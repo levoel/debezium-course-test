@@ -60,7 +60,7 @@ export function SchemaHistoryFlowDiagram() {
           <DiagramTooltip content="Позиция в binlog на момент DDL операции. Используется для определения, какую схему применять к событиям с определённым GTID/file:offset.">
             <FlowNode variant="sink" tabIndex={0} size="sm">
               <div className="flex flex-col items-center">
-                <span className="text-[10px] text-gray-400">position</span>
+                <span className="text-[10px] text-[var(--ink-muted)]">position</span>
                 <span className="font-mono text-xs">file:pos, gtid</span>
               </div>
             </FlowNode>
@@ -69,7 +69,7 @@ export function SchemaHistoryFlowDiagram() {
           <DiagramTooltip content="Полный SQL текст DDL операции. Используется для логирования и debugging. Пример: ALTER TABLE customers ADD COLUMN phone VARCHAR(20).">
             <FlowNode variant="sink" tabIndex={0} size="sm">
               <div className="flex flex-col items-center">
-                <span className="text-[10px] text-gray-400">ddl</span>
+                <span className="text-[10px] text-[var(--ink-muted)]">ddl</span>
                 <span className="font-mono text-xs">SQL statement</span>
               </div>
             </FlowNode>
@@ -78,7 +78,7 @@ export function SchemaHistoryFlowDiagram() {
           <DiagramTooltip content="Структурированное описание схемы: имена колонок, JDBC типы, длина, nullable. Debezium использует для декодирования row events.">
             <FlowNode variant="sink" tabIndex={0} size="sm">
               <div className="flex flex-col items-center">
-                <span className="text-[10px] text-gray-400">tableChanges</span>
+                <span className="text-[10px] text-[var(--ink-muted)]">tableChanges</span>
                 <span className="font-mono text-xs">columns, types</span>
               </div>
             </FlowNode>
@@ -87,7 +87,7 @@ export function SchemaHistoryFlowDiagram() {
           <DiagramTooltip content="Timestamp и source метаданные: версия Debezium, имя connector, database, table. Полезно для аудита и troubleshooting.">
             <FlowNode variant="sink" tabIndex={0} size="sm">
               <div className="flex flex-col items-center">
-                <span className="text-[10px] text-gray-400">source</span>
+                <span className="text-[10px] text-[var(--ink-muted)]">source</span>
                 <span className="font-mono text-xs">metadata</span>
               </div>
             </FlowNode>
@@ -97,13 +97,13 @@ export function SchemaHistoryFlowDiagram() {
 
       {/* Key Warning */}
       <DiagramContainer title="Критическое требование" color="rose" className="max-w-2xl mx-auto">
-        <div className="text-sm text-gray-300 text-center space-y-2">
+        <div className="text-sm text-[var(--ink-default)] text-center space-y-2">
           <DiagramTooltip content="По умолчанию Kafka использует retention 7 дней. После 7 дней старые DDL записи удаляются, и connector не сможет восстановить схему при restart!">
-            <div className="font-semibold text-rose-300 cursor-help underline decoration-dotted">
+            <div className="font-semibold text-rose-700 cursor-help underline decoration-dotted">
               retention.ms = -1 (бесконечный)
             </div>
           </DiagramTooltip>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[var(--ink-muted)]">
             Без infinite retention через 7 дней recovery fails.<br />
             Единственное решение — полный resnapshot базы данных.
           </div>
@@ -150,7 +150,7 @@ export function SchemaRecoveryPathsDiagram() {
 
           {/* Decision Point */}
           <DiagramTooltip content="Критическая проверка: все ли DDL записи присутствуют? Если retention удалил старые записи — схема не может быть восстановлена полностью.">
-            <FlowNode variant="app" tabIndex={0} className="border-2 border-white/30">
+            <FlowNode variant="app" tabIndex={0} className="border-2 border-[var(--line-thin)]">
               DDL History Complete?
             </FlowNode>
           </DiagramTooltip>
@@ -196,8 +196,8 @@ export function SchemaRecoveryPathsDiagram() {
       <div className="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="Normal Recovery" color="emerald" className="flex-1">
           <div className="text-center space-y-2">
-            <div className="text-2xl font-bold text-emerald-300">1-5 мин</div>
-            <div className="text-xs text-gray-400">
+            <div className="text-2xl font-bold text-emerald-700">1-5 мин</div>
+            <div className="text-xs text-[var(--ink-muted)]">
               Чтение schema history + resume CDC
             </div>
           </div>
@@ -205,8 +205,8 @@ export function SchemaRecoveryPathsDiagram() {
 
         <DiagramContainer title="Resnapshot Recovery" color="rose" className="flex-1">
           <div className="text-center space-y-2">
-            <div className="text-2xl font-bold text-rose-300">2-4 часа</div>
-            <div className="text-xs text-gray-400">
+            <div className="text-2xl font-bold text-rose-700">2-4 часа</div>
+            <div className="text-xs text-[var(--ink-muted)]">
               Для 100GB таблицы (зависит от размера)
             </div>
           </div>
@@ -302,7 +302,7 @@ export function SchemaHistoryCorruptionDiagram() {
       {/* Prevention */}
       <DiagramContainer title="Предотвращение Corruption" color="emerald" className="max-w-2xl mx-auto">
         <div className="space-y-3">
-          <div className="flex items-center gap-3 text-sm text-gray-300">
+          <div className="flex items-center gap-3 text-sm text-[var(--ink-default)]">
             <DiagramTooltip content="Каждый connector должен иметь свой уникальный schema history topic. Naming convention: schema-changes.{connector-name}.">
               <FlowNode variant="sink" tabIndex={0} size="sm" className="whitespace-nowrap">
                 Unique topic per connector
@@ -310,7 +310,7 @@ export function SchemaHistoryCorruptionDiagram() {
             </DiagramTooltip>
           </div>
 
-          <div className="flex items-center gap-3 text-sm text-gray-300">
+          <div className="flex items-center gap-3 text-sm text-[var(--ink-default)]">
             <DiagramTooltip content="retention.ms=-1 и retention.bytes=-1 ОБЯЗАТЕЛЬНЫ. Без infinite retention старые DDL записи удаляются через 7 дней.">
               <FlowNode variant="sink" tabIndex={0} size="sm" className="whitespace-nowrap">
                 Infinite retention (-1)
@@ -318,7 +318,7 @@ export function SchemaHistoryCorruptionDiagram() {
             </DiagramTooltip>
           </div>
 
-          <div className="flex items-center gap-3 text-sm text-gray-300">
+          <div className="flex items-center gap-3 text-sm text-[var(--ink-default)]">
             <DiagramTooltip content="Регулярный backup schema history topic через kafka-console-consumer --from-beginning. Restore за минуты vs resnapshot за часы.">
               <FlowNode variant="sink" tabIndex={0} size="sm" className="whitespace-nowrap">
                 Regular backups

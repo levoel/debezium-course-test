@@ -38,7 +38,7 @@ export function GtidAnatomyDiagram() {
             <DiagramTooltip content="Server UUID - автоматически генерируется при первом запуске MySQL. Хранится в /var/lib/mysql/auto.cnf. Гарантированно уникален для каждого сервера.">
               <FlowNode variant="database" tabIndex={0}>
                 <div className="text-center">
-                  <span className="block text-xs text-gray-400">source_id</span>
+                  <span className="block text-xs text-[var(--ink-muted)]">source_id</span>
                   <span className="font-mono text-xs text-blue-400">
                     3E11FA47-71CA-11E1-<br />
                     9E33-C80AA9429562
@@ -47,12 +47,12 @@ export function GtidAnatomyDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <span className="text-2xl text-gray-500">:</span>
+            <span className="text-2xl text-[var(--ink-subtle)]">:</span>
 
             <DiagramTooltip content="Transaction ID - монотонно возрастающий номер транзакции на данном сервере. Начинается с 1, никогда не используется повторно.">
               <FlowNode variant="sink" tabIndex={0}>
                 <div className="text-center">
-                  <span className="block text-xs text-gray-400">transaction_id</span>
+                  <span className="block text-xs text-[var(--ink-muted)]">transaction_id</span>
                   <span className="font-mono text-rose-400">23</span>
                 </div>
               </FlowNode>
@@ -64,22 +64,22 @@ export function GtidAnatomyDiagram() {
       {/* GTID Set example */}
       <DiagramContainer title="GTID Set (диапазоны)" color="blue">
         <div className="flex flex-col gap-4">
-          <div className="text-center font-mono text-sm bg-gray-800/50 p-3 rounded">
+          <div className="text-center font-mono text-sm bg-[var(--bg-sunken)] p-3 rounded">
             <DiagramTooltip content="Компактное представление множества GTIDs. Показывает транзакции 1-100 от первого сервера и 1-50 от второго. Диапазоны экономят память и bandwidth.">
               <span className="cursor-help">
                 <span className="text-blue-400">3E11FA47-71CA-11E1-9E33-C80AA9429562</span>
-                <span className="text-gray-400">:</span>
+                <span className="text-[var(--ink-muted)]">:</span>
                 <span className="text-emerald-400">1-100</span>
-                <span className="text-gray-400">,</span>
+                <span className="text-[var(--ink-muted)]">,</span>
                 <br />
                 <span className="text-amber-400">4E22GB58-82DB-22F2-AF44-D91BA0530673</span>
-                <span className="text-gray-400">:</span>
+                <span className="text-[var(--ink-muted)]">:</span>
                 <span className="text-emerald-400">1-50</span>
               </span>
             </DiagramTooltip>
           </div>
 
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             Транзакции 1-100 от первого сервера<br />
             + транзакции 1-50 от второго (после failover)
           </div>
@@ -89,23 +89,23 @@ export function GtidAnatomyDiagram() {
       {/* Key benefits */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <DiagramTooltip content="GTID одинаков на primary, replica и после failover. Транзакция ...562:23 имеет тот же ID везде в топологии.">
-          <div className="bg-gray-800/30 p-4 rounded-lg text-center cursor-help">
+          <div className="bg-[var(--bg-sunken)] p-4 rounded-lg text-center cursor-help">
             <div className="text-emerald-400 font-semibold mb-1">Глобально уникален</div>
-            <div className="text-xs text-gray-400">Одинаков на всех серверах</div>
+            <div className="text-xs text-[var(--ink-muted)]">Одинаков на всех серверах</div>
           </div>
         </DiagramTooltip>
 
         <DiagramTooltip content="В отличие от file:offset, GTID не зависит от конкретного сервера. Debezium может продолжить чтение с нового primary.">
-          <div className="bg-gray-800/30 p-4 rounded-lg text-center cursor-help">
+          <div className="bg-[var(--bg-sunken)] p-4 rounded-lg text-center cursor-help">
             <div className="text-blue-400 font-semibold mb-1">Position-независим</div>
-            <div className="text-xs text-gray-400">Не привязан к binlog файлам</div>
+            <div className="text-xs text-[var(--ink-muted)]">Не привязан к binlog файлам</div>
           </div>
         </DiagramTooltip>
 
         <DiagramTooltip content="Диапазоны позволяют легко обнаружить пропущенные транзакции. Например, 1-10:15-20 показывает gap 11-14.">
-          <div className="bg-gray-800/30 p-4 rounded-lg text-center cursor-help">
+          <div className="bg-[var(--bg-sunken)] p-4 rounded-lg text-center cursor-help">
             <div className="text-amber-400 font-semibold mb-1">Gap detection</div>
-            <div className="text-xs text-gray-400">Обнаружение пропусков</div>
+            <div className="text-xs text-[var(--ink-muted)]">Обнаружение пропусков</div>
           </div>
         </DiagramTooltip>
       </div>
@@ -225,7 +225,7 @@ export function GtidFailoverComparisonDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-center text-xs text-gray-400">
+            <div className="text-center text-xs text-[var(--ink-muted)]">
               Position на старом сервере<br />
               не соответствует той же<br />
               транзакции на новом
@@ -269,7 +269,7 @@ export function GtidFailoverComparisonDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-center text-xs text-gray-400">
+            <div className="text-center text-xs text-[var(--ink-muted)]">
               Debezium запрашивает<br />
               все после GTID ...562:100
             </div>

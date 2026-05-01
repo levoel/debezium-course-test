@@ -55,7 +55,7 @@ export function DualWriteProblemDiagram() {
         >
           <FlowNode variant="database" tabIndex={0}>
             UPDATE orders
-            <span className="block text-xs text-gray-400 mt-1">COMMIT</span>
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">COMMIT</span>
           </FlowNode>
         </DiagramTooltip>
 
@@ -74,7 +74,7 @@ export function DualWriteProblemDiagram() {
                 <li>Application crash после COMMIT</li>
                 <li>Timeout при отправке</li>
               </ul>
-              <p className="mt-2 text-amber-300">
+              <p className="mt-2 text-amber-700">
                 Проблема: БД уже обновлена, откатить нельзя!
               </p>
             </div>
@@ -82,7 +82,7 @@ export function DualWriteProblemDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+            className="bg-amber-500/20 border-amber-400/30 text-amber-700"
             tabIndex={0}
           >
             kafka_producer.send(...)
@@ -109,14 +109,14 @@ export function DualWriteProblemDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 size="sm"
                 tabIndex={0}
               >
                 <div className="text-center text-xs">
                   <div>✅ БД обновлена</div>
                   <div>✅ Событие отправлено</div>
-                  <div className="text-emerald-300 mt-1">Consistency OK</div>
+                  <div className="text-emerald-700 mt-1">Consistency OK</div>
                 </div>
               </FlowNode>
             </DiagramTooltip>
@@ -133,7 +133,7 @@ export function DualWriteProblemDiagram() {
                     Kafka не получил событие, но БД уже обновлена. Откатить
                     транзакцию нельзя - она уже зафиксирована.
                   </p>
-                  <p className="mt-2 text-rose-300">
+                  <p className="mt-2 text-rose-700">
                     Результат: Downstream системы не узнают об изменении.
                     Data inconsistency в distributed системе.
                   </p>
@@ -142,14 +142,14 @@ export function DualWriteProblemDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-rose-500/20 border-rose-400/30 text-rose-200"
+                className="bg-rose-500/20 border-rose-400/30 text-rose-700"
                 size="sm"
                 tabIndex={0}
               >
                 <div className="text-center text-xs">
                   <div>✅ БД обновлена</div>
                   <div>❌ Событие НЕ отправлено</div>
-                  <div className="text-rose-300 mt-1 font-bold">
+                  <div className="text-rose-700 mt-1 font-bold">
                     💥 Data loss!
                   </div>
                 </div>
@@ -160,7 +160,7 @@ export function DualWriteProblemDiagram() {
 
         <div className="mt-4 text-sm text-rose-400 border-l-2 border-rose-400 pl-3">
           <strong>Почему dual-write не работает:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             Два независимых write operations (БД и message broker) не могут быть
             атомарными без distributed transactions (2PC). Один может failнуть
             после успеха другого.
@@ -256,7 +256,7 @@ export function OutboxSolutionDiagram() {
               <FlowNode
                 variant="connector"
                 size="sm"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 COMMIT
@@ -313,7 +313,7 @@ export function OutboxSolutionDiagram() {
                     PostgreSQL WAL содержит оба изменения атомарно. Если COMMIT
                     успешен - оба write зафиксированы в WAL.
                   </p>
-                  <p className="mt-2 text-blue-300">
+                  <p className="mt-2 text-blue-700">
                     WAL - single source of truth для Debezium CDC
                   </p>
                 </div>
@@ -322,7 +322,7 @@ export function OutboxSolutionDiagram() {
               <FlowNode
                 variant="sink"
                 size="sm"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 WAL
@@ -379,7 +379,7 @@ export function OutboxSolutionDiagram() {
               <FlowNode
                 variant="connector"
                 size="sm"
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 tabIndex={0}
               >
                 Outbox Event Router SMT
@@ -403,7 +403,7 @@ export function OutboxSolutionDiagram() {
                     Kafka топик с clean domain events. Downstream consumers
                     получают события без CDC metadata.
                   </p>
-                  <p className="mt-2 text-emerald-300">
+                  <p className="mt-2 text-emerald-700">
                     Topic name: outbox.event.Order (из aggregatetype)
                   </p>
                 </div>
@@ -411,7 +411,7 @@ export function OutboxSolutionDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 order-events topic
@@ -440,7 +440,7 @@ export function OutboxSolutionDiagram() {
 
         <div className="mt-2 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
           <strong>Ключевое преимущество:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             UPDATE + INSERT outbox выполняются в одной транзакции. Если
             транзакция зафиксирована - событие ГАРАНТИРОВАННО попадет в Kafka
             (at-least-once).
@@ -475,7 +475,7 @@ export function OutboxTransactionFlowDiagram() {
         >
           <FlowNode variant="app" tabIndex={0}>
             Application
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               approve_order(123)
             </span>
           </FlowNode>
@@ -508,7 +508,7 @@ export function OutboxTransactionFlowDiagram() {
                   INSERT INTO outbox (aggregatetype, aggregateid, type, payload)
                   VALUES ('Order', 'order-123', 'OrderApproved', '&#123;...&#125;').
                 </p>
-                <p className="mt-2 text-blue-300">
+                <p className="mt-2 text-blue-700">
                   В той же транзакции! Ключевая идея Outbox Pattern.
                 </p>
               </div>
@@ -531,7 +531,7 @@ export function OutboxTransactionFlowDiagram() {
                 успешен - оба write зафиксированы. Если ROLLBACK - ни один
                 write не зафиксирован.
               </p>
-              <p className="mt-2 text-emerald-300">
+              <p className="mt-2 text-emerald-700">
                 Atomic commit гарантия на уровне PostgreSQL
               </p>
             </div>
@@ -539,7 +539,7 @@ export function OutboxTransactionFlowDiagram() {
         >
           <FlowNode
             variant="sink"
-            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
             tabIndex={0}
           >
             PostgreSQL WAL
@@ -578,7 +578,7 @@ export function OutboxTransactionFlowDiagram() {
                 Финальное domain событие публикуется в Kafka. Topic name из
                 aggregatetype, Kafka key из aggregateid.
               </p>
-              <p className="mt-2 text-emerald-300">
+              <p className="mt-2 text-emerald-700">
                 At-least-once delivery гарантия
               </p>
             </div>
@@ -586,18 +586,18 @@ export function OutboxTransactionFlowDiagram() {
         >
           <FlowNode
             variant="app"
-            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
             tabIndex={0}
           >
             Kafka Topic
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               order-events
             </span>
           </FlowNode>
         </DiagramTooltip>
 
-        <div className="mt-4 text-sm text-gray-400 border-l-2 border-emerald-400 pl-3">
-          <strong className="text-emerald-300">Почему атомарность важна?</strong>
+        <div className="mt-4 text-sm text-[var(--ink-muted)] border-l-2 border-emerald-400 pl-3">
+          <strong className="text-emerald-700">Почему атомарность важна?</strong>
           <p className="mt-1">
             Если приложение crashит между UPDATE и INSERT - транзакция откачена,
             оба write отменены. Если crashит после COMMIT - событие в WAL,
@@ -659,7 +659,7 @@ export function MicroservicesOutboxDiagram() {
               >
                 <FlowNode variant="database" size="sm" tabIndex={0}>
                   PostgreSQL
-                  <span className="block text-xs text-gray-400 mt-1">
+                  <span className="block text-xs text-[var(--ink-muted)] mt-1">
                     orders + outbox
                   </span>
                 </FlowNode>
@@ -705,7 +705,7 @@ export function MicroservicesOutboxDiagram() {
               >
                 <FlowNode variant="database" size="sm" tabIndex={0}>
                   PostgreSQL
-                  <span className="block text-xs text-gray-400 mt-1">
+                  <span className="block text-xs text-[var(--ink-muted)] mt-1">
                     payments + outbox
                   </span>
                 </FlowNode>
@@ -735,11 +735,11 @@ export function MicroservicesOutboxDiagram() {
               <FlowNode
                 variant="connector"
                 size="sm"
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 tabIndex={0}
               >
                 Debezium
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Order Service
                 </span>
               </FlowNode>
@@ -759,11 +759,11 @@ export function MicroservicesOutboxDiagram() {
               <FlowNode
                 variant="connector"
                 size="sm"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 Debezium
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Payment Service
                 </span>
               </FlowNode>
@@ -792,7 +792,7 @@ export function MicroservicesOutboxDiagram() {
               <FlowNode
                 variant="app"
                 size="sm"
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 tabIndex={0}
               >
                 outbox.event.Order
@@ -813,7 +813,7 @@ export function MicroservicesOutboxDiagram() {
               <FlowNode
                 variant="app"
                 size="sm"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 outbox.event.Payment
@@ -838,7 +838,7 @@ export function MicroservicesOutboxDiagram() {
                     outbox.event.Payment). При получении события отправляет
                     notification.
                   </p>
-                  <p className="mt-2 text-rose-300">
+                  <p className="mt-2 text-rose-700">
                     КРИТИЧНО: Consumer ДОЛЖЕН быть idempotent (at-least-once delivery)
                   </p>
                 </div>
@@ -846,7 +846,7 @@ export function MicroservicesOutboxDiagram() {
             >
               <FlowNode variant="app" size="sm" tabIndex={0}>
                 Kafka Consumer
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Subscribes to both topics
                 </span>
               </FlowNode>
@@ -867,7 +867,7 @@ export function MicroservicesOutboxDiagram() {
             >
               <FlowNode variant="database" size="sm" tabIndex={0}>
                 PostgreSQL
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   notifications
                 </span>
               </FlowNode>
@@ -877,7 +877,7 @@ export function MicroservicesOutboxDiagram() {
 
         <div className="mt-2 text-sm text-blue-400 border-l-2 border-blue-400 pl-3">
           <strong>Database-per-Service Pattern:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             Каждый микросервис владеет своей БД и своей outbox-таблицей.
             Debezium коннектор per service публикует события в отдельные топики.
             Downstream сервисы подписываются на нужные топики.

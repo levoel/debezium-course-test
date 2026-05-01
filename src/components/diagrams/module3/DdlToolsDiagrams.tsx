@@ -28,7 +28,7 @@ export function GhOstFlowDiagram() {
                 <FlowNode variant="database" tabIndex={0}>
                   orders
                   <br />
-                  <span className="text-xs text-gray-400">(original)</span>
+                  <span className="text-xs text-[var(--ink-muted)]">(original)</span>
                 </FlowNode>
               </DiagramTooltip>
               <div className="text-xs text-emerald-400">Application writes</div>
@@ -50,7 +50,7 @@ export function GhOstFlowDiagram() {
                 <FlowNode variant="app" tabIndex={0} size="sm">
                   _orders_ghc
                   <br />
-                  <span className="text-xs text-gray-400">(metadata)</span>
+                  <span className="text-xs text-[var(--ink-muted)]">(metadata)</span>
                 </FlowNode>
               </DiagramTooltip>
             </div>
@@ -73,7 +73,7 @@ export function GhOstFlowDiagram() {
                 <FlowNode variant="app" tabIndex={0} size="sm">
                   chunk copy
                   <br />
-                  <span className="text-xs text-gray-400">1000 rows</span>
+                  <span className="text-xs text-[var(--ink-muted)]">1000 rows</span>
                 </FlowNode>
               </DiagramTooltip>
             </div>
@@ -86,7 +86,7 @@ export function GhOstFlowDiagram() {
                 <FlowNode variant="cluster" tabIndex={0} size="sm">
                   binlog events
                   <br />
-                  <span className="text-xs text-gray-400">INS/UPD/DEL</span>
+                  <span className="text-xs text-[var(--ink-muted)]">INS/UPD/DEL</span>
                 </FlowNode>
               </DiagramTooltip>
             </div>
@@ -118,17 +118,17 @@ export function GhOstFlowDiagram() {
 
       {/* Debezium interaction */}
       <DiagramContainer title="Debezium: Filter gh-ost Tables" color="amber">
-        <div className="text-sm text-gray-300 space-y-2">
+        <div className="text-sm text-[var(--ink-default)] space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-amber-400 font-bold">ВАЖНО:</span>
             <span>gh-ost создает временные таблицы, которые Debezium видит в binlog.</span>
           </div>
-          <div className="font-mono text-xs bg-gray-800/50 p-3 rounded mt-2">
-            <div className="text-gray-400">// Filter SMT для исключения helper tables</div>
+          <div className="font-mono text-xs bg-[var(--bg-sunken)] p-3 rounded mt-2">
+            <div className="text-[var(--ink-muted)]">// Filter SMT для исключения helper tables</div>
             <div className="text-emerald-400">"transforms.Filter.condition":</div>
             <div className="text-amber-400 ml-2">"!value.source.table.matches('.*_(gho|ghc)$')"</div>
           </div>
-          <div className="text-xs text-gray-400 mt-2">
+          <div className="text-xs text-[var(--ink-muted)] mt-2">
             Без фильтра consumers получат дублирующие события от orders и _orders_gho.
           </div>
         </div>
@@ -152,7 +152,7 @@ export function PtOscFlowDiagram() {
                 <FlowNode variant="database" tabIndex={0}>
                   orders
                   <br />
-                  <span className="text-xs text-gray-400">(original)</span>
+                  <span className="text-xs text-[var(--ink-muted)]">(original)</span>
                 </FlowNode>
               </DiagramTooltip>
               <div className="text-xs text-blue-400">+ TRIGGERS</div>
@@ -177,7 +177,7 @@ export function PtOscFlowDiagram() {
               <FlowNode variant="connector" tabIndex={0} size="sm">
                 AFTER INSERT
                 <br />
-                <span className="text-xs text-gray-400">→ INSERT _orders_new</span>
+                <span className="text-xs text-[var(--ink-muted)]">→ INSERT _orders_new</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -185,7 +185,7 @@ export function PtOscFlowDiagram() {
               <FlowNode variant="connector" tabIndex={0} size="sm">
                 AFTER UPDATE
                 <br />
-                <span className="text-xs text-gray-400">→ REPLACE _orders_new</span>
+                <span className="text-xs text-[var(--ink-muted)]">→ REPLACE _orders_new</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -193,7 +193,7 @@ export function PtOscFlowDiagram() {
               <FlowNode variant="connector" tabIndex={0} size="sm">
                 AFTER DELETE
                 <br />
-                <span className="text-xs text-gray-400">→ DELETE _orders_new</span>
+                <span className="text-xs text-[var(--ink-muted)]">→ DELETE _orders_new</span>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -247,12 +247,12 @@ export function PtOscFlowDiagram() {
 
       {/* pt-osc advantage */}
       <DiagramContainer title="pt-osc Advantage: Foreign Keys" color="emerald">
-        <div className="text-sm text-gray-300 space-y-2">
+        <div className="text-sm text-[var(--ink-default)] space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-emerald-400 font-bold">ПОДДЕРЖКА FK:</span>
             <span>pt-osc корректно обрабатывает таблицы с foreign keys.</span>
           </div>
-          <div className="text-xs text-gray-400 mt-2">
+          <div className="text-xs text-[var(--ink-muted)] mt-2">
             gh-ost НЕ поддерживает foreign keys — нужно временно удалять FK constraints.
             pt-osc использует триггеры, которые соблюдают FK при копировании данных.
           </div>
@@ -261,8 +261,8 @@ export function PtOscFlowDiagram() {
 
       {/* Debezium filter */}
       <DiagramContainer title="Debezium: Filter pt-osc Tables" color="amber">
-        <div className="font-mono text-xs bg-gray-800/50 p-3 rounded">
-          <div className="text-gray-400">// Filter SMT для pt-osc helper tables</div>
+        <div className="font-mono text-xs bg-[var(--bg-sunken)] p-3 rounded">
+          <div className="text-[var(--ink-muted)]">// Filter SMT для pt-osc helper tables</div>
           <div className="text-emerald-400">"transforms.Filter.condition":</div>
           <div className="text-amber-400 ml-2">"!value.source.table.matches('.*_(new|old)$')"</div>
         </div>
@@ -289,7 +289,7 @@ export function DdlToolComparisonDiagram() {
               </DiagramTooltip>
             </div>
 
-            <div className="text-xs text-gray-300 space-y-2">
+            <div className="text-xs text-[var(--ink-default)] space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400">+</span>
                 <span>Triggerless — нет overhead на записи</span>
@@ -315,7 +315,7 @@ export function DdlToolComparisonDiagram() {
             <div className="text-xs text-emerald-400 font-medium mt-2">
               Рекомендуется для CDC
               <br />
-              <span className="text-gray-400">(если нет FK)</span>
+              <span className="text-[var(--ink-muted)]">(если нет FK)</span>
             </div>
           </div>
         </DiagramContainer>
@@ -331,7 +331,7 @@ export function DdlToolComparisonDiagram() {
               </DiagramTooltip>
             </div>
 
-            <div className="text-xs text-gray-300 space-y-2">
+            <div className="text-xs text-[var(--ink-default)] space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400">+</span>
                 <span>Поддерживает Foreign Keys</span>
@@ -364,31 +364,31 @@ export function DdlToolComparisonDiagram() {
       {/* Comparison table */}
       <DiagramContainer title="Feature Comparison" color="neutral">
         <div className="overflow-x-auto">
-          <table className="text-xs text-gray-300 w-full">
+          <table className="text-xs text-[var(--ink-default)] w-full">
             <thead>
-              <tr className="border-b border-gray-600">
+              <tr className="border-b border-[var(--line-thin)]">
                 <th className="text-left py-2 pr-4">Feature</th>
                 <th className="text-left py-2 pr-4">gh-ost</th>
                 <th className="text-left py-2">pt-osc</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-gray-700">
+              <tr className="border-b border-[var(--line-thin)]">
                 <td className="py-2 pr-4">Mechanism</td>
                 <td className="py-2 pr-4 text-emerald-400">Binlog reading</td>
                 <td className="py-2 text-blue-400">Triggers</td>
               </tr>
-              <tr className="border-b border-gray-700">
+              <tr className="border-b border-[var(--line-thin)]">
                 <td className="py-2 pr-4">Helper tables</td>
                 <td className="py-2 pr-4 font-mono">_gho, _ghc</td>
                 <td className="py-2 font-mono">_new, _old</td>
               </tr>
-              <tr className="border-b border-gray-700">
+              <tr className="border-b border-[var(--line-thin)]">
                 <td className="py-2 pr-4">Foreign Keys</td>
                 <td className="py-2 pr-4 text-rose-400">Not supported</td>
                 <td className="py-2 text-emerald-400">Supported</td>
               </tr>
-              <tr className="border-b border-gray-700">
+              <tr className="border-b border-[var(--line-thin)]">
                 <td className="py-2 pr-4">Binlog impact</td>
                 <td className="py-2 pr-4 text-amber-400">2x read load</td>
                 <td className="py-2 text-emerald-400">Normal</td>
@@ -417,7 +417,7 @@ export function GhostTableLifecycleDiagram() {
           {/* Timeline */}
           <div className="relative w-full">
             {/* Timeline line */}
-            <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-gray-600 transform -translate-y-1/2" />
+            <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-[var(--bg-deep)] transform -translate-y-1/2" />
 
             {/* Timeline events */}
             <div className="flex justify-between items-center relative">
@@ -431,7 +431,7 @@ export function GhostTableLifecycleDiagram() {
                     <span className="text-xs text-emerald-400">_orders_gho</span>
                   </FlowNode>
                 </DiagramTooltip>
-                <div className="text-xs text-gray-400">T0</div>
+                <div className="text-xs text-[var(--ink-muted)]">T0</div>
               </div>
 
               {/* Step 2: Copy */}
@@ -444,7 +444,7 @@ export function GhostTableLifecycleDiagram() {
                     <span className="text-xs text-blue-400">data migration</span>
                   </FlowNode>
                 </DiagramTooltip>
-                <div className="text-xs text-gray-400">T1-Tn</div>
+                <div className="text-xs text-[var(--ink-muted)]">T1-Tn</div>
               </div>
 
               {/* Step 3: Cutover */}
@@ -457,7 +457,7 @@ export function GhostTableLifecycleDiagram() {
                     <span className="text-xs text-amber-400">cutover</span>
                   </FlowNode>
                 </DiagramTooltip>
-                <div className="text-xs text-gray-400">Tn+1</div>
+                <div className="text-xs text-[var(--ink-muted)]">Tn+1</div>
               </div>
 
               {/* Step 4: Cleanup */}
@@ -470,7 +470,7 @@ export function GhostTableLifecycleDiagram() {
                     <span className="text-xs text-rose-400">cleanup</span>
                   </FlowNode>
                 </DiagramTooltip>
-                <div className="text-xs text-gray-400">Tn+2</div>
+                <div className="text-xs text-[var(--ink-muted)]">Tn+2</div>
               </div>
             </div>
           </div>
@@ -480,23 +480,23 @@ export function GhostTableLifecycleDiagram() {
       {/* What Debezium sees */}
       <DiagramContainer title="Debezium Perspective" color="amber">
         <div className="flex flex-col gap-4">
-          <div className="text-sm text-gray-300">
+          <div className="text-sm text-[var(--ink-default)]">
             <span className="text-amber-400 font-bold">Debezium видит в binlog:</span>
           </div>
 
           <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 bg-gray-800/50 p-3 rounded">
+            <div className="flex-1 bg-[var(--bg-sunken)] p-3 rounded">
               <div className="text-xs text-emerald-400 font-bold mb-2">T0: CREATE</div>
-              <div className="text-xs text-gray-300 space-y-1">
+              <div className="text-xs text-[var(--ink-default)] space-y-1">
                 <div>CREATE TABLE _orders_gho (...)</div>
                 <div>CREATE TABLE _orders_ghc (...)</div>
               </div>
               <div className="text-xs text-amber-400 mt-2">→ Schema history updated</div>
             </div>
 
-            <div className="flex-1 bg-gray-800/50 p-3 rounded">
+            <div className="flex-1 bg-[var(--bg-sunken)] p-3 rounded">
               <div className="text-xs text-blue-400 font-bold mb-2">T1-Tn: DATA</div>
-              <div className="text-xs text-gray-300 space-y-1">
+              <div className="text-xs text-[var(--ink-default)] space-y-1">
                 <div>INSERT _orders_gho (copy)</div>
                 <div>INSERT/UPDATE/DELETE orders</div>
                 <div>INSERT _orders_gho (sync)</div>
@@ -504,22 +504,22 @@ export function GhostTableLifecycleDiagram() {
               <div className="text-xs text-emerald-400 mt-2">→ Filter SMT excludes _gho</div>
             </div>
 
-            <div className="flex-1 bg-gray-800/50 p-3 rounded">
+            <div className="flex-1 bg-[var(--bg-sunken)] p-3 rounded">
               <div className="text-xs text-amber-400 font-bold mb-2">Tn+1: RENAME</div>
-              <div className="text-xs text-gray-300 space-y-1">
+              <div className="text-xs text-[var(--ink-default)] space-y-1">
                 <div>RENAME orders → _orders_old</div>
                 <div>RENAME _orders_gho → orders</div>
               </div>
               <div className="text-xs text-purple-400 mt-2">→ New schema active</div>
             </div>
 
-            <div className="flex-1 bg-gray-800/50 p-3 rounded">
+            <div className="flex-1 bg-[var(--bg-sunken)] p-3 rounded">
               <div className="text-xs text-rose-400 font-bold mb-2">Tn+2: DROP</div>
-              <div className="text-xs text-gray-300 space-y-1">
+              <div className="text-xs text-[var(--ink-default)] space-y-1">
                 <div>DROP _orders_old</div>
                 <div>DROP _orders_ghc</div>
               </div>
-              <div className="text-xs text-gray-400 mt-2">→ Schema history updated</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-2">→ Schema history updated</div>
             </div>
           </div>
         </div>
@@ -527,12 +527,12 @@ export function GhostTableLifecycleDiagram() {
 
       {/* Consumer impact */}
       <DiagramContainer title="Consumer Impact" color="emerald">
-        <div className="text-sm text-gray-300 space-y-2">
+        <div className="text-sm text-[var(--ink-default)] space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-emerald-400 font-bold">РЕЗУЛЬТАТ:</span>
             <span>Consumers видят новую колонку автоматически после cutover.</span>
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[var(--ink-muted)]">
             С Filter SMT consumers получают только события от оригинальной таблицы orders.
             После cutover новая схема (с добавленной колонкой) применяется автоматически.
             <br />

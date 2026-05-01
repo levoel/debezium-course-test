@@ -78,7 +78,7 @@ export function CloudSqlCdcArchitectureDiagram() {
         </DiagramTooltip>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-blue-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-blue-700/70">
         <p>
           Replication Slot хранит позицию чтения и управляет удалением WAL файлов
         </p>

@@ -134,11 +134,11 @@ export function WorkloadIdentityFlowDiagram() {
         messageSpacing={55}
       />
 
-      <div className="mt-4 pt-3 border-t border-white/10">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)]">
         <div className="grid md:grid-cols-2 gap-4 text-xs">
           <div>
-            <h3 className="font-semibold text-emerald-200 mb-1">✅ Workload Identity (Рекомендуется)</h3>
-            <ul className="text-emerald-200/70 space-y-1">
+            <h3 className="font-semibold text-emerald-700 mb-1">✅ Workload Identity (Рекомендуется)</h3>
+            <ul className="text-emerald-700/70 space-y-1">
               <li>• Токен автоматически ротируется каждый час</li>
               <li>• Нет ключей для хранения и ротации</li>
               <li>• Аудит через Cloud Logging</li>
@@ -146,8 +146,8 @@ export function WorkloadIdentityFlowDiagram() {
             </ul>
           </div>
           <div>
-            <h3 className="font-semibold text-rose-200 mb-1">❌ Service Account Keys (Не делайте)</h3>
-            <ul className="text-rose-200/70 space-y-1">
+            <h3 className="font-semibold text-rose-700 mb-1">❌ Service Account Keys (Не делайте)</h3>
+            <ul className="text-rose-700/70 space-y-1">
               <li>• key.json может утечь в git/logs</li>
               <li>• Нет автоматической ротации</li>
               <li>• Сложный аудит утечек</li>

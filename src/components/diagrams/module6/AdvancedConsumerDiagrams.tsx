@@ -112,7 +112,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
                 <FlowNode
                   variant="app"
                   size="sm"
-                  className="bg-rose-500/20 border-rose-400/30 text-rose-200"
+                  className="bg-rose-500/20 border-rose-400/30 text-rose-700"
                   tabIndex={0}
                 >
                   Повторная обработка
@@ -137,7 +137,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
                 <FlowNode
                   variant="app"
                   size="sm"
-                  className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                  className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                   tabIndex={0}
                 >
                   OK
@@ -299,7 +299,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
                 <FlowNode
                   variant="app"
                   size="sm"
-                  className="bg-rose-500/20 border-rose-400/30 text-rose-200"
+                  className="bg-rose-500/20 border-rose-400/30 text-rose-700"
                   tabIndex={0}
                 >
                   Rollback всей транзакции
@@ -324,7 +324,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
                 <FlowNode
                   variant="app"
                   size="sm"
-                  className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                  className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                   tabIndex={0}
                 >
                   OK атомарно
@@ -431,7 +431,7 @@ export function RebalancingSequenceDiagram() {
         ]}
         messageSpacing={55}
       />
-      <div className="mt-4 text-xs text-gray-400">
+      <div className="mt-4 text-xs text-[var(--ink-muted)]">
         <div className="font-semibold text-amber-400 mb-2">Решение проблемы:</div>
         <ul className="list-disc list-inside space-y-1">
           <li>Уменьшите max.poll.records (меньше сообщений за один poll)</li>

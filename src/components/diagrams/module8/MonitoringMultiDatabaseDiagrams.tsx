@@ -34,7 +34,7 @@ export function MonitoringMultiDatabaseDiagram() {
                   <p className="text-sm mt-1">Измеряется в байтах WAL</p>
                 </div>
               }>
-                <FlowNode variant="connector" size="sm" className="bg-blue-500/20 border-blue-400/30 text-blue-200">
+                <FlowNode variant="connector" size="sm" className="bg-blue-500/20 border-blue-400/30 text-blue-700">
                   WAL Lag (bytes)
                 </FlowNode>
               </DiagramTooltip>
@@ -45,7 +45,7 @@ export function MonitoringMultiDatabaseDiagram() {
                   <p className="text-sm mt-1">Alert если slot inactive {'>'} 5 min</p>
                 </div>
               }>
-                <FlowNode variant="connector" size="sm" className="bg-blue-500/20 border-blue-400/30 text-blue-200">
+                <FlowNode variant="connector" size="sm" className="bg-blue-500/20 border-blue-400/30 text-blue-700">
                   Slot Status
                 </FlowNode>
               </DiagramTooltip>
@@ -62,7 +62,7 @@ export function MonitoringMultiDatabaseDiagram() {
                   <p className="text-sm mt-1">Измеряется во ВРЕМЕНИ, не в байтах</p>
                 </div>
               }>
-                <FlowNode variant="connector" size="sm" className="bg-red-500/20 border-red-400/30 text-red-200">
+                <FlowNode variant="connector" size="sm" className="bg-red-500/20 border-red-400/30 text-red-700">
                   Binlog Lag (time)
                 </FlowNode>
               </DiagramTooltip>
@@ -73,7 +73,7 @@ export function MonitoringMultiDatabaseDiagram() {
                   <p className="text-sm mt-1">Alert если position stuck {'>'} 5 min</p>
                 </div>
               }>
-                <FlowNode variant="connector" size="sm" className="bg-red-500/20 border-red-400/30 text-red-200">
+                <FlowNode variant="connector" size="sm" className="bg-red-500/20 border-red-400/30 text-red-700">
                   Binlog Position
                 </FlowNode>
               </DiagramTooltip>
@@ -82,8 +82,8 @@ export function MonitoringMultiDatabaseDiagram() {
         </div>
 
         {/* Unified monitoring layer */}
-        <div className="flex flex-col items-center gap-2 pt-3 border-t border-white/10">
-          <div className="text-xs text-gray-400">Export JMX metrics</div>
+        <div className="flex flex-col items-center gap-2 pt-3 border-t border-[var(--line-thin)]">
+          <div className="text-xs text-[var(--ink-muted)]">Export JMX metrics</div>
           <Arrow direction="down" />
           <DiagramTooltip content={
             <div>
@@ -94,7 +94,7 @@ export function MonitoringMultiDatabaseDiagram() {
           }>
             <FlowNode variant="sink">
               <div>Prometheus</div>
-              <div className="text-xs text-gray-400 mt-1">(unified scraping)</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">(unified scraping)</div>
             </FlowNode>
           </DiagramTooltip>
           <Arrow direction="down" />
@@ -107,17 +107,17 @@ export function MonitoringMultiDatabaseDiagram() {
           }>
             <FlowNode variant="connector">
               <div>Grafana Dashboard</div>
-              <div className="text-xs text-gray-400 mt-1">(multi-database view)</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">(multi-database view)</div>
             </FlowNode>
           </DiagramTooltip>
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-blue-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-blue-700/70">
         <p className="font-semibold mb-1">Key Differences в metrics:</p>
         <ul className="space-y-1">
-          <li>• <span className="text-blue-300">PostgreSQL:</span> WAL lag измеряется в байтах (pg_wal_lsn_diff)</li>
-          <li>• <span className="text-red-300">MySQL:</span> Binlog lag измеряется во времени (MilliSecondsBehindSource)</li>
+          <li>• <span className="text-blue-700">PostgreSQL:</span> WAL lag измеряется в байтах (pg_wal_lsn_diff)</li>
+          <li>• <span className="text-red-700">MySQL:</span> Binlog lag измеряется во времени (MilliSecondsBehindSource)</li>
           <li>• Unified view: normalize обе метрики к latency (ms) для сравнения</li>
           <li>• source_database column в CDC events критична для traceability</li>
         </ul>

@@ -61,12 +61,12 @@ export function DiagnosticTreeDiagram() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
           {branches.map((b) => (
             <DiagramTooltip key={b.question} content={b.tooltip}>
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/[.03] border border-white/[.06] cursor-help">
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--line-thin)] cursor-help">
                 <FlowNode variant={variantMap[b.color]} tabIndex={0} size="sm">
                   {b.question}
                 </FlowNode>
                 <Arrow direction="right" />
-                <span className="text-xs text-gray-300 shrink-0">{b.action}</span>
+                <span className="text-xs text-[var(--ink-default)] shrink-0">{b.action}</span>
               </div>
             </DiagramTooltip>
           ))}

@@ -31,7 +31,7 @@ export function BinlogVsWalDiagram() {
           <DiagramTooltip content="Write-Ahead Log (WAL) - физический журнал транзакций PostgreSQL. По умолчанию содержит побайтовые изменения блоков страниц. Оптимизирован для durability и crash recovery.">
             <FlowNode variant="sink" tabIndex={0}>
               WAL
-              <span className="block text-xs text-gray-400 mt-1">Физический лог</span>
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">Физический лог</span>
             </FlowNode>
           </DiagramTooltip>
 
@@ -51,7 +51,7 @@ export function BinlogVsWalDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 text-center mt-2 px-4">
+          <div className="text-xs text-[var(--ink-muted)] text-center mt-2 px-4">
             Изначально физический формат<br />
             Требует декодирования<br />
             Оптимизирован для durability
@@ -70,7 +70,7 @@ export function BinlogVsWalDiagram() {
           <DiagramTooltip content="Binary Log (binlog) - логический журнал изменений MySQL. Изначально создан для репликации. При binlog_format=ROW содержит готовые события с данными строк.">
             <FlowNode variant="sink" tabIndex={0}>
               Binary Log
-              <span className="block text-xs text-gray-400 mt-1">Логический лог</span>
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">Логический лог</span>
             </FlowNode>
           </DiagramTooltip>
 
@@ -82,7 +82,7 @@ export function BinlogVsWalDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 text-center mt-2 px-4">
+          <div className="text-xs text-[var(--ink-muted)] text-center mt-2 px-4">
             Изначально логический формат<br />
             Готов для репликации<br />
             Оптимизирован для replication
@@ -120,26 +120,26 @@ export function RowFormatDiagram() {
       <DiagramContainer title="ROW формат" color="emerald" recommended>
         <div className="flex flex-col items-center gap-2">
           <DiagramTooltip content="Первое UPDATE_ROWS_EVENT: before содержит старое значение цены 100, after содержит новое значение 110. Позволяет consumer вычислить точное изменение.">
-            <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-lg px-3 py-2 text-xs font-mono text-emerald-200 inline-block" tabIndex={0}>
+            <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-lg px-3 py-2 text-xs font-mono text-emerald-700 inline-block" tabIndex={0}>
               UPDATE_ROWS_EVENT<br />
               Row 1: before={'{id:1, price:100}'} after={'{id:1, price:110}'}
             </div>
           </DiagramTooltip>
 
           <DiagramTooltip content="Второе UPDATE_ROWS_EVENT для следующей строки. ROW формат детерминированный - одинаковый результат на любой реплике.">
-            <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-lg px-3 py-2 text-xs font-mono text-emerald-200 inline-block" tabIndex={0}>
+            <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-lg px-3 py-2 text-xs font-mono text-emerald-700 inline-block" tabIndex={0}>
               Row 2: before={'{id:2, price:200}'} after={'{id:2, price:220}'}
             </div>
           </DiagramTooltip>
 
           <DiagramTooltip content="Продолжение для всех затронутых строк. Массовый UPDATE может генерировать много событий. Debezium обрабатывает их последовательно.">
-            <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-lg px-3 py-2 text-xs font-mono text-emerald-200 inline-block" tabIndex={0}>
+            <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-lg px-3 py-2 text-xs font-mono text-emerald-700 inline-block" tabIndex={0}>
               Row N: ...
             </div>
           </DiagramTooltip>
         </div>
 
-        <div className="text-xs text-gray-400 text-center mt-4 px-4">
+        <div className="text-xs text-[var(--ink-muted)] text-center mt-4 px-4">
           Детерминированный<br />
           Полная информация о значениях<br />
           Единственный формат для CDC
@@ -335,8 +335,8 @@ export function BinlogRotationDiagram() {
             <FlowNode variant="sink" tabIndex={0}>
               <div className="text-xs">
                 mysql-bin.000001<br />
-                <span className="text-gray-400">0-1073741824 bytes</span><br />
-                <span className="text-gray-500">Status: CLOSED</span>
+                <span className="text-[var(--ink-muted)]">0-1073741824 bytes</span><br />
+                <span className="text-[var(--ink-subtle)]">Status: CLOSED</span>
               </div>
             </FlowNode>
           </DiagramTooltip>
@@ -347,8 +347,8 @@ export function BinlogRotationDiagram() {
             <FlowNode variant="sink" tabIndex={0}>
               <div className="text-xs">
                 mysql-bin.000002<br />
-                <span className="text-gray-400">0-1073741824 bytes</span><br />
-                <span className="text-gray-500">Status: CLOSED</span>
+                <span className="text-[var(--ink-muted)]">0-1073741824 bytes</span><br />
+                <span className="text-[var(--ink-subtle)]">Status: CLOSED</span>
               </div>
             </FlowNode>
           </DiagramTooltip>
@@ -359,7 +359,7 @@ export function BinlogRotationDiagram() {
             <FlowNode variant="database" tabIndex={0}>
               <div className="text-xs">
                 mysql-bin.000003<br />
-                <span className="text-gray-400">0-524288 bytes</span><br />
+                <span className="text-[var(--ink-muted)]">0-524288 bytes</span><br />
                 <span className="text-emerald-400">Status: ACTIVE</span>
               </div>
             </FlowNode>
@@ -387,8 +387,8 @@ export function BinlogRotationDiagram() {
       </DiagramContainer>
 
       {/* Info box */}
-      <div className="text-xs text-gray-400 text-center px-4 py-2 bg-gray-800/30 rounded-lg">
-        <strong className="text-gray-300">Ротация происходит при:</strong><br />
+      <div className="text-xs text-[var(--ink-muted)] text-center px-4 py-2 bg-[var(--bg-sunken)] rounded-lg">
+        <strong className="text-[var(--ink-default)]">Ротация происходит при:</strong><br />
         max_binlog_size достигнут | Перезапуск MySQL | FLUSH BINARY LOGS
       </div>
     </div>

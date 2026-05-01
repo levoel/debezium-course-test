@@ -91,7 +91,7 @@ export function DeploymentModesDiagram() {
 
           <Arrow direction="down" />
 
-          <div className="text-xs text-gray-400 text-center px-4">
+          <div className="text-xs text-[var(--ink-muted)] text-center px-4">
             Pub/Sub, Kinesis, Event Hubs
           </div>
         </div>
@@ -179,7 +179,7 @@ export function KafkaConnectClusterDiagram() {
               </DiagramTooltip>
             </div>
 
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               ↔ Координация между workers
             </div>
           </div>
@@ -366,7 +366,7 @@ export function CdcEventFlowDiagram() {
   return (
     <div className="w-full">
       <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-400/30">
-        <p className="text-xs text-blue-200">
+        <p className="text-xs text-blue-700">
           <strong>Logical Replication Protocol:</strong> PostgreSQL встроенный механизм для чтения WAL
         </p>
       </div>

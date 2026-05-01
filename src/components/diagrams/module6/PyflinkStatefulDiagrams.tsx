@@ -49,11 +49,11 @@ export function StatefulOperationsDiagram() {
           >
             <FlowNode
               variant="app"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               tabIndex={0}
             >
               Aggregations<br />
-              <span className="text-xs text-gray-400">(COUNT, SUM, AVG)</span>
+              <span className="text-xs text-[var(--ink-muted)]">(COUNT, SUM, AVG)</span>
             </FlowNode>
           </DiagramTooltip>
 
@@ -70,7 +70,7 @@ export function StatefulOperationsDiagram() {
           >
             <FlowNode
               variant="app"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               tabIndex={0}
             >
               Joins
@@ -90,7 +90,7 @@ export function StatefulOperationsDiagram() {
           >
             <FlowNode
               variant="app"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               tabIndex={0}
             >
               Deduplication
@@ -110,7 +110,7 @@ export function StatefulOperationsDiagram() {
           >
             <FlowNode
               variant="app"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               tabIndex={0}
             >
               Sessionization
@@ -135,7 +135,7 @@ export function StatefulOperationsDiagram() {
                   По умолчанию state хранится в памяти (heap). Для больших
                   state используйте RocksDB (on-disk state backend).
                 </p>
-                <p className="mt-2 text-blue-300">
+                <p className="mt-2 text-blue-700">
                   RocksDB: поддерживает терабайты state
                 </p>
               </div>
@@ -143,11 +143,11 @@ export function StatefulOperationsDiagram() {
           >
             <FlowNode
               variant="database"
-              className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+              className="bg-blue-500/20 border-blue-400/30 text-blue-700"
               tabIndex={0}
             >
               State хранится<br />
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-[var(--ink-muted)]">
                 в памяти или RocksDB
               </span>
             </FlowNode>
@@ -169,7 +169,7 @@ export function StatefulOperationsDiagram() {
           >
             <FlowNode
               variant="sink"
-              className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+              className="bg-blue-500/20 border-blue-400/30 text-blue-700"
               tabIndex={0}
             >
               Периодические checkpoints
@@ -192,7 +192,7 @@ export function StatefulOperationsDiagram() {
           >
             <FlowNode
               variant="connector"
-              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
               tabIndex={0}
             >
               Восстановление при сбоях
@@ -357,7 +357,7 @@ export function OutOfOrderEventsSequenceDiagram() {
             E1 прибыл последним из-за network delay на Partition 1. Processing
             time: T3. Event time: 10:00 (самый ранний!).
           </p>
-          <p className="mt-2 text-rose-300">
+          <p className="mt-2 text-rose-700">
             Проблема: Watermark мог уже закрыть окно 10:00-10:05!
           </p>
         </div>
@@ -378,7 +378,7 @@ export function OutOfOrderEventsSequenceDiagram() {
       />
       <div className="mt-4 text-sm text-rose-400 border-l-2 border-rose-400 pl-3">
         <strong>Почему это происходит:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           Processing time порядок: E2 → E3 → E1 (порядок прибытия в Flink)
           <br />
           Event time порядок: E1 → E2 → E3 (порядок генерации событий)
@@ -416,7 +416,7 @@ export function WatermarkProgressDiagram() {
             <FlowNode
               variant="sink"
               size="sm"
-              className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+              className="bg-blue-500/20 border-blue-400/30 text-blue-700"
               tabIndex={0}
             >
               10:00
@@ -436,7 +436,7 @@ export function WatermarkProgressDiagram() {
             <FlowNode
               variant="sink"
               size="sm"
-              className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+              className="bg-blue-500/20 border-blue-400/30 text-blue-700"
               tabIndex={0}
             >
               10:01
@@ -459,11 +459,11 @@ export function WatermarkProgressDiagram() {
             <FlowNode
               variant="connector"
               size="sm"
-              className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+              className="bg-amber-500/20 border-amber-400/30 text-amber-700"
               tabIndex={0}
             >
               10:02
-              <span className="block text-xs text-amber-300 mt-1">
+              <span className="block text-xs text-amber-700 mt-1">
                 ← Watermark
               </span>
             </FlowNode>
@@ -485,7 +485,7 @@ export function WatermarkProgressDiagram() {
             <FlowNode
               variant="sink"
               size="sm"
-              className="bg-gray-500/20 border-gray-400/30 text-gray-300"
+              className="bg-[var(--bg-deep)] border-[var(--line-medium)] text-[var(--ink-default)]"
               tabIndex={0}
             >
               10:03
@@ -505,7 +505,7 @@ export function WatermarkProgressDiagram() {
             <FlowNode
               variant="sink"
               size="sm"
-              className="bg-gray-500/20 border-gray-400/30 text-gray-300"
+              className="bg-[var(--bg-deep)] border-[var(--line-medium)] text-[var(--ink-default)]"
               tabIndex={0}
             >
               10:04
@@ -524,7 +524,7 @@ export function WatermarkProgressDiagram() {
                   выдаёт результат. Например, окно [10:00-10:05] закроется
                   когда watermark = 10:05.
                 </p>
-                <p className="mt-2 text-amber-300">
+                <p className="mt-2 text-amber-700">
                   Формула: watermark = max_event_time - allowed_lateness
                 </p>
               </div>
@@ -532,7 +532,7 @@ export function WatermarkProgressDiagram() {
           >
             <FlowNode
               variant="app"
-              className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+              className="bg-amber-500/20 border-amber-400/30 text-amber-700"
               tabIndex={0}
             >
               Закрыть windows с end_time ≤ 10:02
@@ -542,7 +542,7 @@ export function WatermarkProgressDiagram() {
 
         <div className="mt-2 text-sm text-amber-400 border-l-2 border-amber-400 pl-3">
           <strong>Watermark Definition:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             Watermark — это маркер, который говорит Flink: "Все события с
             event_time &lt; W уже прибыли (скорее всего)". Конфигурация:
             WATERMARK FOR event_time AS event_time - INTERVAL '5' SECONDS
@@ -578,11 +578,11 @@ export function TumblingWindowsDiagram() {
           >
             <FlowNode
               variant="sink"
-              className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+              className="bg-blue-500/20 border-blue-400/30 text-blue-700"
               tabIndex={0}
             >
               10:00-10:05<br />
-              <span className="text-xs text-gray-400">Window 1</span>
+              <span className="text-xs text-[var(--ink-muted)]">Window 1</span>
             </FlowNode>
           </DiagramTooltip>
 
@@ -601,11 +601,11 @@ export function TumblingWindowsDiagram() {
           >
             <FlowNode
               variant="sink"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               tabIndex={0}
             >
               10:05-10:10<br />
-              <span className="text-xs text-gray-400">Window 2</span>
+              <span className="text-xs text-[var(--ink-muted)]">Window 2</span>
             </FlowNode>
           </DiagramTooltip>
 
@@ -621,11 +621,11 @@ export function TumblingWindowsDiagram() {
           >
             <FlowNode
               variant="sink"
-              className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+              className="bg-amber-500/20 border-amber-400/30 text-amber-700"
               tabIndex={0}
             >
               10:10-10:15<br />
-              <span className="text-xs text-gray-400">Window 3</span>
+              <span className="text-xs text-[var(--ink-muted)]">Window 3</span>
             </FlowNode>
           </DiagramTooltip>
 
@@ -641,23 +641,23 @@ export function TumblingWindowsDiagram() {
           >
             <FlowNode
               variant="sink"
-              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
               tabIndex={0}
             >
               10:15-10:20<br />
-              <span className="text-xs text-gray-400">Window 4</span>
+              <span className="text-xs text-[var(--ink-muted)]">Window 4</span>
             </FlowNode>
           </DiagramTooltip>
         </div>
 
         <div className="text-sm text-blue-400 border-l-2 border-blue-400 pl-3">
           <strong>Характеристики:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             Неперекрывающиеся окна фиксированного размера. Каждое событие
             попадает ровно в одно окно. Use case: hourly/daily aggregations,
             periodic metrics.
           </p>
-          <p className="mt-2 text-gray-300">
+          <p className="mt-2 text-[var(--ink-default)]">
             SQL: TUMBLE(event_time, INTERVAL '5' MINUTES)
           </p>
         </div>
@@ -691,15 +691,15 @@ export function SlidingWindowsDiagram() {
           >
             <FlowNode
               variant="sink"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200 opacity-80"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700 opacity-80"
               tabIndex={0}
             >
               10:00-10:10<br />
-              <span className="text-xs text-gray-400">Window 1</span>
+              <span className="text-xs text-[var(--ink-muted)]">Window 1</span>
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-gray-500 text-sm px-2">overlap →</div>
+          <div className="text-[var(--ink-subtle)] text-sm px-2">overlap →</div>
 
           <DiagramTooltip
             content={
@@ -709,7 +709,7 @@ export function SlidingWindowsDiagram() {
                   Второе окно сдвинуто на 5 минут (slide). Перекрывается с
                   Window 1 в интервале [10:05, 10:10).
                 </p>
-                <p className="mt-2 text-purple-300">
+                <p className="mt-2 text-purple-700">
                   Событие в 10:07 попадёт в оба окна!
                 </p>
               </div>
@@ -717,15 +717,15 @@ export function SlidingWindowsDiagram() {
           >
             <FlowNode
               variant="sink"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200 opacity-80"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700 opacity-80"
               tabIndex={0}
             >
               10:05-10:15<br />
-              <span className="text-xs text-gray-400">Window 2</span>
+              <span className="text-xs text-[var(--ink-muted)]">Window 2</span>
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-gray-500 text-sm px-2">overlap →</div>
+          <div className="text-[var(--ink-subtle)] text-sm px-2">overlap →</div>
 
           <DiagramTooltip
             content={
@@ -740,25 +740,25 @@ export function SlidingWindowsDiagram() {
           >
             <FlowNode
               variant="sink"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200 opacity-80"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700 opacity-80"
               tabIndex={0}
             >
               10:10-10:20<br />
-              <span className="text-xs text-gray-400">Window 3</span>
+              <span className="text-xs text-[var(--ink-muted)]">Window 3</span>
             </FlowNode>
           </DiagramTooltip>
         </div>
 
         <div className="text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
           <strong>Характеристики:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             Перекрывающиеся окна. Событие может попасть в несколько окон. Use
             case: moving averages, rolling metrics, trend analysis.
           </p>
-          <p className="mt-2 text-gray-300">
+          <p className="mt-2 text-[var(--ink-default)]">
             SQL: HOP(event_time, INTERVAL '5' MINUTES, INTERVAL '10' MINUTES)
           </p>
-          <p className="mt-2 text-amber-300">
+          <p className="mt-2 text-amber-700">
             Warning: Малый slide создаёт много окон → больше state → больше
             памяти
           </p>
@@ -781,7 +781,7 @@ export function SessionWindowsDiagram() {
       <div className="flex flex-col gap-4">
         {/* Session 1 */}
         <div className="flex flex-col gap-2">
-          <div className="text-sm text-emerald-300 font-semibold">
+          <div className="text-sm text-emerald-700 font-semibold">
             User 1 — Session 1:
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -798,11 +798,11 @@ export function SessionWindowsDiagram() {
             >
               <FlowNode
                 variant="sink"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 10:00-10:15<br />
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-[var(--ink-muted)]">
                   Session 1 (3 события)
                 </span>
               </FlowNode>
@@ -824,11 +824,11 @@ export function SessionWindowsDiagram() {
               <FlowNode
                 variant="app"
                 size="sm"
-                className="bg-rose-500/20 border-rose-400/30 text-rose-200"
+                className="bg-rose-500/20 border-rose-400/30 text-rose-700"
                 tabIndex={0}
               >
                 Gap: 30 min<br />
-                <span className="text-xs text-gray-400">(inactivity)</span>
+                <span className="text-xs text-[var(--ink-muted)]">(inactivity)</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -847,11 +847,11 @@ export function SessionWindowsDiagram() {
             >
               <FlowNode
                 variant="sink"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 10:45-10:55<br />
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-[var(--ink-muted)]">
                   Session 2 (3 события)
                 </span>
               </FlowNode>
@@ -861,15 +861,15 @@ export function SessionWindowsDiagram() {
 
         <div className="text-sm text-emerald-400 border-l-2 border-emerald-400 pl-3">
           <strong>Характеристики:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             Динамические окна. Размер зависит от событий. Закрываются после gap
             of inactivity. Use case: user session analysis, clickstream
             analytics, activity tracking.
           </p>
-          <p className="mt-2 text-gray-300">
+          <p className="mt-2 text-[var(--ink-default)]">
             SQL: SESSION(event_time, INTERVAL '30' MINUTES)
           </p>
-          <p className="mt-2 text-amber-300">
+          <p className="mt-2 text-amber-700">
             Note: Session windows сложнее для state management, т.к. session
             границы неизвестны заранее
           </p>
@@ -1068,12 +1068,12 @@ export function TemporalJoinSequenceDiagram() {
       />
       <div className="mt-4 text-sm text-blue-400 border-l-2 border-blue-400 pl-3">
         <strong>Ключевая идея:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           Temporal join использует event time из orders для поиска правильной
           версии product. Если цена изменилась между заказами — каждый заказ
           получит цену, актуальную на момент его создания.
         </p>
-        <p className="mt-2 text-amber-300">
+        <p className="mt-2 text-amber-700">
           Требования: PRIMARY KEY на dimension table, WATERMARK на обеих
           таблицах
         </p>
@@ -1105,7 +1105,7 @@ export function StateGrowthDiagram() {
         >
           <FlowNode
             variant="database"
-            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
             tabIndex={0}
           >
             Day 1: 1 GB state
@@ -1127,7 +1127,7 @@ export function StateGrowthDiagram() {
         >
           <FlowNode
             variant="database"
-            className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+            className="bg-amber-500/20 border-amber-400/30 text-amber-700"
             tabIndex={0}
           >
             Day 7: 10 GB state
@@ -1143,7 +1143,7 @@ export function StateGrowthDiagram() {
               <p className="mt-1">
                 State продолжает расти. Memory pressure на TaskManagers.
               </p>
-              <p className="mt-2 text-amber-300">
+              <p className="mt-2 text-amber-700">
                 Warning: Приближаемся к heap limit
               </p>
             </div>
@@ -1151,7 +1151,7 @@ export function StateGrowthDiagram() {
         >
           <FlowNode
             variant="database"
-            className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+            className="bg-amber-500/20 border-amber-400/30 text-amber-700"
             tabIndex={0}
           >
             Day 30: 50 GB state
@@ -1167,7 +1167,7 @@ export function StateGrowthDiagram() {
               <p className="mt-1">
                 State превысил heap memory. TaskManager crash. Job failure.
               </p>
-              <p className="mt-2 text-rose-300">
+              <p className="mt-2 text-rose-700">
                 Критическая проблема: State растёт unbounded без cleanup
               </p>
             </div>
@@ -1175,7 +1175,7 @@ export function StateGrowthDiagram() {
         >
           <FlowNode
             variant="app"
-            className="bg-rose-500/20 border-rose-400/30 text-rose-200 border-2 animate-pulse"
+            className="bg-rose-500/20 border-rose-400/30 text-rose-700 border-2 animate-pulse"
             tabIndex={0}
           >
             Day 90: OOM crash! 💥
@@ -1184,7 +1184,7 @@ export function StateGrowthDiagram() {
 
         <div className="mt-4 text-sm text-rose-400 border-l-2 border-rose-400 pl-3">
           <strong>Решения:</strong>
-          <ul className="mt-1 list-disc list-inside text-gray-300">
+          <ul className="mt-1 list-disc list-inside text-[var(--ink-default)]">
             <li>
               <strong>State TTL:</strong> Автоматический cleanup старого state
               (например, TTL = 7 дней)

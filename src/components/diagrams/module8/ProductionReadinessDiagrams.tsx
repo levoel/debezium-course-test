@@ -31,7 +31,7 @@ export function ProductionGapDiagram() {
             Code works in<br/>Docker Compose
           </FlowNode>
         </DiagramTooltip>
-        <div className="mt-3 text-xs text-amber-200/70">
+        <div className="mt-3 text-xs text-amber-700/70">
           <p>Functional, but not production-ready</p>
         </div>
       </DiagramContainer>
@@ -100,7 +100,7 @@ export function ProductionGapDiagram() {
             </FlowNode>
           </DiagramTooltip>
         </div>
-        <div className="mt-3 text-xs text-emerald-200/70">
+        <div className="mt-3 text-xs text-emerald-700/70">
           <p>Production-ready: reliable, observable, maintainable</p>
         </div>
       </DiagramContainer>
@@ -133,7 +133,7 @@ export function FourGoldenSignalsDiagram() {
               Latency
             </FlowNode>
           </DiagramTooltip>
-          <div className="text-xs text-purple-200/70 text-center">maps to</div>
+          <div className="text-xs text-purple-700/70 text-center">maps to</div>
           <DiagramTooltip content={
             <div>
               <p className="font-semibold mb-1">Replication Lag</p>
@@ -161,7 +161,7 @@ export function FourGoldenSignalsDiagram() {
               Traffic
             </FlowNode>
           </DiagramTooltip>
-          <div className="text-xs text-purple-200/70 text-center">maps to</div>
+          <div className="text-xs text-purple-700/70 text-center">maps to</div>
           <DiagramTooltip content={
             <div>
               <p className="font-semibold mb-1">Event Throughput</p>
@@ -189,7 +189,7 @@ export function FourGoldenSignalsDiagram() {
               Errors
             </FlowNode>
           </DiagramTooltip>
-          <div className="text-xs text-purple-200/70 text-center">maps to</div>
+          <div className="text-xs text-purple-700/70 text-center">maps to</div>
           <DiagramTooltip content={
             <div>
               <p className="font-semibold mb-1">Connector Failures</p>
@@ -217,7 +217,7 @@ export function FourGoldenSignalsDiagram() {
               Saturation
             </FlowNode>
           </DiagramTooltip>
-          <div className="text-xs text-purple-200/70 text-center">maps to</div>
+          <div className="text-xs text-purple-700/70 text-center">maps to</div>
           <DiagramTooltip content={
             <div>
               <p className="font-semibold mb-1">Queue Capacity</p>
@@ -233,13 +233,13 @@ export function FourGoldenSignalsDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-purple-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-purple-700/70">
         <p className="font-semibold mb-1">Four Golden Signals framework:</p>
         <ul className="space-y-1">
-          <li><span className="text-purple-300">Latency</span> - Replication lag (ms behind source)</li>
-          <li><span className="text-purple-300">Traffic</span> - Events/second throughput</li>
-          <li><span className="text-purple-300">Errors</span> - Connector failures, task crashes</li>
-          <li><span className="text-purple-300">Saturation</span> - Queue capacity, WAL bloat</li>
+          <li><span className="text-purple-700">Latency</span> - Replication lag (ms behind source)</li>
+          <li><span className="text-purple-700">Traffic</span> - Events/second throughput</li>
+          <li><span className="text-purple-700">Errors</span> - Connector failures, task crashes</li>
+          <li><span className="text-purple-700">Saturation</span> - Queue capacity, WAL bloat</li>
         </ul>
       </div>
     </DiagramContainer>

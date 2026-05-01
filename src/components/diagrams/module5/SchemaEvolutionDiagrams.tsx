@@ -40,7 +40,7 @@ export function SchemaCompatibilityDiagram() {
                 <br />1. Update consumers (они научатся читать new fields)
                 <br />2. Update producers (начнут отправлять new schema)
               </p>
-              <p className="mt-2 text-emerald-300">
+              <p className="mt-2 text-emerald-700">
                 Используйте BACKWARD для CDC, где consumers должны работать
                 со старыми данными
               </p>
@@ -51,12 +51,12 @@ export function SchemaCompatibilityDiagram() {
             className="p-4 rounded-lg bg-emerald-500/20 border-2 border-emerald-400/30 cursor-pointer hover:border-emerald-400"
             tabIndex={0}
           >
-            <div className="text-lg font-bold text-emerald-200">BACKWARD</div>
-            <div className="text-sm text-gray-300 mt-2">
+            <div className="text-lg font-bold text-emerald-700">BACKWARD</div>
+            <div className="text-sm text-[var(--ink-default)] mt-2">
               Old consumer + New data
             </div>
             <div className="text-xs text-emerald-400 mt-2">✅ Compatible</div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="text-xs text-[var(--ink-muted)] mt-1">
               Add optional field, Remove field
             </div>
           </div>
@@ -81,7 +81,7 @@ export function SchemaCompatibilityDiagram() {
                 <br />1. Update producers (начнут отправлять new schema)
                 <br />2. Update consumers (научатся читать new fields)
               </p>
-              <p className="mt-2 text-blue-300">
+              <p className="mt-2 text-blue-700">
                 Используйте FORWARD, если хотите сначала обновить producers
               </p>
             </div>
@@ -91,12 +91,12 @@ export function SchemaCompatibilityDiagram() {
             className="p-4 rounded-lg bg-blue-500/20 border-2 border-blue-400/30 cursor-pointer hover:border-blue-400"
             tabIndex={0}
           >
-            <div className="text-lg font-bold text-blue-200">FORWARD</div>
-            <div className="text-sm text-gray-300 mt-2">
+            <div className="text-lg font-bold text-blue-700">FORWARD</div>
+            <div className="text-sm text-[var(--ink-default)] mt-2">
               New consumer + Old data
             </div>
             <div className="text-xs text-blue-400 mt-2">✅ Compatible</div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="text-xs text-[var(--ink-muted)] mt-1">
               Add field, Remove optional field
             </div>
           </div>
@@ -120,7 +120,7 @@ export function SchemaCompatibilityDiagram() {
                 <strong>Upgrade order:</strong>
                 <br />Любой порядок — обновляйте producers и consumers независимо
               </p>
-              <p className="mt-2 text-purple-300">
+              <p className="mt-2 text-purple-700">
                 Используйте FULL для production-critical систем, где нужна
                 максимальная гибкость deployment
               </p>
@@ -131,12 +131,12 @@ export function SchemaCompatibilityDiagram() {
             className="p-4 rounded-lg bg-purple-500/20 border-2 border-purple-400/30 cursor-pointer hover:border-purple-400"
             tabIndex={0}
           >
-            <div className="text-lg font-bold text-purple-200">FULL</div>
-            <div className="text-sm text-gray-300 mt-2">
+            <div className="text-lg font-bold text-purple-700">FULL</div>
+            <div className="text-sm text-[var(--ink-default)] mt-2">
               Both directions compatible
             </div>
             <div className="text-xs text-purple-400 mt-2">✅ Max safety</div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="text-xs text-[var(--ink-muted)] mt-1">
               Only optional field changes
             </div>
           </div>
@@ -157,7 +157,7 @@ export function SchemaCompatibilityDiagram() {
                 <br />❌ Consumers могут сломаться внезапно
                 <br />❌ Нет защиты от некорректных схем
               </p>
-              <p className="mt-2 text-rose-300">
+              <p className="mt-2 text-rose-700">
                 НЕ используйте NONE в production. Только для dev/testing.
               </p>
             </div>
@@ -167,10 +167,10 @@ export function SchemaCompatibilityDiagram() {
             className="p-4 rounded-lg bg-rose-500/20 border-2 border-rose-400/30 cursor-pointer hover:border-rose-400"
             tabIndex={0}
           >
-            <div className="text-lg font-bold text-rose-200">NONE</div>
-            <div className="text-sm text-gray-300 mt-2">No compatibility check</div>
+            <div className="text-lg font-bold text-rose-700">NONE</div>
+            <div className="text-sm text-[var(--ink-default)] mt-2">No compatibility check</div>
             <div className="text-xs text-rose-400 mt-2">⚠️ No validation</div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="text-xs text-[var(--ink-muted)] mt-1">
               Any change allowed (dangerous)
             </div>
           </div>
@@ -179,7 +179,7 @@ export function SchemaCompatibilityDiagram() {
 
       <div className="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
         <strong>Рекомендация для CDC систем:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           Используйте FULL для production pipelines. Это позволяет обновлять Debezium
           connector и consumers независимо без coordinated deployment. BACKWARD подходит
           для менее критичных систем.
@@ -224,7 +224,7 @@ export function EvolutionDecisionTreeDiagram() {
               <FlowNode
                 variant="connector"
                 size="sm"
-                className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                 tabIndex={0}
               >
                 Добавление поля?
@@ -241,7 +241,7 @@ export function EvolutionDecisionTreeDiagram() {
                     Schema Registry разрешит изменение, если поле optional или
                     имеет default value.
                   </p>
-                  <p className="mt-2 text-emerald-300">
+                  <p className="mt-2 text-emerald-700">
                     Old consumers игнорируют новое поле. New consumers читают его.
                   </p>
                   <p className="mt-2 text-sm font-mono">
@@ -253,17 +253,17 @@ export function EvolutionDecisionTreeDiagram() {
               <FlowNode
                 variant="app"
                 size="sm"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 ✅ BACKWARD compatible
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Add optional field
                 </span>
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 text-center mt-2">
+            <div className="text-xs text-[var(--ink-muted)] text-center mt-2">
               Old consumer + New data → Works
             </div>
           </div>
@@ -287,7 +287,7 @@ export function EvolutionDecisionTreeDiagram() {
               <FlowNode
                 variant="connector"
                 size="sm"
-                className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                 tabIndex={0}
               >
                 Удаление поля?
@@ -304,10 +304,10 @@ export function EvolutionDecisionTreeDiagram() {
                     New consumers не ожидают удаленное поле. Old consumers получат
                     null или default value.
                   </p>
-                  <p className="mt-2 text-blue-300">
+                  <p className="mt-2 text-blue-700">
                     Обновите producers первыми, затем consumers.
                   </p>
-                  <p className="mt-2 text-amber-300">
+                  <p className="mt-2 text-amber-700">
                     Если поле было required — это breaking change!
                   </p>
                 </div>
@@ -316,17 +316,17 @@ export function EvolutionDecisionTreeDiagram() {
               <FlowNode
                 variant="app"
                 size="sm"
-                className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                 tabIndex={0}
               >
                 ✅ FORWARD compatible
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Remove optional field
                 </span>
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 text-center mt-2">
+            <div className="text-xs text-[var(--ink-muted)] text-center mt-2">
               New consumer + Old data → Works
             </div>
           </div>
@@ -350,7 +350,7 @@ export function EvolutionDecisionTreeDiagram() {
               <FlowNode
                 variant="connector"
                 size="sm"
-                className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                 tabIndex={0}
               >
                 Изменение типа?
@@ -367,7 +367,7 @@ export function EvolutionDecisionTreeDiagram() {
                     Schema Registry ЗАБЛОКИРУЕТ регистрацию несовместимой схемы.
                     Нельзя изменить тип поля без migration strategy.
                   </p>
-                  <p className="mt-2 text-rose-300">
+                  <p className="mt-2 text-rose-700">
                     Решение: создайте новое поле (age_v2), deprecated старое.
                     После миграции всех consumers удалите старое поле.
                   </p>
@@ -384,11 +384,11 @@ export function EvolutionDecisionTreeDiagram() {
               <FlowNode
                 variant="app"
                 size="sm"
-                className="bg-rose-500/20 border-rose-400/30 text-rose-200"
+                className="bg-rose-500/20 border-rose-400/30 text-rose-700"
                 tabIndex={0}
               >
                 ❌ BREAKING change
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Needs migration
                 </span>
               </FlowNode>
@@ -403,10 +403,10 @@ export function EvolutionDecisionTreeDiagram() {
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
           {/* Safe changes summary */}
           <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-400/30">
-            <div className="text-sm font-bold text-emerald-300">
+            <div className="text-sm font-bold text-emerald-700">
               ✅ Безопасные изменения
             </div>
-            <ul className="mt-2 text-xs text-gray-300 space-y-1">
+            <ul className="mt-2 text-xs text-[var(--ink-default)] space-y-1">
               <li>• Add optional field (с default value)</li>
               <li>• Remove optional field</li>
               <li>• Add enum value (append only)</li>
@@ -416,10 +416,10 @@ export function EvolutionDecisionTreeDiagram() {
 
           {/* Unsafe changes summary */}
           <div className="p-4 rounded-lg bg-rose-500/10 border border-rose-400/30">
-            <div className="text-sm font-bold text-rose-300">
+            <div className="text-sm font-bold text-rose-700">
               ❌ Breaking changes
             </div>
-            <ul className="mt-2 text-xs text-gray-300 space-y-1">
+            <ul className="mt-2 text-xs text-[var(--ink-default)] space-y-1">
               <li>• Add required field (no default)</li>
               <li>• Remove required field</li>
               <li>• Change field type (incompatible)</li>
@@ -431,7 +431,7 @@ export function EvolutionDecisionTreeDiagram() {
 
         <div className="mt-4 text-sm text-blue-400 border-l-2 border-blue-400 pl-3">
           <strong>Golden Rule:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             Если изменение схемы может сломать десериализацию у существующих
             consumers — это breaking change. Всегда используйте Schema Registry
             compatibility mode для автоматической валидации перед deployment.

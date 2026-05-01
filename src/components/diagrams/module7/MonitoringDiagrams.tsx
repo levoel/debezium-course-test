@@ -48,7 +48,7 @@ export function MonitoringComponentsDiagram() {
         </div>
 
         {/* Monitoring layer */}
-        <div className="flex items-center justify-center gap-2 pt-3 border-t border-white/10">
+        <div className="flex items-center justify-center gap-2 pt-3 border-t border-[var(--line-thin)]">
           <FlowNode variant="gcp-monitoring" size="sm" tabIndex={0}>Cloud Monitoring</FlowNode>
           <Arrow direction="right" />
           <FlowNode variant="app" size="sm" tabIndex={0}>Unified Dashboard</FlowNode>
@@ -73,7 +73,7 @@ export function MonitoringPointsHierarchyDiagram() {
       <div className="grid md:grid-cols-3 gap-4">
         {/* Cloud SQL Metrics */}
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-purple-200">Cloud SQL</h3>
+          <h3 className="text-sm font-semibold text-purple-700">Cloud SQL</h3>
           <DiagramTooltip content="CPU utilization > 80% → scale up instance tier">
             <FlowNode variant="gcp-monitoring" size="sm" tabIndex={0}>
               CPU/Memory
@@ -93,7 +93,7 @@ export function MonitoringPointsHierarchyDiagram() {
 
         {/* Debezium Metrics */}
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-emerald-200">Debezium Server</h3>
+          <h3 className="text-sm font-semibold text-emerald-700">Debezium Server</h3>
           <DiagramTooltip content="MilliSecondsBehindSource > 60000 → alert">
             <FlowNode variant="gcp-monitoring" size="sm" tabIndex={0}>
               System Lag
@@ -113,7 +113,7 @@ export function MonitoringPointsHierarchyDiagram() {
 
         {/* Pub/Sub Metrics */}
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-amber-200">Pub/Sub</h3>
+          <h3 className="text-sm font-semibold text-amber-700">Pub/Sub</h3>
           <DiagramTooltip content="oldest_unacked_message_age > 300s → consumer lag">
             <FlowNode variant="gcp-monitoring" size="sm" tabIndex={0}>
               Message Age
@@ -132,7 +132,7 @@ export function MonitoringPointsHierarchyDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-amber-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-amber-700/70">
         <p>System lag — ключевая метрика для real-time CDC (задержка обработки)</p>
       </div>
     </DiagramContainer>
@@ -214,7 +214,7 @@ export function AlertFlowDiagram() {
         </DiagramContainer>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-rose-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-rose-700/70">
         <p className="font-semibold mb-1">Alert thresholds:</p>
         <ul className="space-y-1">
           <li>• Critical: immediate action required (page on-call)</li>
@@ -272,10 +272,10 @@ export function CdcDashboardStructureDiagram() {
       <div className="space-y-3">
         {rows.map((row) => (
           <div key={row.label} className={`rounded-lg border p-3 ${colorMap[row.color]}`}>
-            <div className="text-xs font-semibold text-gray-300 mb-2">{row.label}</div>
+            <div className="text-xs font-semibold text-[var(--ink-default)] mb-2">{row.label}</div>
             <div className="flex flex-wrap gap-2">
               {row.widgets.map((w) => (
-                <span key={w} className="text-[11px] text-gray-400 px-2 py-1 rounded bg-white/[.04] border border-white/[.08]">
+                <span key={w} className="text-[11px] text-[var(--ink-muted)] px-2 py-1 rounded bg-[var(--bg-surface)] border border-[var(--line-thin)]">
                   {w}
                 </span>
               ))}

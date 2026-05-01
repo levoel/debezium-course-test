@@ -27,7 +27,7 @@ export function WalLevelHierarchyDiagram() {
                 minimal
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               Только crash recovery<br />
               Нет репликации
             </div>
@@ -44,7 +44,7 @@ export function WalLevelHierarchyDiagram() {
                 replica
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               + Physical replication<br />
               + Point-in-time recovery
             </div>
@@ -61,7 +61,7 @@ export function WalLevelHierarchyDiagram() {
                 logical
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               + Logical decoding<br />
               + CDC (Debezium)
             </div>
@@ -106,7 +106,7 @@ export function WorkloadWalImpactDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               Минимальный overhead<br />
               Логируется только новая строка
             </div>
@@ -130,7 +130,7 @@ export function WorkloadWalImpactDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               Умеренный overhead<br />
               Типичный OLTP профиль
             </div>
@@ -154,7 +154,7 @@ export function WorkloadWalImpactDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               Максимальный overhead<br />
               Особенно при REPLICA IDENTITY FULL
             </div>
@@ -165,7 +165,7 @@ export function WorkloadWalImpactDiagram() {
       {/* Note about REPLICA IDENTITY */}
       <div className="flex justify-center">
         <DiagramContainer title="Влияние REPLICA IDENTITY" color="amber" className="max-w-lg">
-          <div className="text-xs text-gray-400 text-center space-y-2">
+          <div className="text-xs text-[var(--ink-muted)] text-center space-y-2">
             <div>
               <strong className="text-amber-400/80">DEFAULT:</strong> UPDATE/DELETE логирует только PK
             </div>

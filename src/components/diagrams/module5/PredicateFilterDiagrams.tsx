@@ -36,7 +36,7 @@ export function PredicateEvaluationDiagram() {
         >
           <FlowNode variant="app" tabIndex={0}>
             <div>Incoming Message</div>
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               topic: dbserver1.inventory.customers
             </span>
           </FlowNode>
@@ -52,7 +52,7 @@ export function PredicateEvaluationDiagram() {
                 TopicNameMatches проверяет regex pattern. Если топик соответствует
                 dbserver1\.inventory\..* — возвращает true, иначе false.
               </p>
-              <p className="mt-2 text-xs text-purple-300">
+              <p className="mt-2 text-xs text-purple-700">
                 Heartbeat публикуется в топик __debezium-heartbeat.dbserver1 (не соответствует pattern) → predicate вернет false.
               </p>
             </div>
@@ -60,11 +60,11 @@ export function PredicateEvaluationDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             <div>Predicate: IsDataEvent</div>
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               pattern: dbserver1\.inventory\..*
             </span>
           </FlowNode>
@@ -88,11 +88,11 @@ export function PredicateEvaluationDiagram() {
             >
               <FlowNode
                 variant="connector"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 <div>Apply SMT</div>
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Unwrap envelope
                 </span>
               </FlowNode>
@@ -101,7 +101,7 @@ export function PredicateEvaluationDiagram() {
 
           {/* FALSE path */}
           <div className="flex flex-col items-center gap-2">
-            <div className="text-sm font-semibold text-gray-400">FALSE</div>
+            <div className="text-sm font-semibold text-[var(--ink-muted)]">FALSE</div>
             <Arrow direction="down" />
             <DiagramTooltip
               content={
@@ -116,11 +116,11 @@ export function PredicateEvaluationDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-gray-700/20 border-gray-600/30 text-gray-300"
+                className="bg-[var(--bg-sunken)] border-[var(--line-thin)] text-[var(--ink-default)]"
                 tabIndex={0}
               >
                 <div>Skip SMT</div>
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Pass through
                 </span>
               </FlowNode>
@@ -174,7 +174,7 @@ export function PredicateCombinationDiagram() {
         >
           <FlowNode variant="app" tabIndex={0}>
             <div>Message</div>
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               topic: dbserver1.inventory.customers
             </span>
           </FlowNode>
@@ -196,7 +196,7 @@ export function PredicateCombinationDiagram() {
                   <p className="mt-1">
                     Проверяет топик по pattern dbserver1\.inventory\..*
                   </p>
-                  <p className="mt-2 text-xs text-blue-300">
+                  <p className="mt-2 text-xs text-blue-700">
                     TRUE для customers/orders топиков, FALSE для heartbeat.
                   </p>
                 </div>
@@ -204,7 +204,7 @@ export function PredicateCombinationDiagram() {
             >
               <FlowNode variant="connector" size="sm" tabIndex={0}>
                 <div>Predicate: IsDataEvent</div>
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   pattern: dbserver1.inventory.*
                 </span>
               </FlowNode>
@@ -225,7 +225,7 @@ export function PredicateCombinationDiagram() {
                 <FlowNode
                   variant="connector"
                   size="sm"
-                  className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                  className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                   tabIndex={0}
                 >
                   ExtractNewRecordState
@@ -251,7 +251,7 @@ export function PredicateCombinationDiagram() {
                   <p className="mt-1">
                     Проверяет топик по pattern .*customers
                   </p>
-                  <p className="mt-2 text-xs text-amber-300">
+                  <p className="mt-2 text-xs text-amber-700">
                     TRUE для customers топика, FALSE для orders топика.
                   </p>
                 </div>
@@ -259,7 +259,7 @@ export function PredicateCombinationDiagram() {
             >
               <FlowNode variant="connector" size="sm" tabIndex={0}>
                 <div>Predicate: IsCustomerTable</div>
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   pattern: .*customers
                 </span>
               </FlowNode>
@@ -281,7 +281,7 @@ export function PredicateCombinationDiagram() {
                 <FlowNode
                   variant="connector"
                   size="sm"
-                  className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+                  className="bg-amber-500/20 border-amber-400/30 text-amber-700"
                   tabIndex={0}
                 >
                   MaskField
@@ -309,7 +309,7 @@ export function PredicateCombinationDiagram() {
         >
           <FlowNode variant="sink" tabIndex={0}>
             <div>To Kafka</div>
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Разные форматы по предикатам
             </span>
           </FlowNode>
@@ -356,7 +356,7 @@ export function FilterDecisionTreeDiagram() {
           {/* NO path - Predicates */}
           <div className="flex flex-col items-center gap-2">
             <div className="text-sm font-semibold text-emerald-400">НЕТ</div>
-            <div className="text-xs text-gray-400">(только topic/tombstone/header)</div>
+            <div className="text-xs text-[var(--ink-muted)]">(только topic/tombstone/header)</div>
             <Arrow direction="down" />
 
             <DiagramTooltip
@@ -371,7 +371,7 @@ export function FilterDecisionTreeDiagram() {
                     <li>• RecordIsTombstone - проверка tombstone</li>
                     <li>• HasHeaderKey - наличие header</li>
                   </ul>
-                  <p className="mt-2 text-xs text-emerald-300">
+                  <p className="mt-2 text-xs text-emerald-700">
                     Overhead минимальный, не требует Groovy.
                   </p>
                 </div>
@@ -379,14 +379,14 @@ export function FilterDecisionTreeDiagram() {
             >
               <FlowNode
                 variant="app"
-                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                 tabIndex={0}
               >
                 <div>Используйте Predicate</div>
-                <div className="text-xs text-gray-400 mt-2">Примеры:</div>
-                <div className="text-xs text-gray-400">- TopicNameMatches</div>
-                <div className="text-xs text-gray-400">- RecordIsTombstone</div>
-                <div className="text-xs text-gray-400">- HasHeaderKey</div>
+                <div className="text-xs text-[var(--ink-muted)] mt-2">Примеры:</div>
+                <div className="text-xs text-[var(--ink-muted)]">- TopicNameMatches</div>
+                <div className="text-xs text-[var(--ink-muted)]">- RecordIsTombstone</div>
+                <div className="text-xs text-[var(--ink-muted)]">- HasHeaderKey</div>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -394,7 +394,7 @@ export function FilterDecisionTreeDiagram() {
           {/* YES path - Filter SMT or Kafka Streams */}
           <div className="flex flex-col items-center gap-2">
             <div className="text-sm font-semibold text-blue-400">ДА</div>
-            <div className="text-xs text-gray-400">(нужен доступ к value.after)</div>
+            <div className="text-xs text-[var(--ink-muted)]">(нужен доступ к value.after)</div>
             <Arrow direction="down" />
 
             <DiagramTooltip
@@ -431,7 +431,7 @@ export function FilterDecisionTreeDiagram() {
                         <li>• Фильтрация по полю: value.after.status == 'ACTIVE'</li>
                         <li>• Простые AND/OR условия</li>
                       </ul>
-                      <p className="mt-2 text-xs text-blue-300">
+                      <p className="mt-2 text-xs text-blue-700">
                         Overhead 1-2ms на сообщение для простых условий.
                       </p>
                     </div>
@@ -439,14 +439,14 @@ export function FilterDecisionTreeDiagram() {
                 >
                   <FlowNode
                     variant="connector"
-                    className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+                    className="bg-blue-500/20 border-blue-400/30 text-blue-700"
                     tabIndex={0}
                   >
                     <div>Filter SMT</div>
-                    <div className="text-xs text-gray-400 mt-2">+ Groovy condition</div>
-                    <div className="text-xs text-gray-400 mt-2">Примеры:</div>
-                    <div className="text-xs text-gray-400">- value.op == 'c'</div>
-                    <div className="text-xs text-gray-400">- value.after.status == 'ACTIVE'</div>
+                    <div className="text-xs text-[var(--ink-muted)] mt-2">+ Groovy condition</div>
+                    <div className="text-xs text-[var(--ink-muted)] mt-2">Примеры:</div>
+                    <div className="text-xs text-[var(--ink-muted)]">- value.op == 'c'</div>
+                    <div className="text-xs text-[var(--ink-muted)]">- value.after.status == 'ACTIVE'</div>
                   </FlowNode>
                 </DiagramTooltip>
               </div>
@@ -454,7 +454,7 @@ export function FilterDecisionTreeDiagram() {
               {/* NO - Kafka Streams */}
               <div className="flex flex-col items-center gap-2">
                 <div className="text-xs font-semibold text-purple-400">НЕТ</div>
-                <div className="text-xs text-gray-400">(сложная логика)</div>
+                <div className="text-xs text-[var(--ink-muted)]">(сложная логика)</div>
                 <Arrow direction="down" />
 
                 <DiagramTooltip
@@ -470,7 +470,7 @@ export function FilterDecisionTreeDiagram() {
                         <li>• Агрегации и joins</li>
                         <li>• Stateful filtering</li>
                       </ul>
-                      <p className="mt-2 text-xs text-purple-300">
+                      <p className="mt-2 text-xs text-purple-700">
                         Kafka Streams не блокирует CDC поток.
                       </p>
                     </div>
@@ -478,15 +478,15 @@ export function FilterDecisionTreeDiagram() {
                 >
                   <FlowNode
                     variant="app"
-                    className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                    className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                     tabIndex={0}
                   >
                     <div>Kafka Streams</div>
-                    <div className="text-xs text-gray-400 mt-2">или ksqlDB</div>
-                    <div className="text-xs text-gray-400 mt-2">Для:</div>
-                    <div className="text-xs text-gray-400">- Сложная логика</div>
-                    <div className="text-xs text-gray-400">- Агрегации</div>
-                    <div className="text-xs text-gray-400">- Joins</div>
+                    <div className="text-xs text-[var(--ink-muted)] mt-2">или ksqlDB</div>
+                    <div className="text-xs text-[var(--ink-muted)] mt-2">Для:</div>
+                    <div className="text-xs text-[var(--ink-muted)]">- Сложная логика</div>
+                    <div className="text-xs text-[var(--ink-muted)]">- Агрегации</div>
+                    <div className="text-xs text-[var(--ink-muted)]">- Joins</div>
                   </FlowNode>
                 </DiagramTooltip>
               </div>

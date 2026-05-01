@@ -73,7 +73,7 @@ export function DeploymentModesDiagram() {
             <DiagramTooltip content="Произвольная система-получатель событий">
               <FlowNode variant="target" tabIndex={0}>Any Target</FlowNode>
             </DiagramTooltip>
-            <p className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 text-xs text-gray-400 whitespace-nowrap">Custom Processing</p>
+            <p className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 text-xs text-[var(--ink-muted)] whitespace-nowrap">Custom Processing</p>
           </div>
         </div>
       </DiagramContainer>

@@ -47,7 +47,7 @@ export function CapstoneArchitectureDiagram() {
             <FlowNode variant="database">orders table</FlowNode>
           </DiagramTooltip>
 
-          <div className="flex items-center gap-2 text-xs text-purple-200/70">
+          <div className="flex items-center gap-2 text-xs text-purple-700/70">
             <span className="hidden md:inline">+</span>
             <span className="md:hidden">+</span>
             <span>same transaction</span>
@@ -61,7 +61,7 @@ export function CapstoneArchitectureDiagram() {
               <p className="text-sm mt-1">Поля: id, aggregatetype, payload (JSONB)</p>
             </div>
           }>
-            <FlowNode variant="connector" className="bg-red-500/20 border-red-400/30 text-red-200">
+            <FlowNode variant="connector" className="bg-red-500/20 border-red-400/30 text-red-700">
               outbox table
             </FlowNode>
           </DiagramTooltip>
@@ -83,7 +83,7 @@ export function CapstoneArchitectureDiagram() {
           }>
             <FlowNode variant="connector">
               Debezium Connector
-              <div className="text-xs text-gray-400 mt-1">(Outbox Event Router SMT)</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">(Outbox Event Router SMT)</div>
             </FlowNode>
           </DiagramTooltip>
 
@@ -102,7 +102,7 @@ export function CapstoneArchitectureDiagram() {
           }>
             <FlowNode variant="cluster">
               Kafka Topic
-              <div className="text-xs text-gray-400 mt-1">outbox.event.orders</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">outbox.event.orders</div>
             </FlowNode>
           </DiagramTooltip>
         </div>
@@ -123,7 +123,7 @@ export function CapstoneArchitectureDiagram() {
           }>
             <FlowNode variant="connector">
               PyFlink Table API
-              <div className="text-xs text-gray-400 mt-1">(transformations)</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">(transformations)</div>
             </FlowNode>
           </DiagramTooltip>
 
@@ -141,7 +141,7 @@ export function CapstoneArchitectureDiagram() {
           }>
             <FlowNode variant="cluster">
               Kafka Topic
-              <div className="text-xs text-gray-400 mt-1">bigquery.orders</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">bigquery.orders</div>
             </FlowNode>
           </DiagramTooltip>
         </div>
@@ -162,7 +162,7 @@ export function CapstoneArchitectureDiagram() {
           }>
             <FlowNode variant="sink">
               BigQuery Connector
-              <div className="text-xs text-gray-400 mt-1">(Storage Write API)</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">(Storage Write API)</div>
             </FlowNode>
           </DiagramTooltip>
 
@@ -181,7 +181,7 @@ export function CapstoneArchitectureDiagram() {
           }>
             <FlowNode variant="target">
               BigQuery Table
-              <div className="text-xs text-gray-400 mt-1">project.dataset.orders</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">project.dataset.orders</div>
             </FlowNode>
           </DiagramTooltip>
         </div>
@@ -202,7 +202,7 @@ export function CapstoneArchitectureDiagram() {
           }>
             <FlowNode variant="sink">
               Prometheus
-              <div className="text-xs text-gray-400 mt-1">(JMX metrics)</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">(JMX metrics)</div>
             </FlowNode>
           </DiagramTooltip>
 
@@ -220,13 +220,13 @@ export function CapstoneArchitectureDiagram() {
           }>
             <FlowNode variant="connector">
               Grafana
-              <div className="text-xs text-gray-400 mt-1">(dashboards)</div>
+              <div className="text-xs text-[var(--ink-muted)] mt-1">(dashboards)</div>
             </FlowNode>
           </DiagramTooltip>
         </div>
       </DiagramContainer>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-400">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-[var(--ink-muted)]">
         <p className="font-semibold mb-2">End-to-End Latency (typical):</p>
         <ul className="space-y-1">
           <li>Application {'->'} outbox insert: &lt;1ms (same transaction)</li>

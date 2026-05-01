@@ -23,7 +23,7 @@ export function PrometheusScrapingDiagram() {
       <div className="flex flex-col lg:flex-row items-center justify-center gap-4">
         {/* Kafka Connect Container */}
         <div className="p-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10">
-          <div className="text-xs text-emerald-300 font-medium mb-3 text-center">
+          <div className="text-xs text-emerald-700 font-medium mb-3 text-center">
             Kafka Connect Container
           </div>
           <div className="flex flex-col items-center gap-2">
@@ -74,7 +74,7 @@ export function PrometheusScrapingDiagram() {
                     Читает JMX MBeans и экспортирует в Prometheus формат.
                     HTTP endpoint на порту 9404.
                   </p>
-                  <p className="mt-1 text-amber-300">
+                  <p className="mt-1 text-amber-700">
                     JMXPORT=9404 в docker-compose.yml
                   </p>
                 </div>
@@ -83,12 +83,12 @@ export function PrometheusScrapingDiagram() {
               <FlowNode
                 variant="connector"
                 size="sm"
-                className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+                className="bg-amber-500/20 border-amber-400/30 text-amber-700"
                 tabIndex={0}
               >
                 <div className="text-center">
                   <div>JMX Exporter</div>
-                  <div className="text-xs text-gray-400">:9404</div>
+                  <div className="text-xs text-[var(--ink-muted)]">:9404</div>
                 </div>
               </FlowNode>
             </DiagramTooltip>
@@ -99,7 +99,7 @@ export function PrometheusScrapingDiagram() {
 
         {/* Prometheus Container */}
         <div className="p-4 rounded-xl border border-rose-400/30 bg-rose-500/10">
-          <div className="text-xs text-rose-300 font-medium mb-3 text-center">
+          <div className="text-xs text-rose-700 font-medium mb-3 text-center">
             Prometheus Container
           </div>
           <div className="flex flex-col items-center gap-2">
@@ -112,7 +112,7 @@ export function PrometheusScrapingDiagram() {
                     scrape_interval: 15s - оптимальный баланс.
                     job_name: kafka-connect в prometheus.yml.
                   </p>
-                  <p className="mt-1 text-blue-300">
+                  <p className="mt-1 text-blue-700">
                     Targets: connect:9404 (Docker service name)
                   </p>
                 </div>
@@ -121,7 +121,7 @@ export function PrometheusScrapingDiagram() {
               <FlowNode variant="app" size="sm" tabIndex={0}>
                 <div className="text-center">
                   <div>Scraper</div>
-                  <div className="text-xs text-gray-400">каждые 15s</div>
+                  <div className="text-xs text-[var(--ink-muted)]">каждые 15s</div>
                 </div>
               </FlowNode>
             </DiagramTooltip>
@@ -137,7 +137,7 @@ export function PrometheusScrapingDiagram() {
                     Retention по умолчанию 15 дней.
                     Поддерживает PromQL для запросов.
                   </p>
-                  <p className="mt-1 text-purple-300">
+                  <p className="mt-1 text-purple-700">
                     metric_relabel_configs фильтрует ненужные метрики
                   </p>
                 </div>
@@ -154,7 +154,7 @@ export function PrometheusScrapingDiagram() {
 
         {/* Clients */}
         <div className="p-4 rounded-xl border border-purple-400/30 bg-purple-500/10">
-          <div className="text-xs text-purple-300 font-medium mb-3 text-center">
+          <div className="text-xs text-purple-700 font-medium mb-3 text-center">
             Потребители
           </div>
           <div className="flex flex-col items-center gap-3">
@@ -196,8 +196,8 @@ export function PrometheusScrapingDiagram() {
       </div>
 
       {/* Key points */}
-      <div className="mt-4 text-xs text-gray-400 text-center px-4 py-2 bg-gray-800/30 rounded-lg">
-        <strong className="text-gray-300">Pull vs Push:</strong> Prometheus
+      <div className="mt-4 text-xs text-[var(--ink-muted)] text-center px-4 py-2 bg-[var(--bg-sunken)] rounded-lg">
+        <strong className="text-[var(--ink-default)]">Pull vs Push:</strong> Prometheus
         инициирует запросы (pull) - проще firewall правила, нет потери данных
         при недоступности Prometheus
       </div>

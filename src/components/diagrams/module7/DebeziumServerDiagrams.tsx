@@ -78,7 +78,7 @@ export function TraditionalKafkaArchitectureDiagram() {
           content={
             <div>
               <p className="font-semibold mb-1">Kafka Cluster</p>
-              <p className="text-sm text-rose-300">
+              <p className="text-sm text-rose-700">
                 Требует развертывания и поддержки Zookeeper + brokers + Connect workers.
               </p>
               <p className="text-sm mt-2">
@@ -136,7 +136,7 @@ export function TraditionalKafkaArchitectureDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-amber-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-amber-700/70">
         <p>Высокая операционная сложность: Kafka + Zookeeper/KRaft + Connect</p>
       </div>
     </DiagramContainer>
@@ -175,7 +175,7 @@ export function KafkalessArchitectureDiagram() {
           content={
             <div>
               <p className="font-semibold mb-1">Debezium Server</p>
-              <p className="text-sm text-emerald-300">
+              <p className="text-sm text-emerald-700">
                 Standalone Quarkus приложение — один контейнер вместо Kafka cluster.
               </p>
               <p className="text-sm mt-2">
@@ -195,7 +195,7 @@ export function KafkalessArchitectureDiagram() {
           content={
             <div>
               <p className="font-semibold mb-1">Google Pub/Sub</p>
-              <p className="text-sm text-emerald-300">
+              <p className="text-sm text-emerald-700">
                 Pub/Sub автоматическое масштабирование заменяет Kafka партиции.
               </p>
               <p className="text-sm mt-2">
@@ -259,7 +259,7 @@ export function KafkalessArchitectureDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-emerald-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-emerald-700/70">
         <p>Простая инфраструктура, serverless, низкие операционные затраты</p>
       </div>
     </DiagramContainer>
@@ -380,8 +380,8 @@ export function DebeziumServerInternalDiagram() {
         </DiagramTooltip>
 
         {/* Offset storage options */}
-        <div className="mt-4 pt-4 border-t border-white/10 w-full">
-          <h3 className="text-sm font-semibold text-purple-200 mb-2 text-center">
+        <div className="mt-4 pt-4 border-t border-[var(--line-thin)] w-full">
+          <h3 className="text-sm font-semibold text-purple-700 mb-2 text-center">
             Offset Storage
           </h3>
           <div className="flex justify-center gap-3">
@@ -392,7 +392,7 @@ export function DebeziumServerInternalDiagram() {
                   <p className="text-sm">
                     Offset хранится в файле offsets.dat. Подходит для single instance deployment.
                   </p>
-                  <p className="text-sm mt-2 text-amber-300">
+                  <p className="text-sm mt-2 text-amber-700">
                     Требует PersistentVolume в Kubernetes для сохранения при restart.
                   </p>
                 </div>
@@ -415,7 +415,7 @@ export function DebeziumServerInternalDiagram() {
                   <p className="text-sm">
                     Offset хранится в Redis. Подходит для HA deployment с несколькими репликами.
                   </p>
-                  <p className="text-sm mt-2 text-emerald-300">
+                  <p className="text-sm mt-2 text-emerald-700">
                     Автоматическая репликация offset через Redis — быстрое восстановление при failover.
                   </p>
                 </div>
@@ -431,7 +431,7 @@ export function DebeziumServerInternalDiagram() {
               </FlowNode>
             </DiagramTooltip>
           </div>
-          <p className="text-xs text-purple-200/70 mt-3 text-center">
+          <p className="text-xs text-purple-700/70 mt-3 text-center">
             Offset storage критичен: без persistent storage при перезапуске pod потеряет позицию
           </p>
         </div>

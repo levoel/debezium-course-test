@@ -22,7 +22,7 @@ export function OperationTypesDiagram() {
         <DiagramTooltip content="Read операция при начальном snapshot. Debezium читает существующие записи при первом запуске. Поле source.snapshot='true'.">
           <div className="flex items-center justify-center gap-3" tabIndex={0}>
             <FlowNode variant="sink" size="sm">
-              <span className="text-gray-400">null</span>
+              <span className="text-[var(--ink-muted)]">null</span>
             </FlowNode>
             <Arrow direction="right" />
             <FlowNode variant="database" size="sm">
@@ -37,7 +37,7 @@ export function OperationTypesDiagram() {
         <DiagramTooltip content="INSERT операция. Новая запись добавлена в таблицу. Поле before=null, данные в after.">
           <div className="flex items-center justify-center gap-3" tabIndex={0}>
             <FlowNode variant="sink" size="sm">
-              <span className="text-gray-400">null</span>
+              <span className="text-[var(--ink-muted)]">null</span>
             </FlowNode>
             <Arrow direction="right" />
             <FlowNode variant="connector" size="sm">
@@ -71,7 +71,7 @@ export function OperationTypesDiagram() {
             </FlowNode>
             <Arrow direction="right" />
             <FlowNode variant="sink" size="sm">
-              <span className="text-gray-400">null</span>
+              <span className="text-[var(--ink-muted)]">null</span>
             </FlowNode>
           </div>
         </DiagramTooltip>
@@ -86,7 +86,7 @@ export function OperationTypesDiagram() {
 function TreeLine({ isLast = false }: { isLast?: boolean }) {
   return (
     <div className="flex items-center justify-center w-6 mr-1">
-      <svg width="24" height="24" viewBox="0 0 24 24" className="text-gray-500/70">
+      <svg width="24" height="24" viewBox="0 0 24 24" className="text-[var(--ink-subtle)]/70">
         {/* Vertical line (full height if not last, half if last) */}
         <line
           x1="12"
@@ -126,7 +126,7 @@ function TreeBranch({
  */
 function TreeChildren({ children }: { children: React.ReactNode }) {
   return (
-    <div className="ml-3 pl-3 border-l border-gray-500/40 space-y-0.5 mt-1">
+    <div className="ml-3 pl-3 border-l border-[var(--line-medium)] space-y-0.5 mt-1">
       {children}
     </div>
   );
@@ -155,7 +155,7 @@ export function EventStructureDiagram() {
                   schema
                 </FlowNode>
               </DiagramTooltip>
-              <span className="text-gray-500 text-xs font-mono">{'{ type, fields }'}</span>
+              <span className="text-[var(--ink-subtle)] text-xs font-mono">{'{ type, fields }'}</span>
             </div>
           </TreeBranch>
 
@@ -176,7 +176,7 @@ export function EventStructureDiagram() {
                         before
                       </FlowNode>
                     </DiagramTooltip>
-                    <span className="text-gray-500 text-xs">состояние ДО</span>
+                    <span className="text-[var(--ink-subtle)] text-xs">состояние ДО</span>
                   </div>
                 </TreeBranch>
 
@@ -187,7 +187,7 @@ export function EventStructureDiagram() {
                         after
                       </FlowNode>
                     </DiagramTooltip>
-                    <span className="text-gray-500 text-xs">состояние ПОСЛЕ</span>
+                    <span className="text-[var(--ink-subtle)] text-xs">состояние ПОСЛЕ</span>
                   </div>
                 </TreeBranch>
 
@@ -198,7 +198,7 @@ export function EventStructureDiagram() {
                         op
                       </FlowNode>
                     </DiagramTooltip>
-                    <span className="text-gray-500 text-xs font-mono">r | c | u | d</span>
+                    <span className="text-[var(--ink-subtle)] text-xs font-mono">r | c | u | d</span>
                   </div>
                 </TreeBranch>
 
@@ -209,7 +209,7 @@ export function EventStructureDiagram() {
                         ts_ms
                       </FlowNode>
                     </DiagramTooltip>
-                    <span className="text-gray-500 text-xs">timestamp Debezium</span>
+                    <span className="text-[var(--ink-subtle)] text-xs">timestamp Debezium</span>
                   </div>
                 </TreeBranch>
 

@@ -34,7 +34,7 @@ export function IncrementalSnapshotLabDiagram() {
               <FlowNode variant="database" tabIndex={0}>
                 orders_large
                 <br />
-                <span className="text-xs text-gray-400">10,000 rows</span>
+                <span className="text-xs text-[var(--ink-muted)]">10,000 rows</span>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -49,7 +49,7 @@ export function IncrementalSnapshotLabDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 text-center font-mono space-y-1">
+            <div className="text-xs text-[var(--ink-muted)] text-center font-mono space-y-1">
               <div>snapshot.mode=never</div>
               <div>chunk.size=512</div>
             </div>
@@ -59,13 +59,13 @@ export function IncrementalSnapshotLabDiagram() {
 
       {/* Data flow */}
       <div className="flex flex-col md:flex-row items-center justify-center gap-4">
-        <div className="text-xs text-gray-400">PostgreSQL</div>
+        <div className="text-xs text-[var(--ink-muted)]">PostgreSQL</div>
         <Arrow direction="right" label="chunks" />
-        <div className="text-xs text-gray-400">Connector</div>
+        <div className="text-xs text-[var(--ink-muted)]">Connector</div>
         <Arrow direction="right" label="events" />
-        <div className="text-xs text-gray-400">Kafka</div>
+        <div className="text-xs text-[var(--ink-muted)]">Kafka</div>
         <Arrow direction="right" label="consume" />
-        <div className="text-xs text-gray-400">Python</div>
+        <div className="text-xs text-[var(--ink-muted)]">Python</div>
       </div>
 
       {/* Kafka + Python */}
@@ -79,7 +79,7 @@ export function IncrementalSnapshotLabDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               op='r' (snapshot) + op='c/u/d' (streaming)
             </div>
           </div>
@@ -94,7 +94,7 @@ export function IncrementalSnapshotLabDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               Считает события, отслеживает chunks
             </div>
           </div>
@@ -103,7 +103,7 @@ export function IncrementalSnapshotLabDiagram() {
 
       {/* Signal flow explanation */}
       <DiagramContainer title="Процесс запуска snapshot" color="neutral">
-        <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-xs text-gray-300">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-xs text-[var(--ink-default)]">
           <div className="flex items-center gap-2">
             <span className="bg-purple-500/20 px-2 py-1 rounded">1. INSERT signal</span>
           </div>
@@ -189,7 +189,7 @@ export function LabCompletionDiagram() {
         ))}
 
         {/* Summary stats */}
-        <div className="mt-4 pt-4 border-t border-gray-700 flex flex-col md:flex-row gap-4 justify-center text-xs text-gray-400">
+        <div className="mt-4 pt-4 border-t border-[var(--line-thin)] flex flex-col md:flex-row gap-4 justify-center text-xs text-[var(--ink-muted)]">
           <div className="text-center">
             <div className="text-emerald-400 text-lg font-bold">10,000</div>
             <div>записей в snapshot</div>

@@ -43,7 +43,7 @@ export function SnapshotDecisionTreeDiagram() {
             <div className="flex flex-col md:flex-row items-start gap-6">
               {/* Small tables */}
               <div className="flex flex-col items-center gap-3">
-                <div className="text-xs text-gray-400">&lt; 100 GB</div>
+                <div className="text-xs text-[var(--ink-muted)]">&lt; 100 GB</div>
                 <Arrow direction="down" />
                 <DiagramTooltip content="Для таблиц < 100 GB используем snapshot.mode=initial с snapshot.locking.mode=minimal. Блокировки держатся секунды-минуты только во время чтения схемы.">
                   <FlowNode variant="cluster" tabIndex={0} size="sm" className="border-2 border-emerald-400">
@@ -55,7 +55,7 @@ export function SnapshotDecisionTreeDiagram() {
 
               {/* Large tables */}
               <div className="flex flex-col items-center gap-3">
-                <div className="text-xs text-gray-400">&gt;= 100 GB</div>
+                <div className="text-xs text-[var(--ink-muted)]">&gt;= 100 GB</div>
                 <Arrow direction="down" />
 
                 <DiagramTooltip content="Для больших таблиц критичен вопрос: можно ли заморозить DDL операции во время snapshot?">
@@ -89,7 +89,7 @@ export function SnapshotDecisionTreeDiagram() {
 
           {/* No branch */}
           <div className="flex flex-col items-center gap-3">
-            <div className="text-xs text-gray-400">Нет (возобновление)</div>
+            <div className="text-xs text-[var(--ink-muted)]">Нет (возобновление)</div>
             <Arrow direction="down" />
 
             <DiagramTooltip content="Для существующего коннектора с сохраненным offset используем snapshot.mode=when_needed. Snapshot будет выполнен только если offset невалиден.">
@@ -97,7 +97,7 @@ export function SnapshotDecisionTreeDiagram() {
                 when_needed
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 text-center">Продолжает с offset</div>
+            <div className="text-xs text-[var(--ink-muted)] text-center">Продолжает с offset</div>
           </div>
         </div>
       </div>
@@ -105,7 +105,7 @@ export function SnapshotDecisionTreeDiagram() {
       {/* Mode summary */}
       <div className="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="Рекомендуемые режимы" color="emerald" className="flex-1">
-          <div className="text-xs text-gray-300 space-y-2">
+          <div className="text-xs text-[var(--ink-default)] space-y-2">
             <div>
               <span className="text-emerald-400 font-bold">initial + minimal</span>
               <br />
@@ -120,7 +120,7 @@ export function SnapshotDecisionTreeDiagram() {
         </DiagramContainer>
 
         <DiagramContainer title="Не использовать на Aurora" color="rose" className="flex-1">
-          <div className="text-xs text-gray-300 space-y-2">
+          <div className="text-xs text-[var(--ink-default)] space-y-2">
             <div>
               <span className="text-rose-400 font-bold">snapshot.locking.mode=extended</span>
               <br />
@@ -216,12 +216,12 @@ export function InitialSnapshotDiagram() {
 
       {/* Blocking period indicator */}
       <DiagramContainer title="Период блокировки записи" color="rose">
-        <div className="text-sm text-gray-300 space-y-2">
+        <div className="text-sm text-[var(--ink-default)] space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-rose-400 font-bold">LOCK период:</span>
             <span>Только во время чтения schema (секунды-минуты)</span>
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[var(--ink-muted)]">
             Чтение данных (SELECT) не блокирует записи — MVCC позволяет concurrent reads и writes.
             <br />
             Initial snapshot блокирует binlog streaming до завершения всех SELECT.
@@ -252,7 +252,7 @@ export function SchemaOnlySnapshotDiagram() {
 
             <DiagramTooltip content="Данные НЕ читаются. Это означает, что существующие записи не попадут в Kafka. Используется когда начальное состояние известно или не нужно.">
               <FlowNode variant="app" tabIndex={0} className="opacity-50 line-through">
-                <span className="text-gray-500">SELECT * (skipped)</span>
+                <span className="text-[var(--ink-subtle)]">SELECT * (skipped)</span>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -280,7 +280,7 @@ export function SchemaOnlySnapshotDiagram() {
       {/* Use cases */}
       <div className="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="Когда использовать" color="emerald" className="flex-1">
-          <ul className="text-xs text-gray-300 space-y-2">
+          <ul className="text-xs text-[var(--ink-default)] space-y-2">
             <li className="flex items-start gap-2">
               <span className="text-emerald-400">+</span>
               <span>Восстановление с известной binlog позиции</span>
@@ -301,7 +301,7 @@ export function SchemaOnlySnapshotDiagram() {
         </DiagramContainer>
 
         <DiagramContainer title="Ограничения" color="rose" className="flex-1">
-          <ul className="text-xs text-gray-300 space-y-2">
+          <ul className="text-xs text-[var(--ink-default)] space-y-2">
             <li className="flex items-start gap-2">
               <span className="text-rose-400">-</span>
               <span>Существующие данные потеряны для CDC</span>
@@ -320,7 +320,7 @@ export function SchemaOnlySnapshotDiagram() {
 
       {/* Tooltip summary */}
       <DiagramContainer title="Типичный workflow" color="neutral">
-        <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-xs text-gray-300">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-xs text-[var(--ink-default)]">
           <span className="bg-purple-500/20 px-2 py-1 rounded">1. schema_only</span>
           <Arrow direction="right" />
           <span className="bg-blue-500/20 px-2 py-1 rounded">2. Schema history populated</span>
@@ -369,13 +369,13 @@ export function NeverSnapshotDiagram() {
 
       {/* Warning */}
       <DiagramContainer title="Критические требования" color="rose">
-        <div className="text-sm text-gray-300 space-y-3">
+        <div className="text-sm text-[var(--ink-default)] space-y-3">
           <div className="flex items-start gap-2">
             <span className="text-rose-400 font-bold">1.</span>
             <div>
               <span className="font-medium">Schema history topic должен быть populated</span>
               <br />
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-[var(--ink-muted)]">
                 Без schema history connector не знает структуру таблиц и падает с ошибкой
               </span>
             </div>
@@ -385,7 +385,7 @@ export function NeverSnapshotDiagram() {
             <div>
               <span className="font-medium">Offset должен указывать на существующий binlog файл</span>
               <br />
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-[var(--ink-muted)]">
                 Если binlog purged — ошибка "Cannot replicate because master purged required binary logs"
               </span>
             </div>
@@ -395,7 +395,7 @@ export function NeverSnapshotDiagram() {
             <div>
               <span className="font-medium">Данные должны быть загружены отдельно</span>
               <br />
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-[var(--ink-muted)]">
                 Используйте JDBC connector, Aurora snapshot + restore, или ETL для initial load
               </span>
             </div>
@@ -406,7 +406,7 @@ export function NeverSnapshotDiagram() {
       {/* Use case */}
       <DiagramContainer title="Backup-Based Initial Load Workflow" color="neutral">
         <div className="flex flex-col items-center gap-3">
-          <div className="flex flex-col md:flex-row items-center justify-center gap-3 text-xs text-gray-300 flex-wrap">
+          <div className="flex flex-col md:flex-row items-center justify-center gap-3 text-xs text-[var(--ink-default)] flex-wrap">
             <span className="bg-purple-500/20 px-2 py-1 rounded whitespace-nowrap">1. SHOW MASTER STATUS</span>
             <Arrow direction="right" />
             <span className="bg-purple-500/20 px-2 py-1 rounded whitespace-nowrap">2. Aurora Snapshot</span>
@@ -415,7 +415,7 @@ export function NeverSnapshotDiagram() {
             <Arrow direction="right" />
             <span className="bg-emerald-500/20 px-2 py-1 rounded whitespace-nowrap">4. Debezium never</span>
           </div>
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             Позволяет загрузить данные без блокировок и с maximum throughput
           </div>
         </div>

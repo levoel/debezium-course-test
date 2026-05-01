@@ -24,7 +24,7 @@ export function RecoveryDecisionTreeDiagram() {
             <FlowNode variant="sink" tabIndex={0} className="border-2 border-rose-400">
               Connector Failed
               <br />
-              <span className="text-xs text-gray-400">Status: FAILED</span>
+              <span className="text-xs text-[var(--ink-muted)]">Status: FAILED</span>
             </FlowNode>
           </DiagramTooltip>
 
@@ -57,7 +57,7 @@ export function RecoveryDecisionTreeDiagram() {
 
               <div className="flex flex-col items-center gap-2 text-xs">
                 <DiagramTooltip content="SHOW BINARY LOGS покажет доступные файлы. Сравните с offset topic для определения gap.">
-                  <div className="bg-gray-800/50 px-3 py-2 rounded text-gray-300">
+                  <div className="bg-[var(--bg-sunken)] px-3 py-2 rounded text-[var(--ink-default)]">
                     1. SHOW BINARY LOGS
                     <br />
                     2. Check offset topic
@@ -155,7 +155,7 @@ export function RecoveryDecisionTreeDiagram() {
 
               <Arrow direction="down" />
 
-              <div className="text-xs text-gray-400 text-center">
+              <div className="text-xs text-[var(--ink-muted)] text-center">
                 Обычно следствие
                 <br />
                 Schema History issue
@@ -176,21 +176,21 @@ export function RecoveryDecisionTreeDiagram() {
       {/* Error patterns reference */}
       <DiagramContainer title="Error Message Patterns" color="neutral">
         <div className="overflow-x-auto">
-          <table className="text-xs text-gray-300 w-full">
+          <table className="text-xs text-[var(--ink-default)] w-full">
             <thead>
-              <tr className="border-b border-gray-600">
+              <tr className="border-b border-[var(--line-thin)]">
                 <th className="text-left py-2 pr-4">Error Pattern</th>
                 <th className="text-left py-2 pr-4">Scenario</th>
                 <th className="text-left py-2">Recovery Path</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-gray-700">
+              <tr className="border-b border-[var(--line-thin)]">
                 <td className="py-2 pr-4 font-mono text-amber-400">binlog file not available</td>
                 <td className="py-2 pr-4">Binlog Position Loss</td>
                 <td className="py-2 text-emerald-400">when_needed / initial</td>
               </tr>
-              <tr className="border-b border-gray-700">
+              <tr className="border-b border-[var(--line-thin)]">
                 <td className="py-2 pr-4 font-mono text-rose-400">history topic missing</td>
                 <td className="py-2 pr-4">Schema History Corruption</td>
                 <td className="py-2 text-amber-400">recovery / backup / fresh</td>
@@ -198,7 +198,7 @@ export function RecoveryDecisionTreeDiagram() {
               <tr>
                 <td className="py-2 pr-4 font-mono text-amber-400">table not found in schema</td>
                 <td className="py-2 pr-4">Schema Mismatch</td>
-                <td className="py-2 text-gray-400">See Schema History</td>
+                <td className="py-2 text-[var(--ink-muted)]">See Schema History</td>
               </tr>
             </tbody>
           </table>
@@ -222,7 +222,7 @@ export function RecoveryFlowDiagram() {
               <FlowNode variant="sink" tabIndex={0} className="border-2 border-rose-400">
                 1. Detect Issue
                 <br />
-                <span className="text-xs text-gray-400">Connector: FAILED</span>
+                <span className="text-xs text-[var(--ink-muted)]">Connector: FAILED</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -245,7 +245,7 @@ export function RecoveryFlowDiagram() {
               <FlowNode variant="connector" tabIndex={0}>
                 3. Diagnose Cause
                 <br />
-                <span className="text-xs text-gray-400">Check logs, binlog, schema history</span>
+                <span className="text-xs text-[var(--ink-muted)]">Check logs, binlog, schema history</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -255,7 +255,7 @@ export function RecoveryFlowDiagram() {
               <FlowNode variant="cluster" tabIndex={0}>
                 4. Apply Fix
                 <br />
-                <span className="text-xs text-gray-400">Based on diagnosis</span>
+                <span className="text-xs text-[var(--ink-muted)]">Based on diagnosis</span>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -268,7 +268,7 @@ export function RecoveryFlowDiagram() {
               <FlowNode variant="app" tabIndex={0} className="border-2 border-blue-400">
                 5. Verify Fix
                 <br />
-                <span className="text-xs text-gray-400">Test before resume</span>
+                <span className="text-xs text-[var(--ink-muted)]">Test before resume</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -287,12 +287,12 @@ export function RecoveryFlowDiagram() {
 
       {/* Critical warning */}
       <DiagramContainer title="Critical: Stop Before Fix" color="rose">
-        <div className="text-sm text-gray-300 space-y-2">
+        <div className="text-sm text-[var(--ink-default)] space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-rose-400 font-bold">ПРАВИЛО:</span>
             <span>Всегда останавливайте connector перед исправлением.</span>
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[var(--ink-muted)]">
             Попытка исправить running connector может привести к:
             <ul className="list-disc list-inside mt-1 space-y-1">
               <li>Data duplication (partial snapshot + streaming)</li>
@@ -306,34 +306,34 @@ export function RecoveryFlowDiagram() {
       {/* Recovery time estimates */}
       <DiagramContainer title="Recovery Time Estimates" color="neutral">
         <div className="overflow-x-auto">
-          <table className="text-xs text-gray-300 w-full">
+          <table className="text-xs text-[var(--ink-default)] w-full">
             <thead>
-              <tr className="border-b border-gray-600">
+              <tr className="border-b border-[var(--line-thin)]">
                 <th className="text-left py-2 pr-4">Recovery Method</th>
                 <th className="text-left py-2 pr-4">Time Estimate</th>
                 <th className="text-left py-2">When to Use</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-gray-700">
+              <tr className="border-b border-[var(--line-thin)]">
                 <td className="py-2 pr-4 text-emerald-400">Restore from backup</td>
                 <td className="py-2 pr-4">1-5 minutes</td>
-                <td className="py-2 text-gray-400">Backup exists, schema history corruption</td>
+                <td className="py-2 text-[var(--ink-muted)]">Backup exists, schema history corruption</td>
               </tr>
-              <tr className="border-b border-gray-700">
+              <tr className="border-b border-[var(--line-thin)]">
                 <td className="py-2 pr-4 text-blue-400">snapshot.mode=recovery</td>
                 <td className="py-2 pr-4">Seconds-minutes</td>
-                <td className="py-2 text-gray-400">No DDL since last offset</td>
+                <td className="py-2 text-[var(--ink-muted)]">No DDL since last offset</td>
               </tr>
-              <tr className="border-b border-gray-700">
+              <tr className="border-b border-[var(--line-thin)]">
                 <td className="py-2 pr-4 text-amber-400">snapshot.mode=when_needed</td>
                 <td className="py-2 pr-4">Hours (data-dependent)</td>
-                <td className="py-2 text-gray-400">Binlog position loss</td>
+                <td className="py-2 text-[var(--ink-muted)]">Binlog position loss</td>
               </tr>
               <tr>
                 <td className="py-2 pr-4 text-rose-400">Fresh connector + initial</td>
                 <td className="py-2 pr-4">Hours (data-dependent)</td>
-                <td className="py-2 text-gray-400">DDL happened, no other option</td>
+                <td className="py-2 text-[var(--ink-muted)]">DDL happened, no other option</td>
               </tr>
             </tbody>
           </table>

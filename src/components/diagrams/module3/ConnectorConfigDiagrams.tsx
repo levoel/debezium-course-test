@@ -133,7 +133,7 @@ export function MysqlConnectorDataFlowDiagram() {
       {/* Phase headers */}
       <div className="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="Snapshot Phase" color="blue" className="flex-1">
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             <DiagramTooltip content="Первичное чтение всех данных из таблиц. Может занять часы для больших баз. События с op=r.">
               <span className="cursor-help">
                 SELECT * FROM tables<br />
@@ -144,7 +144,7 @@ export function MysqlConnectorDataFlowDiagram() {
         </DiagramContainer>
 
         <DiagramContainer title="Streaming Phase" color="emerald" className="flex-1">
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             <DiagramTooltip content="Непрерывное чтение binlog. Real-time события с минимальной latency. События с op=c/u/d.">
               <span className="cursor-help">
                 Read binlog events<br />
@@ -166,26 +166,26 @@ export function MysqlConnectorDataFlowDiagram() {
       <DiagramContainer title="Критические параметры" color="purple">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <DiagramTooltip content="Уникальный ID в MySQL cluster. Не должен совпадать с server_id primary или replica. Типичные значения: 184000-184999.">
-            <div className="bg-gray-800/50 p-3 rounded-lg">
-              <div className="text-xs text-gray-400">database.server.id</div>
+            <div className="bg-[var(--bg-sunken)] p-3 rounded-lg">
+              <div className="text-xs text-[var(--ink-muted)]">database.server.id</div>
               <div className="font-mono text-blue-400">184054</div>
-              <div className="text-xs text-gray-500 mt-1">Unique in cluster</div>
+              <div className="text-xs text-[var(--ink-subtle)] mt-1">Unique in cluster</div>
             </div>
           </DiagramTooltip>
 
           <DiagramTooltip content="Schema history topic с infinite retention. Single partition обязательно для сохранения порядка DDL.">
-            <div className="bg-gray-800/50 p-3 rounded-lg">
-              <div className="text-xs text-gray-400">schema.history.topic</div>
+            <div className="bg-[var(--bg-sunken)] p-3 rounded-lg">
+              <div className="text-xs text-[var(--ink-muted)]">schema.history.topic</div>
               <div className="font-mono text-emerald-400 text-xs">schema-changes.mysql</div>
-              <div className="text-xs text-gray-500 mt-1">retention.ms=-1</div>
+              <div className="text-xs text-[var(--ink-subtle)] mt-1">retention.ms=-1</div>
             </div>
           </DiagramTooltip>
 
           <DiagramTooltip content="Heartbeat для предотвращения position loss на idle таблицах. Рекомендуется 10-60 секунд.">
-            <div className="bg-gray-800/50 p-3 rounded-lg">
-              <div className="text-xs text-gray-400">heartbeat.interval.ms</div>
+            <div className="bg-[var(--bg-sunken)] p-3 rounded-lg">
+              <div className="text-xs text-[var(--ink-muted)]">heartbeat.interval.ms</div>
               <div className="font-mono text-amber-400">10000</div>
-              <div className="text-xs text-gray-500 mt-1">Keep offset fresh</div>
+              <div className="text-xs text-[var(--ink-subtle)] mt-1">Keep offset fresh</div>
             </div>
           </DiagramTooltip>
         </div>

@@ -39,7 +39,7 @@ export function TraditionalEtlDiagram() {
         >
           <FlowNode variant="database" size="sm" tabIndex={0}>
             Source DB
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               PostgreSQL
             </span>
           </FlowNode>
@@ -84,11 +84,11 @@ export function TraditionalEtlDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+            className="bg-amber-500/20 border-amber-400/30 text-amber-700"
             tabIndex={0}
           >
             ETL Engine
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Filter, aggregate, join, clean
             </span>
           </FlowNode>
@@ -104,7 +104,7 @@ export function TraditionalEtlDiagram() {
                 Load: загружаем готовые, clean данные в warehouse. Данные уже
                 трансформированы и готовы для analytics.
               </p>
-              <p className="mt-2 text-emerald-300">
+              <p className="mt-2 text-emerald-700">
                 Плюс: warehouse хранит только clean data. Минус: потеря raw data.
               </p>
             </div>
@@ -115,7 +115,7 @@ export function TraditionalEtlDiagram() {
             tabIndex={0}
           >
             Data Warehouse
-            <span className="block text-xs text-emerald-300 mt-1">
+            <span className="block text-xs text-emerald-700 mt-1">
               Clean, aggregated
             </span>
           </FlowNode>
@@ -124,7 +124,7 @@ export function TraditionalEtlDiagram() {
 
       <div className="mt-4 text-sm text-amber-400 border-l-2 border-amber-400 pl-3">
         <strong>Традиционный подход:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           ETL трансформирует данные перед загрузкой в warehouse. Проблема: нет
           raw data для re-processing, сложность изменений (новая метрика =
           переделка ETL).
@@ -158,7 +158,7 @@ export function ModernEltDiagram() {
         >
           <FlowNode variant="database" size="sm" tabIndex={0}>
             Source DB
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               PostgreSQL
             </span>
           </FlowNode>
@@ -179,7 +179,7 @@ export function ModernEltDiagram() {
         >
           <FlowNode variant="connector" size="sm" tabIndex={0}>
             CDC Stream
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Debezium
             </span>
           </FlowNode>
@@ -195,7 +195,7 @@ export function ModernEltDiagram() {
                 Load: сырые CDC events пишутся в data lake (Parquet, Delta).
                 Raw data сохранен для re-processing и audit.
               </p>
-              <p className="mt-2 text-blue-300">
+              <p className="mt-2 text-blue-700">
                 Cheap storage (S3, Azure Blob) позволяет хранить all history.
               </p>
             </div>
@@ -206,7 +206,7 @@ export function ModernEltDiagram() {
             tabIndex={0}
           >
             Data Lake
-            <span className="block text-xs text-blue-300 mt-1">
+            <span className="block text-xs text-blue-700 mt-1">
               Parquet, Delta
             </span>
           </FlowNode>
@@ -235,7 +235,7 @@ export function ModernEltDiagram() {
             tabIndex={0}
           >
             Data Warehouse
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               dbt, Spark SQL
             </span>
           </FlowNode>
@@ -244,7 +244,7 @@ export function ModernEltDiagram() {
 
       <div className="mt-4 text-sm text-emerald-400 border-l-2 border-emerald-400 pl-3">
         <strong>Современный подход:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           ELT загружает raw data в lake, трансформации в warehouse. Преимущества:
           raw data для re-processing, гибкость (новая метрика = новый SQL query),
           warehouse выполняет трансформации.
@@ -280,7 +280,7 @@ export function CdcToDataLakeDiagram() {
           <div className="flex justify-center">
             <FlowNode variant="database" tabIndex={0}>
               Transactional Database
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Customer changes (INSERT, UPDATE, DELETE)
               </span>
             </FlowNode>
@@ -313,23 +313,23 @@ export function CdcToDataLakeDiagram() {
                         Все CDC события сохраняются как append-only log. Never
                         update or delete. Полная история изменений.
                       </p>
-                      <p className="mt-2 text-blue-300">
+                      <p className="mt-2 text-blue-700">
                         Use case: Audit trail, compliance (GDPR), time travel.
                       </p>
                     </div>
                   }
                 >
-                  <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg">
+                  <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-2 h-2 rounded-full bg-blue-400" />
-                      <span className="font-medium text-blue-300">
+                      <span className="font-medium text-blue-700">
                         Append-only log
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-[var(--ink-muted)]">
                       All change events
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-[var(--ink-muted)] mt-1">
                       + metadata columns
                     </p>
                   </div>
@@ -352,23 +352,23 @@ export function CdcToDataLakeDiagram() {
                         Latest snapshot — это current state каждой записи. Built
                         from raw events через MERGE или GROUP BY + LAST_VALUE.
                       </p>
-                      <p className="mt-2 text-emerald-300">
+                      <p className="mt-2 text-emerald-700">
                         Use case: Analytics queries, dashboards, reporting.
                       </p>
                     </div>
                   }
                 >
-                  <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg">
+                  <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                      <span className="font-medium text-emerald-300">
+                      <span className="font-medium text-emerald-700">
                         Current state
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-[var(--ink-muted)]">
                       One row per entity
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-[var(--ink-muted)] mt-1">
                       Latest values only
                     </p>
                   </div>
@@ -391,24 +391,24 @@ export function CdcToDataLakeDiagram() {
                         Change history — это audit trail с timestamps. Можно
                         восстановить состояние на любую дату.
                       </p>
-                      <p className="mt-2 text-purple-300">
+                      <p className="mt-2 text-purple-700">
                         Use case: Historical analysis, "what was the value on
                         2023-05-15?", regulatory compliance.
                       </p>
                     </div>
                   }
                 >
-                  <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg">
+                  <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-2 h-2 rounded-full bg-purple-400" />
-                      <span className="font-medium text-purple-300">
+                      <span className="font-medium text-purple-700">
                         Audit trail
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-[var(--ink-muted)]">
                       All historical values
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-[var(--ink-muted)] mt-1">
                       With timestamps
                     </p>
                   </div>
@@ -420,7 +420,7 @@ export function CdcToDataLakeDiagram() {
 
         <div className="mt-2 text-sm text-blue-400 border-l-2 border-blue-400 pl-3">
           <strong>Три слоя data lake:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             CDC stream записывается как raw events (append-only). Downstream
             processing создает snapshot (current state) и history (audit trail).
             Один source → три output layers для разных use cases.
@@ -508,7 +508,7 @@ export function AppendOnlyHistoryDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             PySpark + Metadata
@@ -528,11 +528,11 @@ export function AppendOnlyHistoryDiagram() {
               </div>
             }
           >
-            <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg border border-purple-400/30">
-              <div className="font-medium text-purple-300 mb-1">
+            <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg border border-purple-400/30">
+              <div className="font-medium text-purple-700 mb-1">
                 _operation
               </div>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-[var(--ink-muted)]">
                 c, u, d, r
               </div>
             </div>
@@ -549,11 +549,11 @@ export function AppendOnlyHistoryDiagram() {
               </div>
             }
           >
-            <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg border border-purple-400/30">
-              <div className="font-medium text-purple-300 mb-1">
+            <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg border border-purple-400/30">
+              <div className="font-medium text-purple-700 mb-1">
                 _cdc_timestamp
               </div>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-[var(--ink-muted)]">
                 from ts_ms
               </div>
             </div>
@@ -570,11 +570,11 @@ export function AppendOnlyHistoryDiagram() {
               </div>
             }
           >
-            <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg border border-purple-400/30">
-              <div className="font-medium text-purple-300 mb-1">
+            <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg border border-purple-400/30">
+              <div className="font-medium text-purple-700 mb-1">
                 _processed_at
               </div>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-[var(--ink-muted)]">
                 current_timestamp()
               </div>
             </div>
@@ -591,11 +591,11 @@ export function AppendOnlyHistoryDiagram() {
               </div>
             }
           >
-            <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg border border-purple-400/30">
-              <div className="font-medium text-purple-300 mb-1">
+            <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg border border-purple-400/30">
+              <div className="font-medium text-purple-700 mb-1">
                 _source_db / _source_table
               </div>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-[var(--ink-muted)]">
                 from source metadata
               </div>
             </div>
@@ -620,7 +620,7 @@ export function AppendOnlyHistoryDiagram() {
             tabIndex={0}
           >
             Parquet Sink
-            <span className="block text-xs text-emerald-300 mt-1">
+            <span className="block text-xs text-emerald-700 mt-1">
               With metadata columns
             </span>
           </FlowNode>
@@ -629,7 +629,7 @@ export function AppendOnlyHistoryDiagram() {
 
       <div className="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
         <strong>Metadata columns essential:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           Metadata columns критически важны для troubleshooting, lag monitoring,
           правильной обработки operation types, и multi-table pipelines. Всегда
           добавляйте их при записи CDC data в data lake.
@@ -663,7 +663,7 @@ export function OperationSeparationDiagram() {
         >
           <FlowNode variant="connector" tabIndex={0}>
             CDC Stream
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Mixed operations
             </span>
           </FlowNode>
@@ -684,7 +684,7 @@ export function OperationSeparationDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             Operation Type Filter
@@ -704,7 +704,7 @@ export function OperationSeparationDiagram() {
                       Только CREATE операции. Содержат after state. Простой
                       append в Parquet без upsert logic.
                     </p>
-                    <p className="mt-2 text-emerald-300">
+                    <p className="mt-2 text-emerald-700">
                       Output: inserts_parquet/ directory
                     </p>
                   </div>
@@ -713,11 +713,11 @@ export function OperationSeparationDiagram() {
                 <FlowNode
                   variant="cluster"
                   size="sm"
-                  className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                  className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                   tabIndex={0}
                 >
                   op='c'
-                  <span className="block text-xs text-gray-400 mt-1">
+                  <span className="block text-xs text-[var(--ink-muted)] mt-1">
                     INSERT
                   </span>
                 </FlowNode>
@@ -736,11 +736,11 @@ export function OperationSeparationDiagram() {
                   </div>
                 }
               >
-                <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg border border-emerald-400/30 w-full">
-                  <div className="font-medium text-emerald-300 mb-1">
+                <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg border border-emerald-400/30 w-full">
+                  <div className="font-medium text-emerald-700 mb-1">
                     inserts_parquet/
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-[var(--ink-muted)]">
                     Append-only
                   </div>
                 </div>
@@ -757,7 +757,7 @@ export function OperationSeparationDiagram() {
                       Только UPDATE операции. Содержат before и after state.
                       Требуют MERGE или upsert logic downstream.
                     </p>
-                    <p className="mt-2 text-amber-300">
+                    <p className="mt-2 text-amber-700">
                       Output: updates_parquet/ directory
                     </p>
                   </div>
@@ -766,11 +766,11 @@ export function OperationSeparationDiagram() {
                 <FlowNode
                   variant="connector"
                   size="sm"
-                  className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+                  className="bg-amber-500/20 border-amber-400/30 text-amber-700"
                   tabIndex={0}
                 >
                   op='u'
-                  <span className="block text-xs text-gray-400 mt-1">
+                  <span className="block text-xs text-[var(--ink-muted)] mt-1">
                     UPDATE
                   </span>
                 </FlowNode>
@@ -789,11 +789,11 @@ export function OperationSeparationDiagram() {
                   </div>
                 }
               >
-                <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg border border-amber-400/30 w-full">
-                  <div className="font-medium text-amber-300 mb-1">
+                <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg border border-amber-400/30 w-full">
+                  <div className="font-medium text-amber-700 mb-1">
                     updates_parquet/
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-[var(--ink-muted)]">
                     Requires MERGE
                   </div>
                 </div>
@@ -810,7 +810,7 @@ export function OperationSeparationDiagram() {
                       Только DELETE операции. Содержат before state. Требуют
                       soft-delete (set deleted_at) или hard delete downstream.
                     </p>
-                    <p className="mt-2 text-rose-300">
+                    <p className="mt-2 text-rose-700">
                       Output: deletes_parquet/ directory
                     </p>
                   </div>
@@ -819,11 +819,11 @@ export function OperationSeparationDiagram() {
                 <FlowNode
                   variant="app"
                   size="sm"
-                  className="bg-rose-500/20 border-rose-400/30 text-rose-200"
+                  className="bg-rose-500/20 border-rose-400/30 text-rose-700"
                   tabIndex={0}
                 >
                   op='d'
-                  <span className="block text-xs text-gray-400 mt-1">
+                  <span className="block text-xs text-[var(--ink-muted)] mt-1">
                     DELETE
                   </span>
                 </FlowNode>
@@ -843,11 +843,11 @@ export function OperationSeparationDiagram() {
                   </div>
                 }
               >
-                <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg border border-rose-400/30 w-full">
-                  <div className="font-medium text-rose-300 mb-1">
+                <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg border border-rose-400/30 w-full">
+                  <div className="font-medium text-rose-700 mb-1">
                     deletes_parquet/
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-[var(--ink-muted)]">
                     Soft/hard delete
                   </div>
                 </div>
@@ -856,9 +856,9 @@ export function OperationSeparationDiagram() {
           </div>
         </div>
 
-        <div className="mt-4 text-sm text-gray-400 border-l-2 border-gray-400 pl-3">
+        <div className="mt-4 text-sm text-[var(--ink-muted)] border-l-2 border-[var(--line-medium)] pl-3">
           <strong>Зачем разделять по operation type:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             Разные операции требуют разной обработки downstream. INSERT — простой
             append, UPDATE — MERGE/upsert, DELETE — soft-delete. Разделение
             упрощает downstream logic и позволяет настроить separate partitioning,
@@ -875,8 +875,8 @@ function FileTreeItem({ name, children, indent = 0 }: { name: string; children?:
   return (
     <>
       <div className="flex items-center gap-1.5" style={{ paddingLeft: `${indent * 16}px` }}>
-        <span className="text-gray-500 select-none">{children ? '📁' : '📄'}</span>
-        <span className={`text-xs ${children ? 'text-gray-300 font-medium' : 'text-gray-400 font-mono'}`}>{name}</span>
+        <span className="text-[var(--ink-subtle)] select-none">{children ? '📁' : '📄'}</span>
+        <span className={`text-xs ${children ? 'text-[var(--ink-default)] font-medium' : 'text-[var(--ink-muted)] font-mono'}`}>{name}</span>
       </div>
       {children?.map((c) => (
         <FileTreeItem key={c.name} name={c.name} children={(c as any).children} indent={indent + 1} />

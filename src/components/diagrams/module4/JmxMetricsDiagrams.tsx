@@ -74,7 +74,7 @@ export function JmxMetricsPipelineDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+            className="bg-amber-500/20 border-amber-400/30 text-amber-700"
             tabIndex={0}
           >
             JMX Exporter
@@ -147,7 +147,7 @@ export function LagCalculationDiagram() {
           <FlowNode variant="database" tabIndex={0}>
             <div className="text-center">
               <div>Transaction</div>
-              <div className="text-xs text-gray-400 mt-1">
+              <div className="text-xs text-[var(--ink-muted)] mt-1">
                 timestamp: 10:00:00.000
               </div>
             </div>
@@ -171,7 +171,7 @@ export function LagCalculationDiagram() {
           <FlowNode variant="connector" tabIndex={0}>
             <div className="text-center">
               <div>Processing</div>
-              <div className="text-xs text-gray-400 mt-1">
+              <div className="text-xs text-[var(--ink-muted)] mt-1">
                 time: 10:00:00.150
               </div>
             </div>
@@ -190,7 +190,7 @@ export function LagCalculationDiagram() {
               <p className="mt-1">
                 150ms = 10:00:00.150 - 10:00:00.000
               </p>
-              <p className="mt-1 text-amber-300">
+              <p className="mt-1 text-amber-700">
                 PRIMARY metric для lag мониторинга!
               </p>
             </div>
@@ -198,7 +198,7 @@ export function LagCalculationDiagram() {
         >
           <FlowNode
             variant="app"
-            className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+            className="bg-amber-500/20 border-amber-400/30 text-amber-700"
             tabIndex={0}
           >
             <div className="text-center">
@@ -240,14 +240,14 @@ export function StalenessScenariosDiagram() {
           <Arrow direction="down" />
 
           <div className="text-center text-sm">
-            <div className="text-emerald-300 font-medium">
+            <div className="text-emerald-700 font-medium">
               MilliSecondsBehindSource
             </div>
             <div className="text-emerald-400 font-mono">100ms</div>
           </div>
 
           <div className="text-center text-sm">
-            <div className="text-emerald-300 font-medium">
+            <div className="text-emerald-700 font-medium">
               MilliSecondsSinceLastEvent
             </div>
             <div className="text-emerald-400 font-mono">50ms</div>
@@ -267,7 +267,7 @@ export function StalenessScenariosDiagram() {
                   &quot;замирает&quot; на последнем значении. MilliSecondsSinceLastEvent
                   растет - это ожидаемо.
                 </p>
-                <p className="mt-1 text-blue-300">
+                <p className="mt-1 text-blue-700">
                   Решение: настроить heartbeat.interval.ms
                 </p>
               </div>
@@ -281,15 +281,15 @@ export function StalenessScenariosDiagram() {
           <Arrow direction="down" />
 
           <div className="text-center text-sm">
-            <div className="text-blue-300 font-medium">
+            <div className="text-blue-700 font-medium">
               MilliSecondsBehindSource
             </div>
             <div className="text-blue-400 font-mono">100ms</div>
-            <div className="text-xs text-gray-500">(не обновляется)</div>
+            <div className="text-xs text-[var(--ink-subtle)]">(не обновляется)</div>
           </div>
 
           <div className="text-center text-sm">
-            <div className="text-blue-300 font-medium">
+            <div className="text-blue-700 font-medium">
               MilliSecondsSinceLastEvent
             </div>
             <div className="text-blue-400 font-mono">5 min</div>
@@ -309,7 +309,7 @@ export function StalenessScenariosDiagram() {
                   wal_status=&apos;lost&apos;. MilliSecondsBehindSource замер,
                   MilliSecondsSinceLastEvent критично высокий.
                 </p>
-                <p className="mt-1 text-rose-300">
+                <p className="mt-1 text-rose-700">
                   Действие: проверить Connected, логи коннектора, статус slot
                 </p>
               </div>
@@ -323,15 +323,15 @@ export function StalenessScenariosDiagram() {
           <Arrow direction="down" />
 
           <div className="text-center text-sm">
-            <div className="text-rose-300 font-medium">
+            <div className="text-rose-700 font-medium">
               MilliSecondsBehindSource
             </div>
             <div className="text-rose-400 font-mono">100ms</div>
-            <div className="text-xs text-gray-500">(замер)</div>
+            <div className="text-xs text-[var(--ink-subtle)]">(замер)</div>
           </div>
 
           <div className="text-center text-sm">
-            <div className="text-rose-300 font-medium">
+            <div className="text-rose-700 font-medium">
               MilliSecondsSinceLastEvent
             </div>
             <div className="text-rose-400 font-mono">10 min</div>
@@ -413,7 +413,7 @@ export function DiagnosticDecisionTreeDiagram() {
                   <FlowNode
                     variant="app"
                     size="sm"
-                    className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+                    className="bg-amber-500/20 border-amber-400/30 text-amber-700"
                     tabIndex={0}
                   >
                     Kafka bottleneck
@@ -552,7 +552,7 @@ export function DiagnosticDecisionTreeDiagram() {
                   <FlowNode
                     variant="connector"
                     size="sm"
-                    className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                    className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                     tabIndex={0}
                   >
                     Pipeline здоров

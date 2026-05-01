@@ -27,7 +27,7 @@ export function SeparateTopicsArchitectureDiagram() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* PostgreSQL path */}
           <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold text-blue-200 text-center">PostgreSQL Path</h3>
+            <h3 className="text-sm font-semibold text-blue-700 text-center">PostgreSQL Path</h3>
             <DiagramTooltip content={
               <div>
                 <p className="font-semibold mb-1">PostgreSQL Database</p>
@@ -35,7 +35,7 @@ export function SeparateTopicsArchitectureDiagram() {
                 <p className="text-sm mt-1">wal_level=logical, replication slot</p>
               </div>
             }>
-              <FlowNode variant="database" className="bg-blue-500/20 border-blue-400/30 text-blue-200">
+              <FlowNode variant="database" className="bg-blue-500/20 border-blue-400/30 text-blue-700">
                 PostgreSQL
               </FlowNode>
             </DiagramTooltip>
@@ -47,7 +47,7 @@ export function SeparateTopicsArchitectureDiagram() {
                 <p className="text-sm mt-1">database.server.name=postgres_prod</p>
               </div>
             }>
-              <FlowNode variant="connector" className="bg-blue-500/20 border-blue-400/30 text-blue-200">
+              <FlowNode variant="connector" className="bg-blue-500/20 border-blue-400/30 text-blue-700">
                 PG Connector
               </FlowNode>
             </DiagramTooltip>
@@ -59,16 +59,16 @@ export function SeparateTopicsArchitectureDiagram() {
                 <p className="text-sm mt-1">Clear source attribution в topic name</p>
               </div>
             }>
-              <FlowNode variant="cluster" className="bg-blue-500/20 border-blue-400/30 text-blue-200">
+              <FlowNode variant="cluster" className="bg-blue-500/20 border-blue-400/30 text-blue-700">
                 <div>postgres_prod</div>
-                <div className="text-xs text-gray-400">.public.orders</div>
+                <div className="text-xs text-[var(--ink-muted)]">.public.orders</div>
               </FlowNode>
             </DiagramTooltip>
           </div>
 
           {/* MySQL path */}
           <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold text-red-200 text-center">MySQL Path</h3>
+            <h3 className="text-sm font-semibold text-red-700 text-center">MySQL Path</h3>
             <DiagramTooltip content={
               <div>
                 <p className="font-semibold mb-1">MySQL Database</p>
@@ -76,7 +76,7 @@ export function SeparateTopicsArchitectureDiagram() {
                 <p className="text-sm mt-1">binlog_format=ROW, gtid_mode=ON</p>
               </div>
             }>
-              <FlowNode variant="database" className="bg-red-500/20 border-red-400/30 text-red-200">
+              <FlowNode variant="database" className="bg-red-500/20 border-red-400/30 text-red-700">
                 MySQL
               </FlowNode>
             </DiagramTooltip>
@@ -88,7 +88,7 @@ export function SeparateTopicsArchitectureDiagram() {
                 <p className="text-sm mt-1">database.server.name=mysql_prod</p>
               </div>
             }>
-              <FlowNode variant="connector" className="bg-red-500/20 border-red-400/30 text-red-200">
+              <FlowNode variant="connector" className="bg-red-500/20 border-red-400/30 text-red-700">
                 MySQL Connector
               </FlowNode>
             </DiagramTooltip>
@@ -100,17 +100,17 @@ export function SeparateTopicsArchitectureDiagram() {
                 <p className="text-sm mt-1">Отдельная schema evolution path</p>
               </div>
             }>
-              <FlowNode variant="cluster" className="bg-red-500/20 border-red-400/30 text-red-200">
+              <FlowNode variant="cluster" className="bg-red-500/20 border-red-400/30 text-red-700">
                 <div>mysql_prod</div>
-                <div className="text-xs text-gray-400">.inventory.stock</div>
+                <div className="text-xs text-[var(--ink-muted)]">.inventory.stock</div>
               </FlowNode>
             </DiagramTooltip>
           </div>
         </div>
 
         {/* Consumer layer */}
-        <div className="flex flex-col items-center gap-2 pt-3 border-t border-white/10">
-          <div className="text-xs text-gray-400">Both topics consumed by single job</div>
+        <div className="flex flex-col items-center gap-2 pt-3 border-t border-[var(--line-thin)]">
+          <div className="text-xs text-[var(--ink-muted)]">Both topics consumed by single job</div>
           <Arrow direction="down" />
           <DiagramTooltip content={
             <div>
@@ -119,20 +119,20 @@ export function SeparateTopicsArchitectureDiagram() {
               <p className="text-sm mt-1">Добавляет source_database column для traceability</p>
             </div>
           }>
-            <FlowNode variant="connector" className="bg-purple-500/20 border-purple-400/30 text-purple-200 w-full max-w-md">
+            <FlowNode variant="connector" className="bg-purple-500/20 border-purple-400/30 text-purple-700 w-full max-w-md">
               PyFlink UNION ALL Consumer
             </FlowNode>
           </DiagramTooltip>
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-400">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-[var(--ink-muted)]">
         <p className="font-semibold mb-1">Separate Topics Pattern:</p>
         <ul className="space-y-1">
-          <li>• <span className="text-emerald-300">Pros:</span> Независимая schema evolution, clear source attribution</li>
-          <li>• <span className="text-emerald-300">Pros:</span> Разные retention policies per database</li>
-          <li>• <span className="text-amber-300">Cons:</span> Consumer должен объединять топики вручную (UNION ALL)</li>
-          <li>• <span className="text-blue-300">database.server.name</span> MUST be unique per connector</li>
+          <li>• <span className="text-emerald-700">Pros:</span> Независимая schema evolution, clear source attribution</li>
+          <li>• <span className="text-emerald-700">Pros:</span> Разные retention policies per database</li>
+          <li>• <span className="text-amber-700">Cons:</span> Consumer должен объединять топики вручную (UNION ALL)</li>
+          <li>• <span className="text-blue-700">database.server.name</span> MUST be unique per connector</li>
         </ul>
       </div>
     </DiagramContainer>
@@ -155,7 +155,7 @@ export function UnifiedTopicsArchitectureDiagram() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* PostgreSQL path */}
           <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold text-blue-200 text-center">PostgreSQL</h3>
+            <h3 className="text-sm font-semibold text-blue-700 text-center">PostgreSQL</h3>
             <DiagramTooltip content={
               <div>
                 <p className="font-semibold mb-1">PostgreSQL Connector</p>
@@ -163,16 +163,16 @@ export function UnifiedTopicsArchitectureDiagram() {
                 <p className="text-sm mt-1">Роутирует по topic.regex → unified.orders</p>
               </div>
             }>
-              <FlowNode variant="connector" className="bg-blue-500/20 border-blue-400/30 text-blue-200">
+              <FlowNode variant="connector" className="bg-blue-500/20 border-blue-400/30 text-blue-700">
                 <div>PG Connector</div>
-                <div className="text-xs text-gray-400">(ByLogicalTableRouter SMT)</div>
+                <div className="text-xs text-[var(--ink-muted)]">(ByLogicalTableRouter SMT)</div>
               </FlowNode>
             </DiagramTooltip>
           </div>
 
           {/* MySQL path */}
           <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold text-red-200 text-center">MySQL</h3>
+            <h3 className="text-sm font-semibold text-red-700 text-center">MySQL</h3>
             <DiagramTooltip content={
               <div>
                 <p className="font-semibold mb-1">MySQL Connector</p>
@@ -180,16 +180,16 @@ export function UnifiedTopicsArchitectureDiagram() {
                 <p className="text-sm mt-1">Роутирует по topic.regex → unified.orders</p>
               </div>
             }>
-              <FlowNode variant="connector" className="bg-red-500/20 border-red-400/30 text-red-200">
+              <FlowNode variant="connector" className="bg-red-500/20 border-red-400/30 text-red-700">
                 <div>MySQL Connector</div>
-                <div className="text-xs text-gray-400">(ByLogicalTableRouter SMT)</div>
+                <div className="text-xs text-[var(--ink-muted)]">(ByLogicalTableRouter SMT)</div>
               </FlowNode>
             </DiagramTooltip>
           </div>
         </div>
 
         {/* Unified topic */}
-        <div className="flex flex-col items-center gap-2 pt-3 border-t border-white/10">
+        <div className="flex flex-col items-center gap-2 pt-3 border-t border-[var(--line-thin)]">
           <div className="flex items-center gap-3">
             <Arrow direction="down" label="Route to" />
           </div>
@@ -216,22 +216,22 @@ export function UnifiedTopicsArchitectureDiagram() {
               <p className="text-sm mt-1">source.db field в CDC envelope для differentiation</p>
             </div>
           }>
-            <FlowNode variant="connector" className="bg-purple-500/20 border-purple-400/30 text-purple-200 w-full max-w-md">
+            <FlowNode variant="connector" className="bg-purple-500/20 border-purple-400/30 text-purple-700 w-full max-w-md">
               <div>PyFlink Consumer</div>
-              <div className="text-xs text-gray-400">(single topic)</div>
+              <div className="text-xs text-[var(--ink-muted)]">(single topic)</div>
             </FlowNode>
           </DiagramTooltip>
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-gray-400">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-[var(--ink-muted)]">
         <p className="font-semibold mb-1">Unified Topics Pattern:</p>
         <ul className="space-y-1">
-          <li>• <span className="text-emerald-300">Pros:</span> Упрощенный consumer (один топик, не UNION ALL)</li>
-          <li>• <span className="text-emerald-300">Pros:</span> Единый retention policy</li>
-          <li>• <span className="text-amber-300">Cons:</span> Требует identical schemas или schema union</li>
-          <li>• <span className="text-amber-300">Cons:</span> Careful key design (могут коллидировать IDs из разных БД)</li>
-          <li>• <span className="text-purple-300">ByLogicalTableRouter SMT</span> routing logic: topic.regex</li>
+          <li>• <span className="text-emerald-700">Pros:</span> Упрощенный consumer (один топик, не UNION ALL)</li>
+          <li>• <span className="text-emerald-700">Pros:</span> Единый retention policy</li>
+          <li>• <span className="text-amber-700">Cons:</span> Требует identical schemas или schema union</li>
+          <li>• <span className="text-amber-700">Cons:</span> Careful key design (могут коллидировать IDs из разных БД)</li>
+          <li>• <span className="text-purple-700">ByLogicalTableRouter SMT</span> routing logic: topic.regex</li>
         </ul>
       </div>
     </DiagramContainer>

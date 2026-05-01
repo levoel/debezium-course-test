@@ -26,13 +26,13 @@ export function EnhancedBinlogArchitectureDiagram() {
         <div className="flex flex-col items-center gap-6">
           {/* Compute Tier */}
           <div className="w-full">
-            <div className="text-xs text-gray-400 text-center mb-2">Compute Tier</div>
+            <div className="text-xs text-[var(--ink-muted)] text-center mb-2">Compute Tier</div>
             <div className="flex flex-col md:flex-row gap-4 justify-center">
               <DiagramTooltip content="MySQL Engine выполняет транзакции и генерирует события ПАРАЛЛЕЛЬНО: transaction log events идут в standard storage, binlog events — в Enhanced Binlog storage. Без ожидания сортировки!">
                 <FlowNode variant="database" tabIndex={0}>
                   <div className="flex flex-col items-center">
                     <span className="text-sm font-medium">MySQL Engine</span>
-                    <span className="text-[10px] text-gray-400">Transaction Execution</span>
+                    <span className="text-[10px] text-[var(--ink-muted)]">Transaction Execution</span>
                   </div>
                 </FlowNode>
               </DiagramTooltip>
@@ -65,7 +65,7 @@ export function EnhancedBinlogArchitectureDiagram() {
             <FlowNode variant="connector" tabIndex={0}>
               <div className="flex flex-col items-center">
                 <span className="text-sm font-medium">Sorting & Ordering</span>
-                <span className="text-[10px] text-gray-400">At Storage Layer</span>
+                <span className="text-[10px] text-[var(--ink-muted)]">At Storage Layer</span>
               </div>
             </FlowNode>
           </DiagramTooltip>
@@ -77,7 +77,7 @@ export function EnhancedBinlogArchitectureDiagram() {
             <FlowNode variant="sink" tabIndex={0}>
               <div className="flex flex-col items-center">
                 <span className="text-sm font-medium">mysql-bin-changelog.*</span>
-                <span className="text-[10px] text-gray-400">256 MB max_binlog_size</span>
+                <span className="text-[10px] text-[var(--ink-muted)]">256 MB max_binlog_size</span>
               </div>
             </FlowNode>
           </DiagramTooltip>
@@ -89,8 +89,8 @@ export function EnhancedBinlogArchitectureDiagram() {
         <DiagramContainer title="Recovery Time" color="emerald" className="text-center">
           <DiagramTooltip content="AWS claim: 99% улучшение recovery времени. Standard binlog ~10 минут, Enhanced Binlog ~6 секунд. Storage nodes уже имеют упорядоченные события.">
             <div className="cursor-help">
-              <div className="text-2xl font-bold text-emerald-300">99%</div>
-              <div className="text-xs text-gray-400">улучшение recovery</div>
+              <div className="text-2xl font-bold text-emerald-700">99%</div>
+              <div className="text-xs text-[var(--ink-muted)]">улучшение recovery</div>
             </div>
           </DiagramTooltip>
         </DiagramContainer>
@@ -98,8 +98,8 @@ export function EnhancedBinlogArchitectureDiagram() {
         <DiagramContainer title="Compute Overhead" color="emerald" className="text-center">
           <DiagramTooltip content="AWS claim: compute overhead падает с 50% до 13%. Сортировка binlog событий перенесена на storage layer, движок освобождается для обработки транзакций.">
             <div className="cursor-help">
-              <div className="text-2xl font-bold text-emerald-300">50% &rarr; 13%</div>
-              <div className="text-xs text-gray-400">compute overhead</div>
+              <div className="text-2xl font-bold text-emerald-700">50% &rarr; 13%</div>
+              <div className="text-xs text-[var(--ink-muted)]">compute overhead</div>
             </div>
           </DiagramTooltip>
         </DiagramContainer>
@@ -107,8 +107,8 @@ export function EnhancedBinlogArchitectureDiagram() {
         <DiagramContainer title="Throughput" color="emerald" className="text-center">
           <DiagramTooltip content="AWS claim: +40% throughput на concurrent workloads. Sysbench тесты: 10K &rarr; 14K transactions/sec. Параллельные записи устраняют binlog bottleneck.">
             <div className="cursor-help">
-              <div className="text-2xl font-bold text-emerald-300">+40%</div>
-              <div className="text-xs text-gray-400">concurrent throughput</div>
+              <div className="text-2xl font-bold text-emerald-700">+40%</div>
+              <div className="text-xs text-[var(--ink-muted)]">concurrent throughput</div>
             </div>
           </DiagramTooltip>
         </DiagramContainer>
@@ -184,7 +184,7 @@ export function StorageTierDiagram() {
                 Binlog Storage Layer
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-[var(--ink-muted)]">
               Специализированный слой для binlog событий<br />
               Сортировка и ordering на storage level
             </div>
@@ -192,7 +192,7 @@ export function StorageTierDiagram() {
         </DiagramContainer>
 
         {/* Durability Guarantees */}
-        <div className="text-xs text-gray-400 text-center space-y-1">
+        <div className="text-xs text-[var(--ink-muted)] text-center space-y-1">
           <div>Quorum writes: 4/6 nodes required for commit</div>
           <div>Quorum reads: 3/6 nodes required for read</div>
           <div>Survives: loss of any AZ or 2 nodes in different AZs</div>
@@ -239,7 +239,7 @@ export function EnhancedVsStandardDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 text-center mt-2 px-4">
+          <div className="text-xs text-[var(--ink-muted)] text-center mt-2 px-4">
             <div>~50% compute overhead</div>
             <div>Sequential writes</div>
             <div>mysql-bin.000001 naming</div>
@@ -288,7 +288,7 @@ export function EnhancedVsStandardDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 text-center mt-2 px-4">
+          <div className="text-xs text-[var(--ink-muted)] text-center mt-2 px-4">
             <div>~13% compute overhead</div>
             <div>Parallel writes</div>
             <div>mysql-bin-changelog.000001 naming</div>
@@ -322,7 +322,7 @@ export function RetentionComparisonDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 space-y-2 px-2">
+            <div className="text-xs text-[var(--ink-muted)] space-y-2 px-2">
               <div className="flex items-center gap-2">
                 <span className="text-blue-400">+</span>
                 <span>Default: 2592000 (30 дней)</span>
@@ -356,7 +356,7 @@ export function RetentionComparisonDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 space-y-2 px-2">
+            <div className="text-xs text-[var(--ink-muted)] space-y-2 px-2">
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400">+</span>
                 <span>Default: NULL (auto-purge)</span>
@@ -381,14 +381,14 @@ export function RetentionComparisonDiagram() {
       {/* Aurora Command */}
       <DiagramContainer title="Aurora Retention Configuration" color="amber" className="max-w-2xl mx-auto">
         <div className="space-y-4">
-          <div className="bg-gray-800/50 rounded-lg p-3 font-mono text-xs text-center">
+          <div className="bg-[var(--bg-sunken)] rounded-lg p-3 font-mono text-xs text-center">
             <DiagramTooltip content="Устанавливает retention на 7 дней (168 часов). Выполняйте ТОЛЬКО на Writer instance. Rds_show_configuration для проверки.">
               <span className="cursor-help">CALL mysql.rds_set_configuration('binlog retention hours', 168);</span>
             </DiagramTooltip>
           </div>
 
-          <div className="text-xs text-gray-400 text-center">
-            Для проверки: <code className="bg-gray-800 px-1 rounded">CALL mysql.rds_show_configuration;</code>
+          <div className="text-xs text-[var(--ink-muted)] text-center">
+            Для проверки: <code className="bg-[var(--bg-sunken)] px-1 rounded">CALL mysql.rds_show_configuration;</code>
           </div>
         </div>
       </DiagramContainer>
@@ -424,7 +424,7 @@ export function RetentionComparisonDiagram() {
           </DiagramTooltip>
         </div>
 
-        <div className="text-xs text-gray-400 text-center mt-4">
+        <div className="text-xs text-[var(--ink-muted)] text-center mt-4">
           После restore/clone/failover Debezium offset становится невалидным.<br />
           Планируйте resnapshot процедуру заранее!
         </div>

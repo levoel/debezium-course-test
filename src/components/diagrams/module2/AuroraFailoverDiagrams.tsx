@@ -153,12 +153,12 @@ export function AuroraFailoverSequenceDiagram() {
 
       {/* Danger zone indicator */}
       <DiagramContainer title="Потеря данных в Failover Window" color="rose">
-        <div className="text-sm text-gray-300 space-y-2">
+        <div className="text-sm text-[var(--ink-default)] space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-rose-400 font-bold">id=101</span>
             <span>— ПОТЕРЯН. Был записан в WAL до crash, но Debezium не успел прочитать.</span>
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[var(--ink-muted)]">
             Новый slot начинает с текущей позиции (после recovery). Все транзакции в failover window невидимы для CDC.
           </div>
         </div>
@@ -182,7 +182,7 @@ export function HeartbeatMonitoringDiagram() {
                 Heartbeat Generator
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-[var(--ink-muted)] text-center">
               heartbeat.interval.ms = 10000
             </div>
           </div>
@@ -196,7 +196,7 @@ export function HeartbeatMonitoringDiagram() {
                 heartbeat table
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 text-center font-mono">
+            <div className="text-xs text-[var(--ink-muted)] text-center font-mono">
               id=1, ts=NOW(), writer_id
             </div>
           </div>
@@ -228,14 +228,14 @@ export function HeartbeatMonitoringDiagram() {
               Alert: gap &gt; 30s
             </FlowNode>
           </DiagramTooltip>
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             Heartbeat обнаруживает, но НЕ предотвращает потерю данных
           </div>
         </div>
       </DiagramContainer>
 
       {/* Data flow arrows */}
-      <div className="flex flex-col items-center gap-2 text-xs text-gray-500">
+      <div className="flex flex-col items-center gap-2 text-xs text-[var(--ink-subtle)]">
         <div className="flex items-center gap-2">
           <Arrow direction="right" label="UPDATE heartbeat" />
           <span>CDC событие</span>
@@ -298,7 +298,7 @@ export function AuroraGlobalDatabaseDiagram() {
               <div className="flex lg:hidden items-center gap-1">
                 <Arrow direction="down" dashed label="Aurora Replication" />
               </div>
-              <span className="text-xs text-gray-400">&lt; 1 sec lag</span>
+              <span className="text-xs text-[var(--ink-muted)]">&lt; 1 sec lag</span>
             </div>
           </DiagramTooltip>
         </div>
@@ -339,7 +339,7 @@ export function AuroraGlobalDatabaseDiagram() {
       <DiagramContainer title="Consumer Service (Multi-Region Merge)" color="amber">
         <div className="flex flex-col items-center gap-4">
           <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8">
-            <div className="text-xs text-gray-400">Kafka #1</div>
+            <div className="text-xs text-[var(--ink-muted)]">Kafka #1</div>
             <Arrow direction="right" />
             <DiagramTooltip content="Потребитель мержит потоки из обоих регионов. Требуется дедупликация по event ID, так как одно событие может прийти из обоих источников при cross-region replication lag.">
               <FlowNode variant="app" tabIndex={0}>
@@ -347,10 +347,10 @@ export function AuroraGlobalDatabaseDiagram() {
               </FlowNode>
             </DiagramTooltip>
             <Arrow direction="left" />
-            <div className="text-xs text-gray-400">Kafka #2</div>
+            <div className="text-xs text-[var(--ink-muted)]">Kafka #2</div>
           </div>
 
-          <div className="text-xs text-gray-400 text-center">
+          <div className="text-xs text-[var(--ink-muted)] text-center">
             Требуется дедупликация по event ID при merge потоков
           </div>
         </div>
@@ -359,7 +359,7 @@ export function AuroraGlobalDatabaseDiagram() {
       {/* Pros/Cons */}
       <div className="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="Преимущества" color="emerald" className="flex-1">
-          <ul className="text-xs text-gray-300 space-y-1">
+          <ul className="text-xs text-[var(--ink-default)] space-y-1">
             <li>+ CDC в двух регионах</li>
             <li>+ При failover в primary — secondary продолжает</li>
             <li>+ Можно мержить потоки с дедупликацией</li>
@@ -367,7 +367,7 @@ export function AuroraGlobalDatabaseDiagram() {
         </DiagramContainer>
 
         <DiagramContainer title="Недостатки" color="rose" className="flex-1">
-          <ul className="text-xs text-gray-300 space-y-1">
+          <ul className="text-xs text-[var(--ink-default)] space-y-1">
             <li>- Увеличенная стоимость (2x инфраструктура)</li>
             <li>- Сложность инфраструктуры</li>
             <li>- Необходима дедупликация при merge</li>

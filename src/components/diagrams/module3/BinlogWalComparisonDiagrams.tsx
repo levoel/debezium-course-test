@@ -143,7 +143,7 @@ export function EventFormatComparisonDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 space-y-2 px-2">
+          <div className="text-xs text-[var(--ink-muted)] space-y-2 px-2">
             <DiagramTooltip content="LSN монотонно возрастает внутри одного сервера. При failover timeline может измениться (1/..., 2/...). Debezium отслеживает через replication slot.">
               <div className="flex items-center gap-2 cursor-help">
                 <span className="text-blue-400">+</span>
@@ -188,7 +188,7 @@ export function EventFormatComparisonDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 space-y-2 px-2">
+          <div className="text-xs text-[var(--ink-muted)] space-y-2 px-2">
             <DiagramTooltip content="GTID глобально уникален во всём MySQL кластере, включая все реплики. При failover GTID продолжает нумерацию — нет reset.">
               <div className="flex items-center gap-2 cursor-help">
                 <span className="text-emerald-400">+</span>
@@ -238,7 +238,7 @@ export function ReplicationModesDiagram() {
                 Physical Replication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 px-2 space-y-1">
+            <div className="text-xs text-[var(--ink-muted)] px-2 space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-blue-400">+</span> Побайтовая копия
               </div>
@@ -249,7 +249,7 @@ export function ReplicationModesDiagram() {
                 <span className="text-blue-400">+</span> Вся база целиком
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-gray-500">-</span> Не для CDC
+                <span className="text-[var(--ink-subtle)]">-</span> Не для CDC
               </div>
             </div>
           </div>
@@ -261,7 +261,7 @@ export function ReplicationModesDiagram() {
                 Logical Replication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 px-2 space-y-1">
+            <div className="text-xs text-[var(--ink-muted)] px-2 space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400">+</span> Структурированные события
               </div>
@@ -289,7 +289,7 @@ export function ReplicationModesDiagram() {
                 Traditional Replication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 px-2 space-y-1">
+            <div className="text-xs text-[var(--ink-muted)] px-2 space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400">+</span> Простая настройка
               </div>
@@ -312,7 +312,7 @@ export function ReplicationModesDiagram() {
                 Group Replication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 px-2 space-y-1">
+            <div className="text-xs text-[var(--ink-muted)] px-2 space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400">+</span> Multi-master
               </div>
@@ -353,12 +353,12 @@ export function SlotVsBinlogDiagram() {
             <FlowNode variant="connector" tabIndex={0}>
               <div className="flex flex-col items-center">
                 <span className="text-sm font-medium">Replication Slot</span>
-                <span className="text-[10px] text-gray-400">restart_lsn, confirmed_flush_lsn</span>
+                <span className="text-[10px] text-[var(--ink-muted)]">restart_lsn, confirmed_flush_lsn</span>
               </div>
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 space-y-2 px-2">
+          <div className="text-xs text-[var(--ink-muted)] space-y-2 px-2">
             <DiagramTooltip content="Slot гарантирует сохранение WAL: пока Debezium не подтвердил чтение, PostgreSQL НЕ удалит WAL сегменты. Никаких потерь при crash.">
               <div className="flex items-center gap-2 cursor-help">
                 <span className="text-emerald-400">+</span>
@@ -392,12 +392,12 @@ export function SlotVsBinlogDiagram() {
             <FlowNode variant="connector" tabIndex={0}>
               <div className="flex flex-col items-center">
                 <span className="text-sm font-medium">Kafka Connect Offsets</span>
-                <span className="text-[10px] text-gray-400">GTID или file:position</span>
+                <span className="text-[10px] text-[var(--ink-muted)]">GTID или file:position</span>
               </div>
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 space-y-2 px-2">
+          <div className="text-xs text-[var(--ink-muted)] space-y-2 px-2">
             <DiagramTooltip content="Нет server-side state — чище для сервера. Abandoned connector не влияет на MySQL (binlog чистится по расписанию независимо).">
               <div className="flex items-center gap-2 cursor-help">
                 <span className="text-emerald-400">+</span>
@@ -438,7 +438,7 @@ export function CdcReadinessDiagram() {
         className="flex-1"
       >
         <div className="space-y-4">
-          <div className="text-sm text-gray-300 mb-3 text-center">
+          <div className="text-sm text-[var(--ink-default)] mb-3 text-center">
             Обязательные параметры для CDC
           </div>
 
@@ -462,7 +462,7 @@ export function CdcReadinessDiagram() {
             </DiagramTooltip>
           </div>
 
-          <div className="text-xs text-gray-500 text-center mt-4">
+          <div className="text-xs text-[var(--ink-subtle)] text-center mt-4">
             После изменения параметров требуется restart PostgreSQL
           </div>
         </div>
@@ -475,7 +475,7 @@ export function CdcReadinessDiagram() {
         className="flex-1"
       >
         <div className="space-y-4">
-          <div className="text-sm text-gray-300 mb-3 text-center">
+          <div className="text-sm text-[var(--ink-default)] mb-3 text-center">
             Обязательные параметры для CDC
           </div>
 
@@ -499,7 +499,7 @@ export function CdcReadinessDiagram() {
             </DiagramTooltip>
           </div>
 
-          <div className="text-xs text-gray-500 text-center mt-4">
+          <div className="text-xs text-[var(--ink-subtle)] text-center mt-4">
             Aurora MySQL: настраивается через Parameter Groups
           </div>
         </div>

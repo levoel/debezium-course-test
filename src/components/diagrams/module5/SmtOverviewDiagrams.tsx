@@ -94,11 +94,11 @@ export function ConsumerComplexityDiagram() {
             <FlowNode
               variant="app"
               size="sm"
-              className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+              className="bg-amber-500/20 border-amber-400/30 text-amber-700"
               tabIndex={0}
             >
               Consumer 1
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Extract after field
               </span>
             </FlowNode>
@@ -118,11 +118,11 @@ export function ConsumerComplexityDiagram() {
             <FlowNode
               variant="app"
               size="sm"
-              className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+              className="bg-amber-500/20 border-amber-400/30 text-amber-700"
               tabIndex={0}
             >
               Consumer 2
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Extract after field
               </span>
             </FlowNode>
@@ -142,11 +142,11 @@ export function ConsumerComplexityDiagram() {
             <FlowNode
               variant="app"
               size="sm"
-              className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+              className="bg-amber-500/20 border-amber-400/30 text-amber-700"
               tabIndex={0}
             >
               Consumer 3
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Extract after field
               </span>
             </FlowNode>
@@ -213,7 +213,7 @@ export function SmtSolutionDiagram() {
                 <br />2. Unwrap - разворачивает envelope в flat JSON
                 <br />3. Mask - маскирует PII поля
               </p>
-              <p className="mt-2 text-xs text-purple-300">
+              <p className="mt-2 text-xs text-purple-700">
                 Централизованная логика обработки — изменение в одном месте.
               </p>
             </div>
@@ -221,13 +221,13 @@ export function SmtSolutionDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             <div>SMT Chain</div>
-            <div className="text-xs text-gray-400 mt-1">1. Filter</div>
-            <div className="text-xs text-gray-400">2. Unwrap</div>
-            <div className="text-xs text-gray-400">3. Mask</div>
+            <div className="text-xs text-[var(--ink-muted)] mt-1">1. Filter</div>
+            <div className="text-xs text-[var(--ink-muted)]">2. Unwrap</div>
+            <div className="text-xs text-[var(--ink-muted)]">3. Mask</div>
           </FlowNode>
         </DiagramTooltip>
 
@@ -266,11 +266,11 @@ export function SmtSolutionDiagram() {
             <FlowNode
               variant="app"
               size="sm"
-              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
               tabIndex={0}
             >
               Consumer 1
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Simple parsing
               </span>
             </FlowNode>
@@ -289,11 +289,11 @@ export function SmtSolutionDiagram() {
             <FlowNode
               variant="app"
               size="sm"
-              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
               tabIndex={0}
             >
               Consumer 2
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Simple parsing
               </span>
             </FlowNode>
@@ -312,11 +312,11 @@ export function SmtSolutionDiagram() {
             <FlowNode
               variant="app"
               size="sm"
-              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
               tabIndex={0}
             >
               Consumer 3
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Simple parsing
               </span>
             </FlowNode>
@@ -357,7 +357,7 @@ export function SmtExecutionModelDiagram() {
           >
             <FlowNode variant="connector" tabIndex={0}>
               Source Connector
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 (Debezium)
               </span>
             </FlowNode>
@@ -378,7 +378,7 @@ export function SmtExecutionModelDiagram() {
           >
             <FlowNode
               variant="connector"
-              className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+              className="bg-blue-500/20 border-blue-400/30 text-blue-700"
               tabIndex={0}
             >
               SMT 1: Filter
@@ -400,7 +400,7 @@ export function SmtExecutionModelDiagram() {
           >
             <FlowNode
               variant="connector"
-              className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+              className="bg-blue-500/20 border-blue-400/30 text-blue-700"
               tabIndex={0}
             >
               SMT 2: ExtractNewRecordState
@@ -422,7 +422,7 @@ export function SmtExecutionModelDiagram() {
           >
             <FlowNode
               variant="connector"
-              className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+              className="bg-blue-500/20 border-blue-400/30 text-blue-700"
               tabIndex={0}
             >
               SMT 3: MaskField
@@ -493,7 +493,7 @@ export function SmtChainOrderDiagram() {
                 имеет доступ к value.op, value.after. Применяется раньше всего
                 для уменьшения объема данных.
               </p>
-              <p className="mt-2 text-xs text-rose-300">
+              <p className="mt-2 text-xs text-rose-700">
                 Цвет: rose (фильтрация на входе)
               </p>
             </div>
@@ -501,11 +501,11 @@ export function SmtChainOrderDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-rose-500/20 border-rose-400/30 text-rose-200"
+            className="bg-rose-500/20 border-rose-400/30 text-rose-700"
             tabIndex={0}
           >
             <div>1. Filter</div>
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Работает с envelope
             </span>
           </FlowNode>
@@ -522,7 +522,7 @@ export function SmtChainOrderDiagram() {
                 Добавляет metadata как __op, __table. После этого
                 SMT downstream работают с flat JSON.
               </p>
-              <p className="mt-2 text-xs text-blue-300">
+              <p className="mt-2 text-xs text-blue-700">
                 Цвет: blue (разворачивание структуры)
               </p>
             </div>
@@ -530,11 +530,11 @@ export function SmtChainOrderDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-blue-500/20 border-blue-400/30 text-blue-200"
+            className="bg-blue-500/20 border-blue-400/30 text-blue-700"
             tabIndex={0}
           >
             <div>2. Unwrap</div>
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Flatten payload
             </span>
           </FlowNode>
@@ -550,7 +550,7 @@ export function SmtChainOrderDiagram() {
                 ByLogicalTableRouter или ContentBasedRouter изменяет имя топика
                 по regex или значению поля. Работает с flat data после unwrap.
               </p>
-              <p className="mt-2 text-xs text-purple-300">
+              <p className="mt-2 text-xs text-purple-700">
                 Цвет: purple (маршрутизация)
               </p>
             </div>
@@ -558,11 +558,11 @@ export function SmtChainOrderDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             <div>3. Route</div>
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Работает с flat data
             </span>
           </FlowNode>
@@ -578,7 +578,7 @@ export function SmtChainOrderDiagram() {
                 Заменяет чувствительные поля (email, ssn) на ***MASKED***
                 для GDPR compliance. Применяется в конце pipeline.
               </p>
-              <p className="mt-2 text-xs text-amber-300">
+              <p className="mt-2 text-xs text-amber-700">
                 Цвет: amber (маскировка данных)
               </p>
             </div>
@@ -586,11 +586,11 @@ export function SmtChainOrderDiagram() {
         >
           <FlowNode
             variant="connector"
-            className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+            className="bg-amber-500/20 border-amber-400/30 text-amber-700"
             tabIndex={0}
           >
             <div>4. Mask</div>
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Работает с flat data
             </span>
           </FlowNode>
@@ -715,7 +715,7 @@ export function SmtDecisionFrameworkDiagram() {
                             <FlowNode
                               variant="app"
                               size="sm"
-                              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+                              className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
                               tabIndex={0}
                             >
                               SMT подходит
@@ -739,7 +739,7 @@ export function SmtDecisionFrameworkDiagram() {
                             <FlowNode
                               variant="app"
                               size="sm"
-                              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                               tabIndex={0}
                             >
                               Kafka Streams
@@ -766,7 +766,7 @@ export function SmtDecisionFrameworkDiagram() {
                         <FlowNode
                           variant="app"
                           size="sm"
-                          className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                          className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                           tabIndex={0}
                         >
                           Kafka Streams
@@ -793,7 +793,7 @@ export function SmtDecisionFrameworkDiagram() {
                     <FlowNode
                       variant="app"
                       size="sm"
-                      className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                      className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                       tabIndex={0}
                     >
                       Kafka Streams
@@ -819,7 +819,7 @@ export function SmtDecisionFrameworkDiagram() {
               >
                 <FlowNode
                   variant="app"
-                  className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                  className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                   tabIndex={0}
                 >
                   Kafka Streams

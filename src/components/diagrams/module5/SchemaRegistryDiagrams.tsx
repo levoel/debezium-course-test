@@ -49,7 +49,7 @@ export function SchemaRegistryIntegrationDiagram() {
                 Debezium connector конвертирует CDC события в Avro формат.
                 Avro Converter использует Schema Registry для регистрации схем.
               </p>
-              <p className="mt-2 text-purple-300">
+              <p className="mt-2 text-purple-700">
                 value.converter=io.confluent.connect.avro.AvroConverter
               </p>
             </div>
@@ -79,7 +79,7 @@ export function SchemaRegistryIntegrationDiagram() {
                 <strong>Consumer запрашивает схему:</strong>
                 <br />GET /schemas/ids/&lt;schema-id&gt;
               </p>
-              <p className="mt-2 text-purple-300">
+              <p className="mt-2 text-purple-700">
                 Schema Registry предотвращает несовместимые изменения
               </p>
             </div>
@@ -87,11 +87,11 @@ export function SchemaRegistryIntegrationDiagram() {
         >
           <FlowNode
             variant="sink"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             Schema Registry
-            <span className="block text-xs text-gray-400 mt-1">
+            <span className="block text-xs text-[var(--ink-muted)] mt-1">
               Confluent / Apicurio
             </span>
           </FlowNode>
@@ -111,7 +111,7 @@ export function SchemaRegistryIntegrationDiagram() {
                     Полная схема НЕ включается в каждое сообщение — это экономит
                     ~300 bytes на сообщение.
                   </p>
-                  <p className="mt-2 text-sm font-mono text-purple-300">
+                  <p className="mt-2 text-sm font-mono text-purple-700">
                     [magic_byte] [schema_id] [binary_data]
                   </p>
                   <p className="mt-1 text-xs">
@@ -123,7 +123,7 @@ export function SchemaRegistryIntegrationDiagram() {
               <FlowNode
                 variant="app"
                 size="sm"
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 tabIndex={0}
               >
                 <div className="text-xs font-mono">
@@ -164,7 +164,7 @@ export function SchemaRegistryIntegrationDiagram() {
                 Consumer читает сообщение, извлекает schema ID из первых 5 bytes.
                 Запрашивает схему из Schema Registry по ID.
               </p>
-              <p className="mt-2 text-emerald-300">
+              <p className="mt-2 text-emerald-700">
                 Schema caching: после первого запроса schema кэшируется локально
               </p>
             </div>
@@ -186,7 +186,7 @@ export function SchemaRegistryIntegrationDiagram() {
                 Consumer запрашивает схему по ID: GET /schemas/ids/123.
                 Schema Registry возвращает полную Avro schema.
               </p>
-              <p className="mt-2 text-xs text-gray-400">
+              <p className="mt-2 text-xs text-[var(--ink-muted)]">
                 Если schema уже в кэше — запрос не выполняется (caching)
               </p>
             </div>
@@ -195,7 +195,7 @@ export function SchemaRegistryIntegrationDiagram() {
           <FlowNode
             variant="sink"
             size="sm"
-            className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+            className="bg-purple-500/20 border-purple-400/30 text-purple-700"
             tabIndex={0}
           >
             Schema Registry
@@ -220,7 +220,7 @@ export function SchemaRegistryIntegrationDiagram() {
           <FlowNode
             variant="app"
             size="sm"
-            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+            className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
             tabIndex={0}
           >
             Deserialized Object
@@ -229,7 +229,7 @@ export function SchemaRegistryIntegrationDiagram() {
 
         <div className="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
           <strong>Ключевое преимущество:</strong>
-          <p className="mt-1 text-gray-300">
+          <p className="mt-1 text-[var(--ink-default)]">
             Schema хранится один раз в Schema Registry. Сообщения содержат только
             4-byte schema ID. Экономия: ~300 bytes на сообщение, что критично для
             CDC pipeline с миллионами событий.

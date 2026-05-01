@@ -120,11 +120,11 @@ export function AlertSeverityHierarchyDiagram() {
           <FlowNode
             variant="connector"
             tabIndex={0}
-            className="bg-yellow-500/20 border-yellow-400/30 text-yellow-200"
+            className="bg-yellow-500/20 border-yellow-400/30 text-yellow-700"
           >
             <div className="text-sm">
               <div className="font-semibold">Warning</div>
-              <div className="text-xs text-yellow-300/70">Investigate during business hours</div>
+              <div className="text-xs text-yellow-700/70">Investigate during business hours</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -136,11 +136,11 @@ export function AlertSeverityHierarchyDiagram() {
           <FlowNode
             variant="app"
             tabIndex={0}
-            className="bg-orange-500/20 border-orange-400/30 text-orange-200"
+            className="bg-orange-500/20 border-orange-400/30 text-orange-700"
           >
             <div className="text-sm">
               <div className="font-semibold">Critical</div>
-              <div className="text-xs text-orange-300/70">Immediate action required</div>
+              <div className="text-xs text-orange-700/70">Immediate action required</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -152,11 +152,11 @@ export function AlertSeverityHierarchyDiagram() {
           <FlowNode
             variant="target"
             tabIndex={0}
-            className="bg-rose-500/20 border-rose-400/30 text-rose-200"
+            className="bg-rose-500/20 border-rose-400/30 text-rose-700"
           >
             <div className="text-sm">
               <div className="font-semibold">Emergency</div>
-              <div className="text-xs text-rose-300/70">Wake up on-call engineer</div>
+              <div className="text-xs text-rose-700/70">Wake up on-call engineer</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -181,7 +181,7 @@ export function BatchInsertSpikeDiagram() {
           <FlowNode variant="database" tabIndex={0} size="sm">
             <div className="text-xs">
               <div>INSERT</div>
-              <div className="text-purple-300/70">1000 rows</div>
+              <div className="text-purple-700/70">1000 rows</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -193,7 +193,7 @@ export function BatchInsertSpikeDiagram() {
           <FlowNode variant="app" tabIndex={0} size="sm">
             <div className="text-xs">
               <div>Lag Spike</div>
-              <div className="text-rose-300/70">3 секунды</div>
+              <div className="text-rose-700/70">3 секунды</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -205,7 +205,7 @@ export function BatchInsertSpikeDiagram() {
           <FlowNode variant="connector" tabIndex={0} size="sm">
             <div className="text-xs">
               <div>Processing</div>
-              <div className="text-emerald-300/70">events flowing</div>
+              <div className="text-emerald-700/70">events flowing</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -217,7 +217,7 @@ export function BatchInsertSpikeDiagram() {
           <FlowNode variant="cluster" tabIndex={0} size="sm">
             <div className="text-xs">
               <div>Recovery</div>
-              <div className="text-emerald-300/70">lag 0.2s</div>
+              <div className="text-emerald-700/70">lag 0.2s</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -228,14 +228,14 @@ export function BatchInsertSpikeDiagram() {
         <DiagramTooltip content="Transient spike: lag быстро возвращается к норме после batch операции. Duration clause в алерте предотвращает ложные срабатывания.">
           <div className="bg-emerald-900/20 border border-emerald-500/30 p-3 rounded-lg text-center">
             <div className="text-emerald-400 font-semibold text-sm">Transient = OK</div>
-            <div className="text-xs text-gray-400 mt-1">Duration filter отсеивает</div>
+            <div className="text-xs text-[var(--ink-muted)] mt-1">Duration filter отсеивает</div>
           </div>
         </DiagramTooltip>
 
         <DiagramTooltip content="Sustained lag: если lag НЕ снижается в течение for duration - это реальная проблема, требующая расследования.">
           <div className="bg-rose-900/20 border border-rose-500/30 p-3 rounded-lg text-center">
             <div className="text-rose-400 font-semibold text-sm">Sustained = Problem</div>
-            <div className="text-xs text-gray-400 mt-1">Alert срабатывает</div>
+            <div className="text-xs text-[var(--ink-muted)] mt-1">Alert срабатывает</div>
           </div>
         </DiagramTooltip>
       </div>
@@ -280,11 +280,11 @@ export function NotificationRoutingDiagram() {
                 variant="connector"
                 tabIndex={0}
                 size="sm"
-                className="bg-yellow-500/20 border-yellow-400/30 text-yellow-200"
+                className="bg-yellow-500/20 border-yellow-400/30 text-yellow-700"
               >
                 <div className="text-xs">
                   <div>Slack</div>
-                  <div className="text-yellow-300/70">#alerts</div>
+                  <div className="text-yellow-700/70">#alerts</div>
                 </div>
               </FlowNode>
             </DiagramTooltip>
@@ -298,11 +298,11 @@ export function NotificationRoutingDiagram() {
                 variant="app"
                 tabIndex={0}
                 size="sm"
-                className="bg-orange-500/20 border-orange-400/30 text-orange-200"
+                className="bg-orange-500/20 border-orange-400/30 text-orange-700"
               >
                 <div className="text-xs">
                   <div>PagerDuty</div>
-                  <div className="text-orange-300/70">on-call</div>
+                  <div className="text-orange-700/70">on-call</div>
                 </div>
               </FlowNode>
             </DiagramTooltip>
@@ -316,11 +316,11 @@ export function NotificationRoutingDiagram() {
                 variant="target"
                 tabIndex={0}
                 size="sm"
-                className="bg-rose-500/20 border-rose-400/30 text-rose-200"
+                className="bg-rose-500/20 border-rose-400/30 text-rose-700"
               >
                 <div className="text-xs">
                   <div>Phone Call</div>
-                  <div className="text-rose-300/70">escalation</div>
+                  <div className="text-rose-700/70">escalation</div>
                 </div>
               </FlowNode>
             </DiagramTooltip>
@@ -330,8 +330,8 @@ export function NotificationRoutingDiagram() {
         {/* Repeat logic */}
         <div className="mt-4">
           <DiagramTooltip content="Repeat interval: если алерт не resolved, уведомление повторяется каждые 4 часа. Не дает забыть о проблеме.">
-            <div className="bg-gray-800/50 border border-gray-600/30 p-3 rounded-lg text-center">
-              <div className="text-gray-300 text-sm">Repeat every 4h if not resolved</div>
+            <div className="bg-[var(--bg-sunken)] border border-[var(--line-thin)] p-3 rounded-lg text-center">
+              <div className="text-[var(--ink-default)] text-sm">Repeat every 4h if not resolved</div>
             </div>
           </DiagramTooltip>
         </div>

@@ -39,7 +39,7 @@ export function PyflinkVsPysparkComparisonDiagram() {
           >
             <FlowNode variant="sink" size="sm" tabIndex={0}>
               Pure Streaming
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Event-by-event processing
               </span>
             </FlowNode>
@@ -58,7 +58,7 @@ export function PyflinkVsPysparkComparisonDiagram() {
           >
             <FlowNode variant="sink" size="sm" tabIndex={0}>
               Low Latency
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Millisecond response
               </span>
             </FlowNode>
@@ -77,7 +77,7 @@ export function PyflinkVsPysparkComparisonDiagram() {
           >
             <FlowNode variant="sink" size="sm" tabIndex={0}>
               Exactly-Once
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Strong guarantees
               </span>
             </FlowNode>
@@ -96,7 +96,7 @@ export function PyflinkVsPysparkComparisonDiagram() {
           >
             <FlowNode variant="sink" size="sm" tabIndex={0}>
               Complex CEP
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Pattern matching
               </span>
             </FlowNode>
@@ -124,12 +124,12 @@ export function PyflinkVsPysparkComparisonDiagram() {
           >
             <FlowNode
               variant="connector"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               size="sm"
               tabIndex={0}
             >
               Unified Batch + Streaming
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Same API for both
               </span>
             </FlowNode>
@@ -148,12 +148,12 @@ export function PyflinkVsPysparkComparisonDiagram() {
           >
             <FlowNode
               variant="connector"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               size="sm"
               tabIndex={0}
             >
               Micro-batching
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Second-scale latency
               </span>
             </FlowNode>
@@ -172,12 +172,12 @@ export function PyflinkVsPysparkComparisonDiagram() {
           >
             <FlowNode
               variant="connector"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               size="sm"
               tabIndex={0}
             >
               Data Lake Native
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Parquet, Delta, Iceberg
               </span>
             </FlowNode>
@@ -196,12 +196,12 @@ export function PyflinkVsPysparkComparisonDiagram() {
           >
             <FlowNode
               variant="connector"
-              className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+              className="bg-purple-500/20 border-purple-400/30 text-purple-700"
               size="sm"
               tabIndex={0}
             >
               ML Integration
-              <span className="block text-xs text-gray-400 mt-1">
+              <span className="block text-xs text-[var(--ink-muted)] mt-1">
                 Spark MLlib ecosystem
               </span>
             </FlowNode>
@@ -243,7 +243,7 @@ export function StructuredStreamingConceptDiagram() {
             >
               <FlowNode variant="sink" size="sm" tabIndex={0}>
                 Kafka Topic
-                <span className="block text-xs text-blue-300 mt-1">
+                <span className="block text-xs text-blue-700 mt-1">
                   Unbounded table
                 </span>
               </FlowNode>
@@ -273,7 +273,7 @@ export function StructuredStreamingConceptDiagram() {
             >
               <FlowNode
                 variant="connector"
-                className="bg-purple-500/20 border-purple-400/30 text-purple-200"
+                className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 size="sm"
                 tabIndex={0}
               >
@@ -296,12 +296,12 @@ export function StructuredStreamingConceptDiagram() {
             >
               <FlowNode
                 variant="connector"
-                className="bg-amber-500/20 border-amber-400/30 text-amber-200"
+                className="bg-amber-500/20 border-amber-400/30 text-amber-700"
                 size="sm"
                 tabIndex={0}
               >
                 Trigger
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Micro-batch intervals
                 </span>
               </FlowNode>
@@ -335,7 +335,7 @@ export function StructuredStreamingConceptDiagram() {
                 tabIndex={0}
               >
                 Sink
-                <span className="block text-xs text-gray-400 mt-1">
+                <span className="block text-xs text-[var(--ink-muted)] mt-1">
                   Parquet, Kafka, Console
                 </span>
               </FlowNode>
@@ -346,7 +346,7 @@ export function StructuredStreamingConceptDiagram() {
 
       <div className="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
         <strong>Key Concept:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           Structured Streaming использует DataFrame API для унификации batch
           и streaming processing. Один код работает для обоих режимов.
         </p>
@@ -368,13 +368,13 @@ export function PysparkWatermarkDiagram() {
       <div className="flex flex-col gap-4">
         {/* Timeline visualization */}
         <div className="flex items-center gap-2">
-          <div className="text-xs text-gray-400 w-20">10:00</div>
-          <div className="flex-1 h-px bg-gray-600" />
+          <div className="text-xs text-[var(--ink-muted)] w-20">10:00</div>
+          <div className="flex-1 h-px bg-[var(--bg-deep)]" />
         </div>
 
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
-            <div className="text-xs text-gray-400 w-20">10:01</div>
+            <div className="text-xs text-[var(--ink-muted)] w-20">10:01</div>
             <DiagramTooltip
               content={
                 <div>
@@ -398,7 +398,7 @@ export function PysparkWatermarkDiagram() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="text-xs text-gray-400 w-20">10:03</div>
+            <div className="text-xs text-[var(--ink-muted)] w-20">10:03</div>
             <DiagramTooltip
               content={
                 <div>
@@ -424,11 +424,11 @@ export function PysparkWatermarkDiagram() {
           <div className="flex items-center gap-2">
             <div className="text-xs text-amber-400 w-20">10:05</div>
             <div className="flex-1 h-px bg-amber-600" />
-            <span className="text-xs text-amber-300">Watermark threshold</span>
+            <span className="text-xs text-amber-700">Watermark threshold</span>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="text-xs text-gray-400 w-20">10:10</div>
+            <div className="text-xs text-[var(--ink-muted)] w-20">10:10</div>
             <DiagramTooltip
               content={
                 <div>
@@ -437,7 +437,7 @@ export function PysparkWatermarkDiagram() {
                     Событие с timestamp 10:02 прибыло в 10:10 — после
                     watermark. PySpark отбрасывает его silent data loss.
                   </p>
-                  <p className="mt-2 text-rose-300">
+                  <p className="mt-2 text-rose-700">
                     Решение: увеличить watermark threshold или использовать
                     side output для late events.
                   </p>
@@ -447,7 +447,7 @@ export function PysparkWatermarkDiagram() {
               <FlowNode
                 variant="app"
                 size="sm"
-                className="flex-1 bg-rose-500/20 border-rose-400/30 text-rose-200"
+                className="flex-1 bg-rose-500/20 border-rose-400/30 text-rose-700"
                 tabIndex={0}
               >
                 Event at 10:02 (arrives 10:10!)
@@ -461,12 +461,12 @@ export function PysparkWatermarkDiagram() {
 
         <div className="mt-2 text-sm text-amber-400 border-l-2 border-amber-400 pl-3">
           <strong>Watermark Configuration:</strong>
-          <p className="mt-1 text-gray-300">
-            <code className="text-xs bg-gray-800 px-2 py-1 rounded">
+          <p className="mt-1 text-[var(--ink-default)]">
+            <code className="text-xs bg-[var(--bg-sunken)] px-2 py-1 rounded">
               .withWatermark("event_time", "10 minutes")
             </code>
           </p>
-          <p className="mt-2 text-gray-300">
+          <p className="mt-2 text-[var(--ink-default)]">
             События с event_time более чем на 10 минут старше текущего
             max(event_time) будут отброшены.
           </p>
@@ -506,14 +506,14 @@ export function MicroBatchVsContinuousDiagram() {
                 </div>
               }
             >
-              <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg">
+              <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-amber-400" />
-                  <span className="font-medium text-amber-300">
+                  <span className="font-medium text-amber-700">
                     Каждый batch как отдельная транзакция
                   </span>
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[var(--ink-muted)]">
                   Checkpoint между batches для fault tolerance
                 </p>
               </div>
@@ -530,14 +530,14 @@ export function MicroBatchVsContinuousDiagram() {
                 </div>
               }
             >
-              <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg">
+              <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-amber-400" />
-                  <span className="font-medium text-amber-300">
+                  <span className="font-medium text-amber-700">
                     Latency ~100ms+
                   </span>
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[var(--ink-muted)]">
                   Configurable через trigger interval
                 </p>
               </div>
@@ -554,14 +554,14 @@ export function MicroBatchVsContinuousDiagram() {
                 </div>
               }
             >
-              <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg">
+              <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="font-medium text-emerald-300">
+                  <span className="font-medium text-emerald-700">
                     Стабильный и проверенный режим
                   </span>
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[var(--ink-muted)]">
                   Recommended для CDC → data lake pipelines
                 </p>
               </div>
@@ -587,14 +587,14 @@ export function MicroBatchVsContinuousDiagram() {
                 </div>
               }
             >
-              <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg">
+              <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-rose-400" />
-                  <span className="font-medium text-rose-300">
+                  <span className="font-medium text-rose-700">
                     Event-by-event processing
                   </span>
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[var(--ink-muted)]">
                   No batching overhead
                 </p>
               </div>
@@ -611,14 +611,14 @@ export function MicroBatchVsContinuousDiagram() {
                 </div>
               }
             >
-              <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg">
+              <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-rose-400" />
-                  <span className="font-medium text-rose-300">
+                  <span className="font-medium text-rose-700">
                     Latency ~1ms
                   </span>
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[var(--ink-muted)]">
                   Ultra-low latency processing
                 </p>
               </div>
@@ -632,20 +632,20 @@ export function MicroBatchVsContinuousDiagram() {
                     Continuous mode — экспериментальный в Spark 4.x. Не
                     рекомендуется для production CDC pipelines.
                   </p>
-                  <p className="mt-2 text-rose-300">
+                  <p className="mt-2 text-rose-700">
                     Если нужна низкая latency — используйте PyFlink.
                   </p>
                 </div>
               }
             >
-              <div className="text-sm text-gray-300 p-3 bg-gray-800/50 rounded-lg">
+              <div className="text-sm text-[var(--ink-default)] p-3 bg-[var(--bg-sunken)] rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-rose-400" />
-                  <span className="font-medium text-rose-300">
+                  <span className="font-medium text-rose-700">
                     Экспериментальный режим
                   </span>
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[var(--ink-muted)]">
                   Not recommended для production
                 </p>
               </div>
@@ -656,7 +656,7 @@ export function MicroBatchVsContinuousDiagram() {
 
       <div className="mt-4 text-sm text-amber-400 border-l-2 border-amber-400 pl-3">
         <strong>Рекомендация для CDC:</strong>
-        <p className="mt-1 text-gray-300">
+        <p className="mt-1 text-[var(--ink-default)]">
           Используйте micro-batch mode с trigger interval 30-60 seconds.
           Continuous mode нестабилен и не нужен для CDC → data lake use case.
         </p>

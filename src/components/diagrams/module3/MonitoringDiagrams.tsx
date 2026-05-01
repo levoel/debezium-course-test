@@ -26,7 +26,7 @@ export function LagMetricsFlowDiagram() {
               <FlowNode variant="database" tabIndex={0}>
                 Binlog Event
                 <br />
-                <span className="text-xs text-gray-400">source.ts_ms</span>
+                <span className="text-xs text-[var(--ink-muted)]">source.ts_ms</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -36,7 +36,7 @@ export function LagMetricsFlowDiagram() {
               <FlowNode variant="connector" tabIndex={0}>
                 Debezium Connector
                 <br />
-                <span className="text-xs text-gray-400">calculate lag</span>
+                <span className="text-xs text-[var(--ink-muted)]">calculate lag</span>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -55,7 +55,7 @@ export function LagMetricsFlowDiagram() {
               <FlowNode variant="app" tabIndex={0}>
                 SecondsBehindMaster
                 <br />
-                <span className="text-xs text-gray-400">Cross-check</span>
+                <span className="text-xs text-[var(--ink-muted)]">Cross-check</span>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -66,7 +66,7 @@ export function LagMetricsFlowDiagram() {
               <FlowNode variant="connector" tabIndex={0}>
                 JMX Exporter
                 <br />
-                <span className="text-xs text-gray-400">:9404/metrics</span>
+                <span className="text-xs text-[var(--ink-muted)]">:9404/metrics</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -92,38 +92,38 @@ export function LagMetricsFlowDiagram() {
       {/* Key metrics explanation */}
       <div className="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="Ключевые метрики" color="emerald" className="flex-1">
-          <div className="text-xs text-gray-300 space-y-2">
+          <div className="text-xs text-[var(--ink-default)] space-y-2">
             <div>
               <span className="text-emerald-400 font-mono">MilliSecondsBehindSource</span>
               <br />
-              <span className="text-gray-400">Задержка connector от source DB (ms)</span>
+              <span className="text-[var(--ink-muted)]">Задержка connector от source DB (ms)</span>
             </div>
             <div>
               <span className="text-emerald-400 font-mono">BinlogPosition</span>
               <br />
-              <span className="text-gray-400">Текущая позиция в binlog файле</span>
+              <span className="text-[var(--ink-muted)]">Текущая позиция в binlog файле</span>
             </div>
             <div>
               <span className="text-emerald-400 font-mono">Connected</span>
               <br />
-              <span className="text-gray-400">1 = connected, 0 = disconnected</span>
+              <span className="text-[var(--ink-muted)]">1 = connected, 0 = disconnected</span>
             </div>
           </div>
         </DiagramContainer>
 
         <DiagramContainer title="Queue метрики (backpressure)" color="amber" className="flex-1">
-          <div className="text-xs text-gray-300 space-y-2">
+          <div className="text-xs text-[var(--ink-default)] space-y-2">
             <div>
               <span className="text-amber-400 font-mono">QueueRemainingCapacity</span>
               <br />
-              <span className="text-gray-400">Свободное место в internal queue</span>
+              <span className="text-[var(--ink-muted)]">Свободное место в internal queue</span>
             </div>
             <div>
               <span className="text-amber-400 font-mono">QueueTotalCapacity</span>
               <br />
-              <span className="text-gray-400">Общий размер queue (default: 8192)</span>
+              <span className="text-[var(--ink-muted)]">Общий размер queue (default: 8192)</span>
             </div>
-            <div className="text-gray-400 text-xs mt-2">
+            <div className="text-[var(--ink-muted)] text-xs mt-2">
               Queue utilization &gt; 80% = Kafka write bottleneck
             </div>
           </div>
@@ -132,7 +132,7 @@ export function LagMetricsFlowDiagram() {
 
       {/* SecondsBehindMaster special case */}
       <DiagramContainer title="SecondsBehindMaster = -1 во время failover" color="neutral">
-        <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-xs text-gray-300">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-xs text-[var(--ink-default)]">
           <div className="flex items-center gap-2">
             <span className="bg-amber-500/20 px-2 py-1 rounded">Failover начат</span>
           </div>
@@ -149,7 +149,7 @@ export function LagMetricsFlowDiagram() {
             <span className="bg-emerald-500/20 px-2 py-1 rounded">Normal value</span>
           </div>
         </div>
-        <div className="text-xs text-gray-400 text-center mt-3">
+        <div className="text-xs text-[var(--ink-muted)] text-center mt-3">
           Не создавайте alert на -1 — это expected behavior во время Aurora failover
         </div>
       </DiagramContainer>
@@ -174,7 +174,7 @@ export function MonitoringArchitectureDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 space-y-1 text-center">
+            <div className="text-xs text-[var(--ink-muted)] space-y-1 text-center">
               <div className="font-mono">MilliSecondsBehindSource</div>
               <div className="font-mono">Connected</div>
               <div className="font-mono">IsGtidModeEnabled</div>
@@ -192,7 +192,7 @@ export function MonitoringArchitectureDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 space-y-1 text-center">
+            <div className="text-xs text-[var(--ink-muted)] space-y-1 text-center">
               <div className="font-mono">AuroraBinlogReplicaLag</div>
               <div className="font-mono">ChangeLogBytesUsed</div>
               <div className="font-mono">ChangeLogReadIOPs</div>
@@ -210,7 +210,7 @@ export function MonitoringArchitectureDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-gray-400 space-y-1 text-center">
+            <div className="text-xs text-[var(--ink-muted)] space-y-1 text-center">
               <div className="font-mono">Heartbeat Events</div>
               <div className="font-mono">Signal Table Events</div>
               <div className="font-mono">Kafka Consumer Lag</div>
@@ -236,7 +236,7 @@ export function MonitoringArchitectureDiagram() {
               <FlowNode variant="connector" tabIndex={0}>
                 Debezium
                 <br />
-                <span className="text-xs text-gray-400">JMX :9404</span>
+                <span className="text-xs text-[var(--ink-muted)]">JMX :9404</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -257,7 +257,7 @@ export function MonitoringArchitectureDiagram() {
                   CloudWatch
                 </FlowNode>
               </DiagramTooltip>
-              <div className="text-xs text-gray-400">Aurora metrics</div>
+              <div className="text-xs text-[var(--ink-muted)]">Aurora metrics</div>
             </div>
 
             <Arrow direction="right" />
@@ -268,7 +268,7 @@ export function MonitoringArchitectureDiagram() {
                   Prometheus
                 </FlowNode>
               </DiagramTooltip>
-              <div className="text-xs text-gray-400">Aggregation</div>
+              <div className="text-xs text-[var(--ink-muted)]">Aggregation</div>
             </div>
 
             <Arrow direction="right" />
@@ -279,7 +279,7 @@ export function MonitoringArchitectureDiagram() {
                   Grafana
                 </FlowNode>
               </DiagramTooltip>
-              <div className="text-xs text-gray-400">Visualization</div>
+              <div className="text-xs text-[var(--ink-muted)]">Visualization</div>
             </div>
 
             <Arrow direction="right" />
@@ -290,7 +290,7 @@ export function MonitoringArchitectureDiagram() {
                   Alertmanager
                 </FlowNode>
               </DiagramTooltip>
-              <div className="text-xs text-gray-400">Alerting</div>
+              <div className="text-xs text-[var(--ink-muted)]">Alerting</div>
             </div>
           </div>
         </div>
@@ -299,7 +299,7 @@ export function MonitoringArchitectureDiagram() {
       {/* Alert thresholds */}
       <div className="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="Warning Alerts" color="amber" className="flex-1">
-          <div className="text-xs text-gray-300 space-y-2">
+          <div className="text-xs text-[var(--ink-default)] space-y-2">
             <div className="flex justify-between">
               <span>Binlog lag</span>
               <span className="font-mono text-amber-400">&gt; 60s for 5m</span>
@@ -316,7 +316,7 @@ export function MonitoringArchitectureDiagram() {
         </DiagramContainer>
 
         <DiagramContainer title="Critical Alerts" color="rose" className="flex-1">
-          <div className="text-xs text-gray-300 space-y-2">
+          <div className="text-xs text-[var(--ink-default)] space-y-2">
             <div className="flex justify-between">
               <span>Binlog lag</span>
               <span className="font-mono text-rose-400">&gt; 300s for 5m</span>
@@ -335,7 +335,7 @@ export function MonitoringArchitectureDiagram() {
 
       {/* Why three tiers */}
       <DiagramContainer title="Почему три уровня мониторинга?" color="neutral">
-        <div className="text-xs text-gray-300 space-y-3">
+        <div className="text-xs text-[var(--ink-default)] space-y-3">
           <div>
             <span className="text-amber-400 font-bold">Сценарий:</span> JMX показывает lag = 100ms (отлично), но CloudWatch показывает AuroraBinlogReplicaLag = 300s (5 минут).
           </div>

@@ -43,7 +43,7 @@ export function PhysicalVsLogicalDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 text-center mt-2 px-4">
+          <div className="text-xs text-[var(--ink-muted)] text-center mt-2 px-4">
             Побайтовая копия данных<br />
             Только PostgreSQL &rarr; PostgreSQL<br />
             Вся база целиком
@@ -81,7 +81,7 @@ export function PhysicalVsLogicalDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-gray-400 text-center mt-2 px-4">
+          <div className="text-xs text-[var(--ink-muted)] text-center mt-2 px-4">
             INSERT/UPDATE/DELETE события<br />
             Выборочные таблицы<br />
             Разные версии PostgreSQL
@@ -196,7 +196,7 @@ export function PublicationsDiagram() {
                 dbz_publication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 px-2">
+            <div className="text-xs text-[var(--ink-muted)] px-2">
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400">+</span> customers
               </div>
@@ -227,18 +227,18 @@ export function PublicationsDiagram() {
                 orders_publication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-gray-400 px-2">
+            <div className="text-xs text-[var(--ink-muted)] px-2">
               <div className="flex items-center gap-2">
                 <span className="text-blue-400">+</span> orders
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-blue-400">+</span> customers
               </div>
-              <div className="flex items-center gap-2 text-gray-600">
-                <span className="text-gray-600">-</span> products
+              <div className="flex items-center gap-2 text-[var(--ink-subtle)]">
+                <span className="text-[var(--ink-subtle)]">-</span> products
               </div>
-              <div className="flex items-center gap-2 text-gray-600">
-                <span className="text-gray-600">-</span> audit_logs
+              <div className="flex items-center gap-2 text-[var(--ink-subtle)]">
+                <span className="text-[var(--ink-subtle)]">-</span> audit_logs
               </div>
             </div>
           </div>
@@ -403,9 +403,9 @@ export function WalRecordDiagram() {
       <div className="space-y-2">
         {fields.map((f) => (
           <DiagramTooltip key={f.label} content={f.tooltip}>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-3 py-2 rounded-lg bg-white/[.03] border border-white/[.06] cursor-help">
-              <span className="text-xs text-gray-400 sm:w-56 shrink-0 font-medium">{f.label}</span>
-              <span className="text-sm text-gray-200 font-mono break-all">{f.value}</span>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--line-thin)] cursor-help">
+              <span className="text-xs text-[var(--ink-muted)] sm:w-56 shrink-0 font-medium">{f.label}</span>
+              <span className="text-sm text-[var(--ink-default)] font-mono break-all">{f.value}</span>
             </div>
           </DiagramTooltip>
         ))}

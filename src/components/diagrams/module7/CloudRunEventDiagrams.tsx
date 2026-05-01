@@ -73,7 +73,7 @@ export function PubSubEventarcCloudRunDiagram() {
         </DiagramTooltip>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-emerald-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-emerald-700/70">
         <p>Pub/Sub base64-кодирует данные в message.data — нужно декодировать → JSON</p>
         <p className="mt-1">min-instances=0 позволяет scale to zero (cost optimization)</p>
       </div>
@@ -169,7 +169,7 @@ export function AutoScalingBehaviorSequence() {
         messageSpacing={45}
       />
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-amber-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-amber-700/70">
         <p>Cloud Run масштабируется автоматически на основе:</p>
         <ul className="mt-1 space-y-1">
           <li>• Concurrency: requests на контейнер (default: 80)</li>
@@ -305,7 +305,7 @@ export function EndToEndEventProcessingSequence() {
         messageSpacing={50}
       />
 
-      <div className="mt-4 pt-3 border-t border-white/10 text-xs text-purple-200/70">
+      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-purple-700/70">
         <p className="font-semibold mb-1">Latency breakdown (typical):</p>
         <ul className="space-y-1">
           <li>• Cloud SQL → Debezium: 100-500ms (WAL polling interval)</li>
@@ -335,10 +335,10 @@ export function CloudRunProjectStructureDiagram() {
     <DiagramContainer title="cdc-processor/" color="blue">
       <div className="space-y-1.5">
         {files.map((f) => (
-          <div key={f.name} className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-white/[.03] border border-white/[.06]">
+          <div key={f.name} className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--line-thin)]">
             <span className="select-none">{f.icon}</span>
-            <span className="text-sm text-gray-200 font-mono">{f.name}</span>
-            <span className="text-xs text-gray-500 ml-auto">{f.desc}</span>
+            <span className="text-sm text-[var(--ink-default)] font-mono">{f.name}</span>
+            <span className="text-xs text-[var(--ink-subtle)] ml-auto">{f.desc}</span>
           </div>
         ))}
       </div>
