@@ -1,6 +1,6 @@
 {
   "id": "debezium",
-  "title": "Debezium CDC Mastery",
+  "title": "Debezium CDC",
   "description": "Полное руководство по Change Data Capture с Debezium — от основ до production deployment",
   "author": "Lev Neganov",
   "difficulty": "intermediate",
