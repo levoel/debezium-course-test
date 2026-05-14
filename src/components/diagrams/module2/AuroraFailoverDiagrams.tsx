@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Aurora Failover Diagrams
  *
@@ -148,17 +149,17 @@ export function AuroraFailoverSequenceDiagram() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div class="space-y-4">
       <SequenceDiagram actors={actors} messages={messages} messageSpacing={45} />
 
       {/* Danger zone indicator */}
       <DiagramContainer title="Потеря данных в Failover Window" color="rose">
-        <div className="text-sm text-[var(--ink-default)] space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-rose-400 font-bold">id=101</span>
+        <div class="text-sm text-[var(--ink-default)] space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-rose-400 font-bold">id=101</span>
             <span>— ПОТЕРЯН. Был записан в WAL до crash, но Debezium не успел прочитать.</span>
           </div>
-          <div className="text-xs text-[var(--ink-muted)]">
+          <div class="text-xs text-[var(--ink-muted)]">
             Новый slot начинает с текущей позиции (после recovery). Все транзакции в failover window невидимы для CDC.
           </div>
         </div>
@@ -172,17 +173,17 @@ export function AuroraFailoverSequenceDiagram() {
  */
 export function HeartbeatMonitoringDiagram() {
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row gap-6">
+    <div class="space-y-6">
+      <div class="flex flex-col lg:flex-row gap-6">
         {/* Debezium */}
         <DiagramContainer title="Debezium Connector" color="amber" className="flex-1">
-          <div className="flex flex-col items-center gap-3">
+          <div class="flex flex-col items-center gap-3">
             <DiagramTooltip content="Debezium периодически (каждые 10 сек) выполняет UPDATE heartbeat SET ts=NOW(). Создает 'маркеры времени' в потоке CDC. Позволяет обнаружить gaps в событиях.">
               <FlowNode variant="connector" tabIndex={0}>
                 Heartbeat Generator
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] text-center">
+            <div class="text-xs text-[var(--ink-muted)] text-center">
               heartbeat.interval.ms = 10000
             </div>
           </div>
@@ -190,13 +191,13 @@ export function HeartbeatMonitoringDiagram() {
 
         {/* PostgreSQL */}
         <DiagramContainer title="PostgreSQL" color="purple" className="flex-1">
-          <div className="flex flex-col items-center gap-3">
+          <div class="flex flex-col items-center gap-3">
             <DiagramTooltip content="Специальная таблица public.heartbeat с полями id, ts, writer_instance. Хранит последний heartbeat и ID текущего writer. Изменения попадают в CDC поток.">
               <FlowNode variant="database" tabIndex={0}>
                 heartbeat table
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] text-center font-mono">
+            <div class="text-xs text-[var(--ink-muted)] text-center font-mono">
               id=1, ts=NOW(), writer_id
             </div>
           </div>
@@ -205,7 +206,7 @@ export function HeartbeatMonitoringDiagram() {
 
       {/* Kafka Topics */}
       <DiagramContainer title="Kafka Topics" color="blue">
-        <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8">
+        <div class="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8">
           <DiagramTooltip content="Топик inventory.public.orders содержит бизнес-события. Heartbeat события помогают обнаружить gaps между событиями — если heartbeat есть, а бизнес-событий нет слишком долго.">
             <FlowNode variant="cluster" tabIndex={0}>
               inventory.public.orders
@@ -222,21 +223,21 @@ export function HeartbeatMonitoringDiagram() {
 
       {/* Monitoring */}
       <DiagramContainer title="Monitoring & Alerting" color="rose">
-        <div className="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3">
           <DiagramTooltip content="Алерт срабатывает при gap > 30 секунд между heartbeat событиями. Heartbeat не предотвращает потерю данных, но позволяет её ОБНАРУЖИТЬ и запустить recovery процедуру.">
             <FlowNode variant="app" tabIndex={0}>
               Alert: gap &gt; 30s
             </FlowNode>
           </DiagramTooltip>
-          <div className="text-xs text-[var(--ink-muted)] text-center">
+          <div class="text-xs text-[var(--ink-muted)] text-center">
             Heartbeat обнаруживает, но НЕ предотвращает потерю данных
           </div>
         </div>
       </DiagramContainer>
 
       {/* Data flow arrows */}
-      <div className="flex flex-col items-center gap-2 text-xs text-[var(--ink-subtle)]">
-        <div className="flex items-center gap-2">
+      <div class="flex flex-col items-center gap-2 text-xs text-[var(--ink-subtle)]">
+        <div class="flex items-center gap-2">
           <Arrow direction="right" label="UPDATE heartbeat" />
           <span>CDC событие</span>
           <Arrow direction="right" label="Kafka topics" />
@@ -253,9 +254,9 @@ export function HeartbeatMonitoringDiagram() {
  */
 export function AuroraGlobalDatabaseDiagram() {
   return (
-    <div className="space-y-6">
+    <div class="space-y-6">
       {/* Two regions */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div class="flex flex-col lg:flex-row gap-6">
         {/* Primary Region */}
         <DiagramContainer
           title="Primary Region (us-east-1)"
@@ -263,7 +264,7 @@ export function AuroraGlobalDatabaseDiagram() {
           recommended
           className="flex-1"
         >
-          <div className="flex flex-col items-center gap-4">
+          <div class="flex flex-col items-center gap-4">
             <DiagramTooltip content="Основной регион us-east-1 с Writer Instance, Debezium #1 и Kafka Cluster #1. Обслуживает основной CDC-поток. При региональном сбое — secondary продолжает работу.">
               <FlowNode variant="database" tabIndex={0}>
                 Writer Instance
@@ -289,16 +290,16 @@ export function AuroraGlobalDatabaseDiagram() {
         </DiagramContainer>
 
         {/* Aurora Replication arrow */}
-        <div className="flex flex-col items-center justify-center gap-2 lg:py-8">
+        <div class="flex flex-col items-center justify-center gap-2 lg:py-8">
           <DiagramTooltip content="Aurora автоматически реплицирует данные между регионами с задержкой < 1 секунды. При failover primary — secondary становится новым primary. Storage layer синхронизирован.">
-            <div className="flex flex-col items-center gap-1 cursor-help">
-              <div className="hidden lg:flex items-center gap-1">
+            <div class="flex flex-col items-center gap-1 cursor-help">
+              <div class="hidden lg:flex items-center gap-1">
                 <Arrow direction="right" dashed label="Aurora Replication" />
               </div>
-              <div className="flex lg:hidden items-center gap-1">
+              <div class="flex lg:hidden items-center gap-1">
                 <Arrow direction="down" dashed label="Aurora Replication" />
               </div>
-              <span className="text-xs text-[var(--ink-muted)]">&lt; 1 sec lag</span>
+              <span class="text-xs text-[var(--ink-muted)]">&lt; 1 sec lag</span>
             </div>
           </DiagramTooltip>
         </div>
@@ -309,7 +310,7 @@ export function AuroraGlobalDatabaseDiagram() {
           color="blue"
           className="flex-1"
         >
-          <div className="flex flex-col items-center gap-4">
+          <div class="flex flex-col items-center gap-4">
             <DiagramTooltip content="Дополнительный регион eu-west-1 с Writer Instance (read replica в нормальном режиме). При regional failover промотится в primary.">
               <FlowNode variant="database" tabIndex={0}>
                 Writer Instance
@@ -337,9 +338,9 @@ export function AuroraGlobalDatabaseDiagram() {
 
       {/* Consumer Service */}
       <DiagramContainer title="Consumer Service (Multi-Region Merge)" color="amber">
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8">
-            <div className="text-xs text-[var(--ink-muted)]">Kafka #1</div>
+        <div class="flex flex-col items-center gap-4">
+          <div class="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8">
+            <div class="text-xs text-[var(--ink-muted)]">Kafka #1</div>
             <Arrow direction="right" />
             <DiagramTooltip content="Потребитель мержит потоки из обоих регионов. Требуется дедупликация по event ID, так как одно событие может прийти из обоих источников при cross-region replication lag.">
               <FlowNode variant="app" tabIndex={0}>
@@ -347,19 +348,19 @@ export function AuroraGlobalDatabaseDiagram() {
               </FlowNode>
             </DiagramTooltip>
             <Arrow direction="left" />
-            <div className="text-xs text-[var(--ink-muted)]">Kafka #2</div>
+            <div class="text-xs text-[var(--ink-muted)]">Kafka #2</div>
           </div>
 
-          <div className="text-xs text-[var(--ink-muted)] text-center">
+          <div class="text-xs text-[var(--ink-muted)] text-center">
             Требуется дедупликация по event ID при merge потоков
           </div>
         </div>
       </DiagramContainer>
 
       {/* Pros/Cons */}
-      <div className="flex flex-col md:flex-row gap-4">
+      <div class="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="Преимущества" color="emerald" className="flex-1">
-          <ul className="text-xs text-[var(--ink-default)] space-y-1">
+          <ul class="text-xs text-[var(--ink-default)] space-y-1">
             <li>+ CDC в двух регионах</li>
             <li>+ При failover в primary — secondary продолжает</li>
             <li>+ Можно мержить потоки с дедупликацией</li>
@@ -367,7 +368,7 @@ export function AuroraGlobalDatabaseDiagram() {
         </DiagramContainer>
 
         <DiagramContainer title="Недостатки" color="rose" className="flex-1">
-          <ul className="text-xs text-[var(--ink-default)] space-y-1">
+          <ul class="text-xs text-[var(--ink-default)] space-y-1">
             <li>- Увеличенная стоимость (2x инфраструктура)</li>
             <li>- Сложность инфраструктуры</li>
             <li>- Необходима дедупликация при merge</li>

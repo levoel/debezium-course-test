@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Snapshot Strategy Diagrams
  *
@@ -21,9 +22,9 @@ import type { SequenceActorDef, SequenceMessageDef } from '@primitives/types';
 export function SnapshotDataLossDiagram() {
   return (
     <DiagramContainer title="Без snapshot: Потеря существующих данных" color="rose">
-      <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8">
+      <div class="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8">
         {/* Existing data flow */}
-        <div className="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3">
           <DiagramTooltip content="Миллионы записей уже существуют в таблице до запуска CDC. Без snapshot consumer их никогда не увидит. Эти данные критичны для полной картины.">
             <FlowNode variant="database" tabIndex={0}>
               Существующие данные
@@ -34,17 +35,17 @@ export function SnapshotDataLossDiagram() {
 
           <DiagramTooltip content="Потеря данных — существующие записи невидимы для CDC. Только операции INSERT/UPDATE/DELETE после запуска коннектора захватываются. История теряется.">
             <FlowNode variant="app" tabIndex={0} className="border-2 border-rose-400">
-              <span className="text-rose-400 font-bold">ПОТЕРЯНЫ</span>
+              <span class="text-rose-400 font-bold">ПОТЕРЯНЫ</span>
             </FlowNode>
           </DiagramTooltip>
         </div>
 
         {/* Divider */}
-        <div className="hidden md:block h-24 w-px bg-[var(--bg-deep)]" />
-        <div className="md:hidden w-24 h-px bg-[var(--bg-deep)]" />
+        <div class="hidden md:block h-24 w-px bg-[var(--bg-deep)]" />
+        <div class="md:hidden w-24 h-px bg-[var(--bg-deep)]" />
 
         {/* New changes flow */}
-        <div className="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3">
           <DiagramTooltip content="CDC захватывает только изменения после запуска. INSERT, UPDATE, DELETE попадают в Kafka. Но это только часть данных.">
             <FlowNode variant="connector" tabIndex={0}>
               Новые изменения
@@ -61,7 +62,7 @@ export function SnapshotDataLossDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 text-xs text-center text-[var(--ink-muted)]">
+      <div class="mt-4 text-xs text-center text-[var(--ink-muted)]">
         Consumer видит только новые изменения, не зная о миллионах существующих записей
       </div>
     </DiagramContainer>
@@ -154,17 +155,17 @@ export function TraditionalSnapshotDiagram() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div class="space-y-4">
       <SequenceDiagram actors={actors} messages={messages} messageSpacing={50} />
 
       {/* Blocking period indicator */}
       <DiagramContainer title="Период блокировки streaming" color="rose">
-        <div className="text-sm text-[var(--ink-default)] space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-rose-400 font-bold">ПРОБЛЕМА:</span>
+        <div class="text-sm text-[var(--ink-default)] space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-rose-400 font-bold">ПРОБЛЕМА:</span>
             <span>Streaming заблокирован на время snapshot.</span>
           </div>
-          <div className="text-xs text-[var(--ink-muted)]">
+          <div class="text-xs text-[var(--ink-muted)]">
             Для таблицы 100GB это могут быть часы. WAL retention растет, replication slot lag увеличивается.
             <br />
             При crash во время snapshot — приходится начинать сначала.
@@ -277,20 +278,20 @@ export function IncrementalSnapshotDiagram() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div class="space-y-4">
       <SequenceDiagram actors={actors} messages={messages} messageSpacing={45} />
 
       {/* Parallel processing indicator */}
       <DiagramContainer title="Параллельная обработка" color="emerald">
-        <div className="text-sm text-[var(--ink-default)] space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold">ПРЕИМУЩЕСТВО:</span>
+        <div class="text-sm text-[var(--ink-default)] space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-emerald-400 font-bold">ПРЕИМУЩЕСТВО:</span>
             <span>Snapshot и streaming работают параллельно.</span>
           </div>
-          <div className="text-xs text-[var(--ink-muted)]">
+          <div class="text-xs text-[var(--ink-muted)]">
             Минимальный downtime, возобновляемость при crash, collision detection.
             <br />
-            Consumer различает события по полю <code className="bg-[var(--bg-sunken)] px-1 rounded">source.snapshot</code>
+            Consumer различает события по полю <code class="bg-[var(--bg-sunken)] px-1 rounded">source.snapshot</code>
           </div>
         </div>
       </DiagramContainer>
@@ -303,9 +304,9 @@ export function IncrementalSnapshotDiagram() {
  */
 export function SnapshotDecisionDiagram() {
   return (
-    <div className="space-y-6">
+    <div class="space-y-6">
       {/* Decision tree */}
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         {/* Root question */}
         <DiagramTooltip content="Первый вопрос: нужны ли существующие данные? Для аналитики с историей — да. Для real-time алертов на новые события — возможно нет.">
           <FlowNode variant="connector" tabIndex={0} className="border-2 border-amber-400">
@@ -313,10 +314,10 @@ export function SnapshotDecisionDiagram() {
           </FlowNode>
         </DiagramTooltip>
 
-        <div className="flex flex-col md:flex-row items-center gap-6 md:gap-12">
+        <div class="flex flex-col md:flex-row items-center gap-6 md:gap-12">
           {/* No branch */}
-          <div className="flex flex-col items-center gap-3">
-            <div className="text-xs text-[var(--ink-muted)]">Нет</div>
+          <div class="flex flex-col items-center gap-3">
+            <div class="text-xs text-[var(--ink-muted)]">Нет</div>
             <Arrow direction="down" />
             <DiagramTooltip content="Используется с incremental snapshot через signaling table. Коннектор сразу начинает streaming. Подходит когда история не нужна или будет загружена отдельно.">
               <FlowNode variant="database" tabIndex={0} className="border-2 border-purple-400">
@@ -326,8 +327,8 @@ export function SnapshotDecisionDiagram() {
           </div>
 
           {/* Yes branch */}
-          <div className="flex flex-col items-center gap-3">
-            <div className="text-xs text-[var(--ink-muted)]">Да</div>
+          <div class="flex flex-col items-center gap-3">
+            <div class="text-xs text-[var(--ink-muted)]">Да</div>
             <Arrow direction="down" />
 
             <DiagramTooltip content="Ключевой фактор: размер таблицы определяет стратегию. < 1M строк — traditional справится за минуты. >= 1M — нужен incremental.">
@@ -336,10 +337,10 @@ export function SnapshotDecisionDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="flex flex-col md:flex-row items-center gap-6">
+            <div class="flex flex-col md:flex-row items-center gap-6">
               {/* Small table */}
-              <div className="flex flex-col items-center gap-3">
-                <div className="text-xs text-[var(--ink-muted)]">&lt; 1M строк</div>
+              <div class="flex flex-col items-center gap-3">
+                <div class="text-xs text-[var(--ink-muted)]">&lt; 1M строк</div>
                 <Arrow direction="down" />
                 <DiagramTooltip content="< 1M строк: Traditional snapshot пройдет за минуты. Простой выбор snapshot.mode=initial. Минимальная конфигурация.">
                   <FlowNode variant="sink" tabIndex={0} className="border-2 border-amber-400">
@@ -347,9 +348,9 @@ export function SnapshotDecisionDiagram() {
                   </FlowNode>
                 </DiagramTooltip>
 
-                <div className="flex flex-row items-center gap-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="text-xs text-[var(--ink-muted)]">Да</div>
+                <div class="flex flex-row items-center gap-4">
+                  <div class="flex flex-col items-center gap-2">
+                    <div class="text-xs text-[var(--ink-muted)]">Да</div>
                     <DiagramTooltip content="Если допустим downtime до 30 минут — можно использовать traditional snapshot даже для средних таблиц. Простейший вариант.">
                       <FlowNode variant="cluster" tabIndex={0} size="sm">
                         initial
@@ -357,8 +358,8 @@ export function SnapshotDecisionDiagram() {
                     </DiagramTooltip>
                   </div>
 
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="text-xs text-[var(--ink-muted)]">Нет</div>
+                  <div class="flex flex-col items-center gap-2">
+                    <div class="text-xs text-[var(--ink-muted)]">Нет</div>
                     <DiagramTooltip content=">= 1M строк: Incremental snapshot обязателен. Минимальный downtime, возобновляемость, параллельный streaming.">
                       <FlowNode variant="cluster" tabIndex={0} size="sm" className="border-2 border-emerald-400">
                         incremental
@@ -369,8 +370,8 @@ export function SnapshotDecisionDiagram() {
               </div>
 
               {/* Large table */}
-              <div className="flex flex-col items-center gap-3">
-                <div className="text-xs text-[var(--ink-muted)]">&gt;= 1M строк</div>
+              <div class="flex flex-col items-center gap-3">
+                <div class="text-xs text-[var(--ink-muted)]">&gt;= 1M строк</div>
                 <Arrow direction="down" />
                 <DiagramTooltip content="Большие таблицы: только incremental snapshot. Traditional заблокирует streaming на часы. Используйте signaling table для контроля.">
                   <FlowNode variant="cluster" tabIndex={0} className="border-2 border-emerald-400">
@@ -384,16 +385,16 @@ export function SnapshotDecisionDiagram() {
       </div>
 
       {/* Recommendations summary */}
-      <div className="flex flex-col md:flex-row gap-4">
+      <div class="flex flex-col md:flex-row gap-4">
         <DiagramContainer title="Рекомендации" color="emerald" className="flex-1">
-          <div className="text-xs text-[var(--ink-default)] space-y-2">
+          <div class="text-xs text-[var(--ink-default)] space-y-2">
             <div>
-              <span className="text-emerald-400 font-bold">snapshot.mode=initial</span>
+              <span class="text-emerald-400 font-bold">snapshot.mode=initial</span>
               <br />
               Новое развертывание, таблицы &lt; 1M строк
             </div>
             <div>
-              <span className="text-emerald-400 font-bold">snapshot.mode=never + incremental</span>
+              <span class="text-emerald-400 font-bold">snapshot.mode=never + incremental</span>
               <br />
               Большие таблицы, zero downtime требование
             </div>
@@ -401,14 +402,14 @@ export function SnapshotDecisionDiagram() {
         </DiagramContainer>
 
         <DiagramContainer title="Анти-паттерны" color="rose" className="flex-1">
-          <div className="text-xs text-[var(--ink-default)] space-y-2">
+          <div class="text-xs text-[var(--ink-default)] space-y-2">
             <div>
-              <span className="text-rose-400 font-bold">snapshot.mode=always</span>
+              <span class="text-rose-400 font-bold">snapshot.mode=always</span>
               <br />
               Полный snapshot при каждом рестарте — только для dev
             </div>
             <div>
-              <span className="text-rose-400 font-bold">initial для &gt; 10M строк</span>
+              <span class="text-rose-400 font-bold">initial для &gt; 10M строк</span>
               <br />
               Часы блокировки streaming, WAL backlog
             </div>

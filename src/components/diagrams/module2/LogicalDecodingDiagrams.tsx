@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Logical Decoding Diagrams
  *
@@ -21,14 +22,14 @@ import type { SequenceActorDef, SequenceMessageDef } from '@primitives/types';
  */
 export function PhysicalVsLogicalDiagram() {
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div class="flex flex-col lg:flex-row gap-6">
       {/* Physical Replication */}
       <DiagramContainer
         title="Physical Replication"
         color="blue"
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           <DiagramTooltip content="Мастер-узел PostgreSQL отправляет побайтовую копию WAL на реплику. Standby получает точную копию данных, включая все внутренние структуры. Используется для High Availability и failover.">
             <FlowNode variant="database" tabIndex={0}>
               PRIMARY
@@ -43,7 +44,7 @@ export function PhysicalVsLogicalDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-[var(--ink-muted)] text-center mt-2 px-4">
+          <div class="text-xs text-[var(--ink-muted)] text-center mt-2 px-4">
             Побайтовая копия данных<br />
             Только PostgreSQL &rarr; PostgreSQL<br />
             Вся база целиком
@@ -58,7 +59,7 @@ export function PhysicalVsLogicalDiagram() {
         recommended
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           <DiagramTooltip content="Мастер-узел с включенным wal_level=logical. Изменения преобразуются в читаемый формат через output plugin. Поддерживает выборочную репликацию таблиц.">
             <FlowNode variant="database" tabIndex={0}>
               PRIMARY
@@ -81,7 +82,7 @@ export function PhysicalVsLogicalDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-[var(--ink-muted)] text-center mt-2 px-4">
+          <div class="text-xs text-[var(--ink-muted)] text-center mt-2 px-4">
             INSERT/UPDATE/DELETE события<br />
             Выборочные таблицы<br />
             Разные версии PostgreSQL
@@ -97,9 +98,9 @@ export function PhysicalVsLogicalDiagram() {
  */
 export function LogicalDecodingComponentsDiagram() {
   return (
-    <div className="flex flex-col items-center gap-4 mb-8">
+    <div class="flex flex-col items-center gap-4 mb-8">
       {/* Main pipeline row */}
-      <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
+      <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
       <DiagramTooltip content="Write-Ahead Log — журнал транзакций PostgreSQL. При wal_level=logical содержит дополнительные данные для декодирования: OID таблиц, tuple data. Гарантирует durability всех изменений.">
         <FlowNode variant="sink" tabIndex={0}>
           WAL
@@ -156,10 +157,10 @@ export function LogicalDecodingComponentsDiagram() {
  */
 export function PublicationsDiagram() {
   return (
-    <div className="space-y-6">
+    <div class="space-y-6">
       {/* Database with tables */}
       <DiagramContainer title="База данных inventory" color="purple">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <DiagramTooltip content="Таблица клиентов — основная бизнес-сущность. Содержит персональные данные, контакты. Часто требует CDC для синхронизации с CRM и аналитикой.">
             <FlowNode variant="database" tabIndex={0} size="sm">
               customers
@@ -184,33 +185,33 @@ export function PublicationsDiagram() {
       </DiagramContainer>
 
       {/* Publications */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div class="flex flex-col lg:flex-row gap-6">
         <DiagramContainer
           title="FOR ALL TABLES"
           color="emerald"
           className="flex-1"
         >
-          <div className="flex flex-col gap-3">
+          <div class="flex flex-col gap-3">
             <DiagramTooltip content="Publication dbz_publication с FOR ALL TABLES включает все таблицы автоматически, включая созданные в будущем. Удобно для полного CDC, когда нужен полный поток изменений базы.">
               <FlowNode variant="connector" tabIndex={0} size="sm">
                 dbz_publication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] px-2">
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> customers
+            <div class="text-xs text-[var(--ink-muted)] px-2">
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> customers
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> orders
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> orders
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> products
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> products
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> audit_logs
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> audit_logs
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> <em>future tables...</em>
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> <em>future tables...</em>
               </div>
             </div>
           </div>
@@ -221,24 +222,24 @@ export function PublicationsDiagram() {
           color="blue"
           className="flex-1"
         >
-          <div className="flex flex-col gap-3">
+          <div class="flex flex-col gap-3">
             <DiagramTooltip content="Selective publication включает только указанные таблицы. Меньше нагрузка, меньше топиков в Kafka, проще управление. Рекомендуется для production с большим количеством таблиц.">
               <FlowNode variant="connector" tabIndex={0} size="sm">
                 orders_publication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] px-2">
-              <div className="flex items-center gap-2">
-                <span className="text-blue-400">+</span> orders
+            <div class="text-xs text-[var(--ink-muted)] px-2">
+              <div class="flex items-center gap-2">
+                <span class="text-blue-400">+</span> orders
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-blue-400">+</span> customers
+              <div class="flex items-center gap-2">
+                <span class="text-blue-400">+</span> customers
               </div>
-              <div className="flex items-center gap-2 text-[var(--ink-subtle)]">
-                <span className="text-[var(--ink-subtle)]">-</span> products
+              <div class="flex items-center gap-2 text-[var(--ink-subtle)]">
+                <span class="text-[var(--ink-subtle)]">-</span> products
               </div>
-              <div className="flex items-center gap-2 text-[var(--ink-subtle)]">
-                <span className="text-[var(--ink-subtle)]">-</span> audit_logs
+              <div class="flex items-center gap-2 text-[var(--ink-subtle)]">
+                <span class="text-[var(--ink-subtle)]">-</span> audit_logs
               </div>
             </div>
           </div>
@@ -373,7 +374,7 @@ export function LogicalDecodingSequenceDiagram() {
   ];
 
   return (
-    <div className="w-full">
+    <div class="w-full">
       <SequenceDiagram
         actors={actors}
         messages={messages}
@@ -400,12 +401,12 @@ export function WalRecordDiagram() {
 
   return (
     <DiagramContainer title="WAL Record" color="purple">
-      <div className="space-y-2">
+      <div class="space-y-2">
         {fields.map((f) => (
-          <DiagramTooltip key={f.label} content={f.tooltip}>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--line-thin)] cursor-help">
-              <span className="text-xs text-[var(--ink-muted)] sm:w-56 shrink-0 font-medium">{f.label}</span>
-              <span className="text-sm text-[var(--ink-default)] font-mono break-all">{f.value}</span>
+          <DiagramTooltip content={f.tooltip}>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--line-thin)] cursor-help">
+              <span class="text-xs text-[var(--ink-muted)] sm:w-56 shrink-0 font-medium">{f.label}</span>
+              <span class="text-sm text-[var(--ink-default)] font-mono break-all">{f.value}</span>
             </div>
           </DiagramTooltip>
         ))}

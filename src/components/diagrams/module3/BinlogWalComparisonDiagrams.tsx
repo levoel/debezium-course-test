@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Binlog vs WAL Comparison Diagrams
  *
@@ -21,14 +22,14 @@ import { DiagramTooltip } from '@primitives/Tooltip';
  */
 export function DetailedArchitectureComparisonDiagram() {
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div class="flex flex-col lg:flex-row gap-6">
       {/* PostgreSQL Architecture */}
       <DiagramContainer
         title="PostgreSQL WAL Architecture"
         color="blue"
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           <DiagramTooltip content="PostgreSQL сервер записывает ВСЕ изменения в Write-Ahead Log (WAL). При wal_level=logical WAL содержит дополнительные данные для декодирования: OID таблиц, tuple data.">
             <FlowNode variant="database" tabIndex={0}>
               PostgreSQL Server
@@ -75,7 +76,7 @@ export function DetailedArchitectureComparisonDiagram() {
         color="emerald"
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           <DiagramTooltip content="MySQL сервер с binlog_format=ROW записывает логические изменения строк в binary log. В отличие от PostgreSQL WAL, binlog изначально логический — не требует декодирования.">
             <FlowNode variant="database" tabIndex={0}>
               MySQL Server
@@ -126,39 +127,39 @@ export function DetailedArchitectureComparisonDiagram() {
  */
 export function EventFormatComparisonDiagram() {
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div class="flex flex-col lg:flex-row gap-6">
       {/* PostgreSQL LSN */}
       <DiagramContainer
         title="PostgreSQL: LSN Position"
         color="blue"
         className="flex-1"
       >
-        <div className="space-y-4">
+        <div class="space-y-4">
           <DiagramTooltip content="Log Sequence Number (LSN) — 64-битное число, представленное как hexadecimal. Формат: timeline/offset, например 0/16B374D8 = timeline 0, offset 381101272 bytes.">
             <FlowNode variant="sink" tabIndex={0} size="sm">
-              <div className="flex flex-col items-center">
-                <span className="text-[10px] text-blue-400">Position Format</span>
-                <span className="font-mono">0/16B374D8</span>
+              <div class="flex flex-col items-center">
+                <span class="text-[10px] text-blue-400">Position Format</span>
+                <span class="font-mono">0/16B374D8</span>
               </div>
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-[var(--ink-muted)] space-y-2 px-2">
+          <div class="text-xs text-[var(--ink-muted)] space-y-2 px-2">
             <DiagramTooltip content="LSN монотонно возрастает внутри одного сервера. При failover timeline может измениться (1/..., 2/...). Debezium отслеживает через replication slot.">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-blue-400">+</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-blue-400">+</span>
                 <span>Монотонно возрастает</span>
               </div>
             </DiagramTooltip>
             <DiagramTooltip content="LSN уникален только в пределах одного PostgreSQL сервера. При переключении на replica LSN может отличаться от primary.">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-blue-400">+</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-blue-400">+</span>
                 <span>Scope: single server</span>
               </div>
             </DiagramTooltip>
             <DiagramTooltip content="Сервер хранит restart_lsn в replication slot. Клиент (Debezium) не обязан хранить позицию — slot помнит.">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-blue-400">+</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-blue-400">+</span>
                 <span>Server-side хранение</span>
               </div>
             </DiagramTooltip>
@@ -178,32 +179,32 @@ export function EventFormatComparisonDiagram() {
         color="emerald"
         className="flex-1"
       >
-        <div className="space-y-4">
+        <div class="space-y-4">
           <DiagramTooltip content="Global Transaction ID (GTID) — UUID:sequence_number, например 3E11FA47-71CA-11E1-9E33-C80AA9429562:1-150. UUID уникален для каждого MySQL сервера.">
             <FlowNode variant="sink" tabIndex={0} size="sm">
-              <div className="flex flex-col items-center">
-                <span className="text-[10px] text-emerald-400">Position Format</span>
-                <span className="font-mono text-xs">uuid:1-150</span>
+              <div class="flex flex-col items-center">
+                <span class="text-[10px] text-emerald-400">Position Format</span>
+                <span class="font-mono text-xs">uuid:1-150</span>
               </div>
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-[var(--ink-muted)] space-y-2 px-2">
+          <div class="text-xs text-[var(--ink-muted)] space-y-2 px-2">
             <DiagramTooltip content="GTID глобально уникален во всём MySQL кластере, включая все реплики. При failover GTID продолжает нумерацию — нет reset.">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-emerald-400">+</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-emerald-400">+</span>
                 <span>Глобально уникален в кластере</span>
               </div>
             </DiagramTooltip>
             <DiagramTooltip content="Failover прозрачен: Debezium просто переподключается к новому primary с последним GTID. Нет server-side state для миграции.">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-emerald-400">+</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-emerald-400">+</span>
                 <span>Failover прозрачен</span>
               </div>
             </DiagramTooltip>
             <DiagramTooltip content="MySQL НЕ хранит позицию клиента. Debezium сохраняет GTID в Kafka Connect offsets topic. Client-side ответственность!">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-amber-400">!</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-amber-400">!</span>
                 <span>Client-side хранение</span>
               </div>
             </DiagramTooltip>
@@ -227,52 +228,52 @@ export function EventFormatComparisonDiagram() {
  */
 export function ReplicationModesDiagram() {
   return (
-    <div className="space-y-6">
+    <div class="space-y-6">
       {/* PostgreSQL Modes */}
       <DiagramContainer title="PostgreSQL Replication Modes" color="blue">
-        <div className="flex flex-col md:flex-row gap-6">
+        <div class="flex flex-col md:flex-row gap-6">
           {/* Physical */}
-          <div className="flex-1 space-y-3">
+          <div class="flex-1 space-y-3">
             <DiagramTooltip content="Physical (Streaming) Replication — побайтовая копия WAL на реплику. Используется для High Availability и failover. Реплика идентична мастеру на уровне блоков.">
               <FlowNode variant="database" tabIndex={0} size="sm">
                 Physical Replication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] px-2 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-blue-400">+</span> Побайтовая копия
+            <div class="text-xs text-[var(--ink-muted)] px-2 space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-blue-400">+</span> Побайтовая копия
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-blue-400">+</span> Только PG &rarr; PG
+              <div class="flex items-center gap-2">
+                <span class="text-blue-400">+</span> Только PG &rarr; PG
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-blue-400">+</span> Вся база целиком
+              <div class="flex items-center gap-2">
+                <span class="text-blue-400">+</span> Вся база целиком
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[var(--ink-subtle)]">-</span> Не для CDC
+              <div class="flex items-center gap-2">
+                <span class="text-[var(--ink-subtle)]">-</span> Не для CDC
               </div>
             </div>
           </div>
 
           {/* Logical */}
-          <div className="flex-1 space-y-3">
+          <div class="flex-1 space-y-3">
             <DiagramTooltip content="Logical Replication — преобразование WAL в структурированные события INSERT/UPDATE/DELETE. Debezium использует этот режим. Требует wal_level=logical.">
               <FlowNode variant="connector" tabIndex={0} size="sm" className="border border-emerald-400">
                 Logical Replication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] px-2 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> Структурированные события
+            <div class="text-xs text-[var(--ink-muted)] px-2 space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> Структурированные события
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> Выборочные таблицы
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> Выборочные таблицы
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> Кросс-версионность
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> Кросс-версионность
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> CDC через Debezium
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> CDC через Debezium
               </div>
             </div>
           </div>
@@ -281,49 +282,49 @@ export function ReplicationModesDiagram() {
 
       {/* MySQL Modes */}
       <DiagramContainer title="MySQL Replication Modes" color="emerald">
-        <div className="flex flex-col md:flex-row gap-6">
+        <div class="flex flex-col md:flex-row gap-6">
           {/* Traditional */}
-          <div className="flex-1 space-y-3">
+          <div class="flex-1 space-y-3">
             <DiagramTooltip content="Traditional (Async) Replication — binlog события асинхронно отправляются на реплику. Простой single-master setup. Debezium читает binlog напрямую.">
               <FlowNode variant="database" tabIndex={0} size="sm">
                 Traditional Replication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] px-2 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> Простая настройка
+            <div class="text-xs text-[var(--ink-muted)] px-2 space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> Простая настройка
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> Single-master
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> Single-master
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> Binlog уже логический
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> Binlog уже логический
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> CDC через Debezium
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> CDC через Debezium
               </div>
             </div>
           </div>
 
           {/* Group */}
-          <div className="flex-1 space-y-3">
+          <div class="flex-1 space-y-3">
             <DiagramTooltip content="Group Replication — multi-master topology с automatic failover. Используется в InnoDB Cluster. Debezium подключается к primary, при failover переключается автоматически (с GTID).">
               <FlowNode variant="connector" tabIndex={0} size="sm">
                 Group Replication
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] px-2 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> Multi-master
+            <div class="text-xs text-[var(--ink-muted)] px-2 space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> Multi-master
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> Automatic failover
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> Automatic failover
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> GTID обязателен
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> GTID обязателен
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">+</span> CDC через GTID
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400">+</span> CDC через GTID
               </div>
             </div>
           </div>
@@ -340,7 +341,7 @@ export function ReplicationModesDiagram() {
  */
 export function SlotVsBinlogDiagram() {
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div class="flex flex-col lg:flex-row gap-6">
       {/* PostgreSQL Slot */}
       <DiagramContainer
         title="PostgreSQL: Server-Side Tracking"
@@ -348,32 +349,32 @@ export function SlotVsBinlogDiagram() {
         recommended
         className="flex-1"
       >
-        <div className="space-y-4">
+        <div class="space-y-4">
           <DiagramTooltip content="Replication Slot создаётся на сервере PostgreSQL. Хранит restart_lsn (позицию для возобновления) и confirmed_flush_lsn (подтверждённая позиция).">
             <FlowNode variant="connector" tabIndex={0}>
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-medium">Replication Slot</span>
-                <span className="text-[10px] text-[var(--ink-muted)]">restart_lsn, confirmed_flush_lsn</span>
+              <div class="flex flex-col items-center">
+                <span class="text-sm font-medium">Replication Slot</span>
+                <span class="text-[10px] text-[var(--ink-muted)]">restart_lsn, confirmed_flush_lsn</span>
               </div>
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-[var(--ink-muted)] space-y-2 px-2">
+          <div class="text-xs text-[var(--ink-muted)] space-y-2 px-2">
             <DiagramTooltip content="Slot гарантирует сохранение WAL: пока Debezium не подтвердил чтение, PostgreSQL НЕ удалит WAL сегменты. Никаких потерь при crash.">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-emerald-400">+</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-emerald-400">+</span>
                 <span>WAL сохраняется до подтверждения</span>
               </div>
             </DiagramTooltip>
             <DiagramTooltip content="При перезапуске Debezium PostgreSQL сообщает сохранённый restart_lsn. Клиент продолжает с точной позиции.">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-emerald-400">+</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-emerald-400">+</span>
                 <span>Автоматическое возобновление</span>
               </div>
             </DiagramTooltip>
             <DiagramTooltip content="ОПАСНОСТЬ: Если slot забыт (active=false), WAL накапливается бесконечно и переполняет диск. Требуется мониторинг pg_replication_slots!">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-rose-400">!</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-rose-400">!</span>
                 <span>Abandoned slot &rarr; disk full</span>
               </div>
             </DiagramTooltip>
@@ -387,32 +388,32 @@ export function SlotVsBinlogDiagram() {
         color="emerald"
         className="flex-1"
       >
-        <div className="space-y-4">
+        <div class="space-y-4">
           <DiagramTooltip content="MySQL НЕ создаёт server-side объект для CDC. Debezium хранит позицию (GTID или file:offset) в Kafka Connect offsets topic.">
             <FlowNode variant="connector" tabIndex={0}>
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-medium">Kafka Connect Offsets</span>
-                <span className="text-[10px] text-[var(--ink-muted)]">GTID или file:position</span>
+              <div class="flex flex-col items-center">
+                <span class="text-sm font-medium">Kafka Connect Offsets</span>
+                <span class="text-[10px] text-[var(--ink-muted)]">GTID или file:position</span>
               </div>
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="text-xs text-[var(--ink-muted)] space-y-2 px-2">
+          <div class="text-xs text-[var(--ink-muted)] space-y-2 px-2">
             <DiagramTooltip content="Нет server-side state — чище для сервера. Abandoned connector не влияет на MySQL (binlog чистится по расписанию независимо).">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-emerald-400">+</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-emerald-400">+</span>
                 <span>Нет влияния на сервер</span>
               </div>
             </DiagramTooltip>
             <DiagramTooltip content="GTID глобально уникален — при failover Debezium просто переподключается к новому primary с сохранённым GTID.">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-emerald-400">+</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-emerald-400">+</span>
                 <span>Failover проще с GTID</span>
               </div>
             </DiagramTooltip>
             <DiagramTooltip content="КРИТИЧНО: Если Debezium down дольше binlog_expire_logs_seconds (default 7 дней), binlog удаляется. Восстановление невозможно — требуется resnapshot!">
-              <div className="flex items-center gap-2 cursor-help">
-                <span className="text-rose-400">!</span>
+              <div class="flex items-center gap-2 cursor-help">
+                <span class="text-rose-400">!</span>
                 <span>Lag &gt; retention &rarr; resnapshot</span>
               </div>
             </DiagramTooltip>
@@ -430,21 +431,21 @@ export function SlotVsBinlogDiagram() {
  */
 export function CdcReadinessDiagram() {
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div class="flex flex-col lg:flex-row gap-6">
       {/* PostgreSQL Requirements */}
       <DiagramContainer
         title="PostgreSQL CDC Requirements"
         color="blue"
         className="flex-1"
       >
-        <div className="space-y-4">
-          <div className="text-sm text-[var(--ink-default)] mb-3 text-center">
+        <div class="space-y-4">
+          <div class="text-sm text-[var(--ink-default)] mb-3 text-center">
             Обязательные параметры для CDC
           </div>
 
-          <div className="space-y-3">
+          <div class="space-y-3">
             <DiagramTooltip content="КРИТИЧЕСКИ ВАЖНО: wal_level=logical включает запись дополнительных данных в WAL для логического декодирования. Без этого параметра Debezium не сможет подключиться.">
-              <FlowNode variant="sink" tabIndex={0} size="sm" className="border-2 border-blue-400">
+              <FlowNode variant="sink" tabindex={0} size="sm" className="border-2 border-blue-400">
                 wal_level = logical
               </FlowNode>
             </DiagramTooltip>
@@ -462,7 +463,7 @@ export function CdcReadinessDiagram() {
             </DiagramTooltip>
           </div>
 
-          <div className="text-xs text-[var(--ink-subtle)] text-center mt-4">
+          <div class="text-xs text-[var(--ink-subtle)] text-center mt-4">
             После изменения параметров требуется restart PostgreSQL
           </div>
         </div>
@@ -474,14 +475,14 @@ export function CdcReadinessDiagram() {
         color="emerald"
         className="flex-1"
       >
-        <div className="space-y-4">
-          <div className="text-sm text-[var(--ink-default)] mb-3 text-center">
+        <div class="space-y-4">
+          <div class="text-sm text-[var(--ink-default)] mb-3 text-center">
             Обязательные параметры для CDC
           </div>
 
-          <div className="space-y-3">
+          <div class="space-y-3">
             <DiagramTooltip content="КРИТИЧЕСКИ ВАЖНО: binlog_format=ROW записывает row-level изменения. При STATEMENT или MIXED Debezium не сможет корректно захватывать данные.">
-              <FlowNode variant="sink" tabIndex={0} size="sm" className="border-2 border-emerald-400">
+              <FlowNode variant="sink" tabindex={0} size="sm" className="border-2 border-emerald-400">
                 binlog_format = ROW
               </FlowNode>
             </DiagramTooltip>
@@ -499,7 +500,7 @@ export function CdcReadinessDiagram() {
             </DiagramTooltip>
           </div>
 
-          <div className="text-xs text-[var(--ink-subtle)] text-center mt-4">
+          <div class="text-xs text-[var(--ink-subtle)] text-center mt-4">
             Aurora MySQL: настраивается через Parameter Groups
           </div>
         </div>

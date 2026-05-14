@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * WAL Bloat and Heartbeat Diagrams for Module 4 Lesson 05
  *
@@ -127,24 +128,24 @@ export function LowTrafficWalScenarioDiagram() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div class="space-y-6">
       <DiagramContainer title="Low-Traffic Table Scenario" color="rose">
         <SequenceDiagram actors={actors} messages={messages} messageSpacing={45} />
       </DiagramContainer>
 
       {/* Consequences */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <DiagramTooltip content="PostgreSQL в read-only: все write операции блокированы. Приложения падают с ошибками. Critical production incident.">
-          <div className="bg-rose-900/20 border border-rose-500/30 p-4 rounded-lg text-center">
-            <div className="text-rose-400 font-semibold">Database Read-Only</div>
-            <div className="text-xs text-[var(--ink-muted)] mt-1">Production outage</div>
+          <div class="bg-rose-900/20 border border-rose-500/30 p-4 rounded-lg text-center">
+            <div class="text-rose-400 font-semibold">Database Read-Only</div>
+            <div class="text-xs text-[var(--ink-muted)] mt-1">Production outage</div>
           </div>
         </DiagramTooltip>
 
         <DiagramTooltip content="Recovery требует ручного вмешательства: DROP slot, освобождение места, перезапуск. Потенциально часы downtime.">
-          <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-lg text-center">
-            <div className="text-amber-400 font-semibold">Manual Recovery</div>
-            <div className="text-xs text-[var(--ink-muted)] mt-1">Часы downtime</div>
+          <div class="bg-amber-900/20 border border-amber-500/30 p-4 rounded-lg text-center">
+            <div class="text-amber-400 font-semibold">Manual Recovery</div>
+            <div class="text-xs text-[var(--ink-muted)] mt-1">Часы downtime</div>
           </div>
         </DiagramTooltip>
       </div>
@@ -162,20 +163,20 @@ export function MultiLayerDefenseDiagram() {
       color="neutral"
       description="Один слой может отказать - многослойность обеспечивает resilience"
     >
-      <div className="flex flex-col gap-6">
+      <div class="flex flex-col gap-6">
         {/* Threats section */}
-        <div className="flex flex-col items-center">
+        <div class="flex flex-col items-center">
           <DiagramTooltip content="Три основные угрозы WAL bloat: abandoned slot (забытый коннектор), low-traffic table (редкие изменения), slow consumer (Kafka тормозит).">
-            <div className="bg-rose-900/30 border border-rose-500/40 p-4 rounded-xl mb-4">
-              <div className="text-rose-400 font-semibold text-center mb-2">Угрозы</div>
-              <div className="flex flex-wrap gap-2 justify-center">
-                <span className="px-2 py-1 bg-rose-800/30 rounded text-xs text-rose-700">
+            <div class="bg-rose-900/30 border border-rose-500/40 p-4 rounded-xl mb-4">
+              <div class="text-rose-400 font-semibold text-center mb-2">Угрозы</div>
+              <div class="flex flex-wrap gap-2 justify-center">
+                <span class="px-2 py-1 bg-rose-800/30 rounded text-xs text-rose-700">
                   Abandoned Slot
                 </span>
-                <span className="px-2 py-1 bg-rose-800/30 rounded text-xs text-rose-700">
+                <span class="px-2 py-1 bg-rose-800/30 rounded text-xs text-rose-700">
                   Low-Traffic Table
                 </span>
-                <span className="px-2 py-1 bg-rose-800/30 rounded text-xs text-rose-700">
+                <span class="px-2 py-1 bg-rose-800/30 rounded text-xs text-rose-700">
                   Slow Consumer
                 </span>
               </div>
@@ -186,13 +187,13 @@ export function MultiLayerDefenseDiagram() {
         </div>
 
         {/* Defense layers */}
-        <div className="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3">
           {/* Layer 1: max_slot_wal_keep_size */}
           <DiagramTooltip content="Layer 1: max_slot_wal_keep_size - PostgreSQL parameter. Жесткий лимит WAL на slot. При превышении slot инвалидируется (wal_status='lost'). Требует resnapshot, но защищает диск.">
             <FlowNode variant="connector" tabIndex={0} className="bg-emerald-500/20 border-emerald-400/30 w-full max-w-md">
-              <div className="text-sm">
-                <div className="font-semibold text-emerald-700">Layer 1: max_slot_wal_keep_size</div>
-                <div className="text-xs text-emerald-700/70">PostgreSQL parameter - жесткий лимит WAL на slot</div>
+              <div class="text-sm">
+                <div class="font-semibold text-emerald-700">Layer 1: max_slot_wal_keep_size</div>
+                <div class="text-xs text-emerald-700/70">PostgreSQL parameter - жесткий лимит WAL на slot</div>
               </div>
             </FlowNode>
           </DiagramTooltip>
@@ -202,9 +203,9 @@ export function MultiLayerDefenseDiagram() {
           {/* Layer 2: Heartbeat */}
           <DiagramTooltip content="Layer 2: Heartbeat - Debezium configuration. Принудительное продвижение slot каждые 10 секунд через pg_logical_emit_message(). Предотвращает застой позиции.">
             <FlowNode variant="sink" tabIndex={0} className="bg-blue-500/20 border-blue-400/30 w-full max-w-md">
-              <div className="text-sm">
-                <div className="font-semibold text-blue-700">Layer 2: Heartbeat Events</div>
-                <div className="text-xs text-blue-700/70">Debezium config - принудительное продвижение slot</div>
+              <div class="text-sm">
+                <div class="font-semibold text-blue-700">Layer 2: Heartbeat Events</div>
+                <div class="text-xs text-blue-700/70">Debezium config - принудительное продвижение slot</div>
               </div>
             </FlowNode>
           </DiagramTooltip>
@@ -214,9 +215,9 @@ export function MultiLayerDefenseDiagram() {
           {/* Layer 3: Monitoring */}
           <DiagramTooltip content="Layer 3: Monitoring - pg_replication_slots мониторинг. Алерты на retained_wal > threshold и wal_status != 'reserved'. Раннее обнаружение проблем.">
             <FlowNode variant="connector" tabIndex={0} className="bg-amber-500/20 border-amber-400/30 w-full max-w-md">
-              <div className="text-sm">
-                <div className="font-semibold text-amber-700">Layer 3: Monitoring & Alerting</div>
-                <div className="text-xs text-amber-700/70">pg_replication_slots - алерты на lag и wal_status</div>
+              <div class="text-sm">
+                <div class="font-semibold text-amber-700">Layer 3: Monitoring & Alerting</div>
+                <div class="text-xs text-amber-700/70">pg_replication_slots - алерты на lag и wal_status</div>
               </div>
             </FlowNode>
           </DiagramTooltip>
@@ -226,9 +227,9 @@ export function MultiLayerDefenseDiagram() {
           {/* Layer 4: Runbooks */}
           <DiagramTooltip content="Layer 4: Runbooks - операционные процедуры. Документированные чеклисты для реагирования на инциденты. Human can intervene когда автоматика не справляется.">
             <FlowNode variant="database" tabIndex={0} className="bg-purple-500/20 border-purple-400/30 w-full max-w-md">
-              <div className="text-sm">
-                <div className="font-semibold text-purple-700">Layer 4: Runbooks & Procedures</div>
-                <div className="text-xs text-purple-700/70">Операционные процедуры - чеклисты реагирования</div>
+              <div class="text-sm">
+                <div class="font-semibold text-purple-700">Layer 4: Runbooks & Procedures</div>
+                <div class="text-xs text-purple-700/70">Операционные процедуры - чеклисты реагирования</div>
               </div>
             </FlowNode>
           </DiagramTooltip>
@@ -237,8 +238,8 @@ export function MultiLayerDefenseDiagram() {
 
           {/* Protected */}
           <DiagramTooltip content="Результат многослойной защиты: WAL bloat предотвращен или быстро обнаружен. Production стабилен.">
-            <div className="bg-emerald-900/30 border border-emerald-500/40 p-4 rounded-xl">
-              <div className="text-emerald-400 font-semibold text-center">Protected</div>
+            <div class="bg-emerald-900/30 border border-emerald-500/40 p-4 rounded-xl">
+              <div class="text-emerald-400 font-semibold text-center">Protected</div>
             </div>
           </DiagramTooltip>
         </div>
@@ -257,13 +258,13 @@ export function HeartbeatFlowDiagram() {
       color="blue"
       description="pg_logical_emit_message() - рекомендуемый подход для PostgreSQL 14+"
     >
-      <div className="flex items-center justify-center gap-3 flex-wrap">
+      <div class="flex items-center justify-center gap-3 flex-wrap">
         {/* Debezium Timer */}
         <DiagramTooltip content="Heartbeat Timer: Debezium выполняет heartbeat.action.query каждые heartbeat.interval.ms (рекомендуется 10 секунд).">
           <FlowNode variant="connector" tabIndex={0} size="sm" className="bg-amber-500/20 border-amber-400/30">
-            <div className="text-xs">
+            <div class="text-xs">
               <div>Debezium</div>
-              <div className="text-amber-700/70">Timer 10s</div>
+              <div class="text-amber-700/70">Timer 10s</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -273,7 +274,7 @@ export function HeartbeatFlowDiagram() {
         {/* pg_logical_emit_message */}
         <DiagramTooltip content="pg_logical_emit_message(false, 'heartbeat', now()): функция PostgreSQL 14+. Записывает logical message в WAL без таблицы. Минимальная нагрузка.">
           <FlowNode variant="database" tabIndex={0} size="sm">
-            <div className="text-xs">
+            <div class="text-xs">
               <div>pg_logical_</div>
               <div>emit_message()</div>
             </div>
@@ -285,9 +286,9 @@ export function HeartbeatFlowDiagram() {
         {/* WAL */}
         <DiagramTooltip content="WAL получает heartbeat event как logical message. Это легковесная запись без блокировок таблиц.">
           <FlowNode variant="sink" tabIndex={0} size="sm">
-            <div className="text-xs">
+            <div class="text-xs">
               <div>WAL</div>
-              <div className="text-blue-700/70">logical msg</div>
+              <div class="text-blue-700/70">logical msg</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -297,9 +298,9 @@ export function HeartbeatFlowDiagram() {
         {/* Slot */}
         <DiagramTooltip content="Debezium читает heartbeat event через replication slot. restart_lsn ПРОДВИГАЕТСЯ на текущую позицию. Старый WAL можно удалить.">
           <FlowNode variant="connector" tabIndex={0} size="sm">
-            <div className="text-xs">
+            <div class="text-xs">
               <div>Slot</div>
-              <div className="text-emerald-700/70">restart_lsn++</div>
+              <div class="text-emerald-700/70">restart_lsn++</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -309,27 +310,27 @@ export function HeartbeatFlowDiagram() {
         {/* Kafka */}
         <DiagramTooltip content="Heartbeat event отправляется в __debezium-heartbeat.prefix topic в Kafka. Offset обновлен, позиция свежая.">
           <FlowNode variant="cluster" tabIndex={0} size="sm">
-            <div className="text-xs">
+            <div class="text-xs">
               <div>Kafka</div>
-              <div className="text-emerald-700/70">heartbeat topic</div>
+              <div class="text-emerald-700/70">heartbeat topic</div>
             </div>
           </FlowNode>
         </DiagramTooltip>
       </div>
 
       {/* Result */}
-      <div className="mt-6 flex flex-col md:flex-row gap-4 justify-center">
+      <div class="mt-6 flex flex-col md:flex-row gap-4 justify-center">
         <DiagramTooltip content="Slot продвигается даже без изменений в мониторируемых таблицах. WAL bloat предотвращен.">
-          <div className="bg-emerald-900/20 border border-emerald-500/30 p-3 rounded-lg text-center">
-            <div className="text-emerald-400 font-semibold text-sm">Slot продвигается</div>
-            <div className="text-xs text-[var(--ink-muted)] mt-1">даже без изменений в таблицах</div>
+          <div class="bg-emerald-900/20 border border-emerald-500/30 p-3 rounded-lg text-center">
+            <div class="text-emerald-400 font-semibold text-sm">Slot продвигается</div>
+            <div class="text-xs text-[var(--ink-muted)] mt-1">даже без изменений в таблицах</div>
           </div>
         </DiagramTooltip>
 
         <DiagramTooltip content="Старые WAL сегменты удаляются автоматически. Disk space стабилен. Production защищен.">
-          <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg text-center">
-            <div className="text-blue-400 font-semibold text-sm">Старый WAL удаляется</div>
-            <div className="text-xs text-[var(--ink-muted)] mt-1">disk space стабилен</div>
+          <div class="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg text-center">
+            <div class="text-blue-400 font-semibold text-sm">Старый WAL удаляется</div>
+            <div class="text-xs text-[var(--ink-muted)] mt-1">disk space стабилен</div>
           </div>
         </DiagramTooltip>
       </div>

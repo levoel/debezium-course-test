@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Monitoring Diagrams for Module 7 Lesson 06
  *
@@ -23,9 +24,9 @@ export function MonitoringComponentsDiagram() {
       color="rose"
       description="End-to-end observability для CDC pipeline"
     >
-      <div className="space-y-4">
+      <div class="space-y-4">
         {/* Pipeline flow */}
-        <div className="flex flex-wrap items-center justify-center gap-2">
+        <div class="flex flex-wrap items-center justify-center gap-2">
           <DiagramTooltip content="Cloud SQL CPU, Disk, Replication lag">
             <FlowNode variant="gcp-database" size="sm" tabIndex={0}>Cloud SQL</FlowNode>
           </DiagramTooltip>
@@ -48,7 +49,7 @@ export function MonitoringComponentsDiagram() {
         </div>
 
         {/* Monitoring layer */}
-        <div className="flex items-center justify-center gap-2 pt-3 border-t border-[var(--line-thin)]">
+        <div class="flex items-center justify-center gap-2 pt-3 border-t border-[var(--line-thin)]">
           <FlowNode variant="gcp-monitoring" size="sm" tabIndex={0}>Cloud Monitoring</FlowNode>
           <Arrow direction="right" />
           <FlowNode variant="app" size="sm" tabIndex={0}>Unified Dashboard</FlowNode>
@@ -70,10 +71,10 @@ export function MonitoringPointsHierarchyDiagram() {
       color="amber"
       description="Ключевые метрики для каждого сервиса CDC pipeline"
     >
-      <div className="grid md:grid-cols-3 gap-4">
+      <div class="grid md:grid-cols-3 gap-4">
         {/* Cloud SQL Metrics */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-purple-700">Cloud SQL</h3>
+        <div class="space-y-2">
+          <h3 class="text-sm font-semibold text-purple-700">Cloud SQL</h3>
           <DiagramTooltip content="CPU utilization > 80% → scale up instance tier">
             <FlowNode variant="gcp-monitoring" size="sm" tabIndex={0}>
               CPU/Memory
@@ -92,8 +93,8 @@ export function MonitoringPointsHierarchyDiagram() {
         </div>
 
         {/* Debezium Metrics */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-emerald-700">Debezium Server</h3>
+        <div class="space-y-2">
+          <h3 class="text-sm font-semibold text-emerald-700">Debezium Server</h3>
           <DiagramTooltip content="MilliSecondsBehindSource > 60000 → alert">
             <FlowNode variant="gcp-monitoring" size="sm" tabIndex={0}>
               System Lag
@@ -112,8 +113,8 @@ export function MonitoringPointsHierarchyDiagram() {
         </div>
 
         {/* Pub/Sub Metrics */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-amber-700">Pub/Sub</h3>
+        <div class="space-y-2">
+          <h3 class="text-sm font-semibold text-amber-700">Pub/Sub</h3>
           <DiagramTooltip content="oldest_unacked_message_age > 300s → consumer lag">
             <FlowNode variant="gcp-monitoring" size="sm" tabIndex={0}>
               Message Age
@@ -132,7 +133,7 @@ export function MonitoringPointsHierarchyDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-amber-700/70">
+      <div class="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-amber-700/70">
         <p>System lag — ключевая метрика для real-time CDC (задержка обработки)</p>
       </div>
     </DiagramContainer>
@@ -149,11 +150,11 @@ export function AlertFlowDiagram() {
       color="rose"
       description="Иерархия алертов от Warning до Critical"
     >
-      <div className="space-y-4">
+      <div class="space-y-4">
         {/* Critical Alerts */}
         <DiagramContainer title="Critical (P0)" color="rose">
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center gap-2">
+          <div class="space-y-2 text-xs">
+            <div class="flex items-center gap-2">
               <DiagramTooltip content="Replication slot lag > 10GB → WAL bloat риск">
                 <FlowNode variant="gcp-monitoring" size="sm" className="border-rose-500" tabIndex={0}>
                   Cloud SQL Lag
@@ -162,7 +163,7 @@ export function AlertFlowDiagram() {
               <Arrow direction="right" />
               <FlowNode variant="app" size="sm" tabIndex={0}>PagerDuty</FlowNode>
             </div>
-            <div className="flex items-center gap-2">
+            <div class="flex items-center gap-2">
               <DiagramTooltip content="Debezium system lag > 5 минут">
                 <FlowNode variant="gcp-monitoring" size="sm" className="border-rose-500" tabIndex={0}>
                   Debezium Lag
@@ -176,8 +177,8 @@ export function AlertFlowDiagram() {
 
         {/* Warning Alerts */}
         <DiagramContainer title="Warning (P1)" color="amber">
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center gap-2">
+          <div class="space-y-2 text-xs">
+            <div class="flex items-center gap-2">
               <DiagramTooltip content="Pub/Sub oldest unacked message age > 5 минут">
                 <FlowNode variant="gcp-monitoring" size="sm" className="border-amber-500" tabIndex={0}>
                   Pub/Sub Age
@@ -186,7 +187,7 @@ export function AlertFlowDiagram() {
               <Arrow direction="right" />
               <FlowNode variant="app" size="sm" tabIndex={0}>Slack</FlowNode>
             </div>
-            <div className="flex items-center gap-2">
+            <div class="flex items-center gap-2">
               <DiagramTooltip content="Dataflow worker CPU > 80%">
                 <FlowNode variant="gcp-monitoring" size="sm" className="border-amber-500" tabIndex={0}>
                   Worker CPU
@@ -200,8 +201,8 @@ export function AlertFlowDiagram() {
 
         {/* Info Alerts */}
         <DiagramContainer title="Info (P2)" color="blue">
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center gap-2">
+          <div class="space-y-2 text-xs">
+            <div class="flex items-center gap-2">
               <DiagramTooltip content="Debezium snapshot started">
                 <FlowNode variant="gcp-monitoring" size="sm" className="border-blue-500" tabIndex={0}>
                   Snapshot Event
@@ -214,9 +215,9 @@ export function AlertFlowDiagram() {
         </DiagramContainer>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-rose-700/70">
-        <p className="font-semibold mb-1">Alert thresholds:</p>
-        <ul className="space-y-1">
+      <div class="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-rose-700/70">
+        <p class="font-semibold mb-1">Alert thresholds:</p>
+        <ul class="space-y-1">
           <li>• Critical: immediate action required (page on-call)</li>
           <li>• Warning: investigate within 1 hour (Slack notification)</li>
           <li>• Info: awareness only (email digest)</li>
@@ -269,13 +270,13 @@ export function CdcDashboardStructureDiagram() {
 
   return (
     <DiagramContainer title="CDC Pipeline Health Dashboard" color="blue">
-      <div className="space-y-3">
+      <div class="space-y-3">
         {rows.map((row) => (
-          <div key={row.label} className={`rounded-lg border p-3 ${colorMap[row.color]}`}>
-            <div className="text-xs font-semibold text-[var(--ink-default)] mb-2">{row.label}</div>
-            <div className="flex flex-wrap gap-2">
+          <div class={`rounded-lg border p-3 ${colorMap[row.color]}`}>
+            <div class="text-xs font-semibold text-[var(--ink-default)] mb-2">{row.label}</div>
+            <div class="flex flex-wrap gap-2">
               {row.widgets.map((w) => (
-                <span key={w} className="text-[11px] text-[var(--ink-muted)] px-2 py-1 rounded bg-[var(--bg-surface)] border border-[var(--line-thin)]">
+                <span class="text-[11px] text-[var(--ink-muted)] px-2 py-1 rounded bg-[var(--bg-surface)] border border-[var(--line-thin)]">
                   {w}
                 </span>
               ))}

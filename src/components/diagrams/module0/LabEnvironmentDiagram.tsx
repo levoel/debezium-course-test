@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Lab Environment Diagram (Module 0)
  *
@@ -12,31 +13,31 @@ import { DiagramTooltip } from '@primitives/Tooltip';
 export function DockerComposeStackDiagram() {
   return (
     <DiagramContainer title="Docker Compose" color="blue">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Row 1 */}
         <DiagramTooltip content="Основная база данных с wal_level=logical для CDC. Используется Debezium PostgreSQL коннектором.">
           <FlowNode variant="database" tabIndex={0}>
-            <div className="flex flex-col items-center">
-              <span className="font-medium">PostgreSQL</span>
-              <span className="text-xs opacity-75">:5432</span>
+            <div class="flex flex-col items-center">
+              <span class="font-medium">PostgreSQL</span>
+              <span class="text-xs opacity-75">:5432</span>
             </div>
           </FlowNode>
         </DiagramTooltip>
 
         <DiagramTooltip content="Apache Kafka в KRaft режиме. Хранит CDC-события и internal топики Kafka Connect.">
           <FlowNode variant="cluster" tabIndex={0}>
-            <div className="flex flex-col items-center">
-              <span className="font-medium">Kafka</span>
-              <span className="text-xs opacity-75">:9092</span>
+            <div class="flex flex-col items-center">
+              <span class="font-medium">Kafka</span>
+              <span class="text-xs opacity-75">:9092</span>
             </div>
           </FlowNode>
         </DiagramTooltip>
 
         <DiagramTooltip content="Kafka Connect с установленным Debezium коннектором. REST API для управления.">
           <FlowNode variant="connector" tabIndex={0}>
-            <div className="flex flex-col items-center">
-              <span className="font-medium">Debezium</span>
-              <span className="text-xs opacity-75">Connect :8083</span>
+            <div class="flex flex-col items-center">
+              <span class="font-medium">Debezium</span>
+              <span class="text-xs opacity-75">Connect :8083</span>
             </div>
           </FlowNode>
         </DiagramTooltip>
@@ -44,27 +45,27 @@ export function DockerComposeStackDiagram() {
         {/* Row 2 */}
         <DiagramTooltip content="Вторая база данных для Module 3. binlog_format=ROW для MySQL CDC.">
           <FlowNode variant="database" tabIndex={0}>
-            <div className="flex flex-col items-center">
-              <span className="font-medium">MySQL</span>
-              <span className="text-xs opacity-75">:3307</span>
+            <div class="flex flex-col items-center">
+              <span class="font-medium">MySQL</span>
+              <span class="text-xs opacity-75">:3307</span>
             </div>
           </FlowNode>
         </DiagramTooltip>
 
         <DiagramTooltip content="Confluent Schema Registry. Хранит Avro/JSON схемы для эволюции структуры событий.">
           <FlowNode variant="sink" tabIndex={0}>
-            <div className="flex flex-col items-center">
-              <span className="font-medium">Schema Registry</span>
-              <span className="text-xs opacity-75">:8081</span>
+            <div class="flex flex-col items-center">
+              <span class="font-medium">Schema Registry</span>
+              <span class="text-xs opacity-75">:8081</span>
             </div>
           </FlowNode>
         </DiagramTooltip>
 
         <DiagramTooltip content="Prometheus собирает метрики, Grafana визуализирует дашборды мониторинга CDC pipeline.">
           <FlowNode variant="app" tabIndex={0}>
-            <div className="flex flex-col items-center">
-              <span className="font-medium">Prometheus</span>
-              <span className="text-xs opacity-75">+ Grafana</span>
+            <div class="flex flex-col items-center">
+              <span class="font-medium">Prometheus</span>
+              <span class="text-xs opacity-75">+ Grafana</span>
             </div>
           </FlowNode>
         </DiagramTooltip>

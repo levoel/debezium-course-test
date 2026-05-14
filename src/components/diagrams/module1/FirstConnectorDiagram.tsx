@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * FirstConnectorDiagram - Connector data flow sequence diagram
  *
@@ -91,7 +92,7 @@ export function FirstConnectorDiagram() {
   ];
 
   return (
-    <div className="w-full">
+    <div class="w-full">
       <SequenceDiagram
         actors={actors}
         messages={messages}

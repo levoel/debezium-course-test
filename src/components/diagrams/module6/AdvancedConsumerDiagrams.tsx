@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Advanced Consumer Diagrams
  *
@@ -17,7 +18,7 @@ import { SequenceDiagram } from '@primitives/SequenceDiagram';
  */
 export function AtLeastOnceVsExactlyOnceDiagram() {
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div class="flex flex-col lg:flex-row gap-6">
       {/* At-Least-Once flow */}
       <DiagramContainer
         title="At-Least-Once"
@@ -25,12 +26,12 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
         className="flex-1"
         description="Commit offset после обработки"
       >
-        <div className="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3">
           <DiagramTooltip
             content={
               <div>
                 <strong>Получить сообщение</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Consumer вызывает poll() и получает сообщение из Kafka.
                 </p>
               </div>
@@ -47,7 +48,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             content={
               <div>
                 <strong>Обработать</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Приложение обрабатывает сообщение (запись в БД, вызов API, трансформация).
                 </p>
               </div>
@@ -64,7 +65,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             content={
               <div>
                 <strong>Commit offset</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   После успешной обработки сохраняется offset через store_offsets().
                   Автоматический commit происходит в фоне.
                 </p>
@@ -82,7 +83,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             content={
               <div>
                 <strong>Точка сбоя</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Если crash происходит до commit offset, сообщение будет обработано повторно.
                   Если crash после commit, сообщение не будет потеряно.
                 </p>
@@ -94,15 +95,15 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="flex gap-6 mt-2">
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-xs font-semibold text-rose-400">До commit</div>
+          <div class="flex gap-6 mt-2">
+            <div class="flex flex-col items-center gap-2">
+              <div class="text-xs font-semibold text-rose-400">До commit</div>
               <Arrow direction="down" />
               <DiagramTooltip
                 content={
                   <div>
                     <strong>Повторная обработка</strong>
-                    <p className="mt-1">
+                    <p class="mt-1">
                       При перезапуске consumer повторит обработку сообщения с последнего
                       сохраненного offset. Требуется идемпотентная обработка на стороне приложения.
                     </p>
@@ -120,14 +121,14 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
               </DiagramTooltip>
             </div>
 
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-xs font-semibold text-emerald-400">После commit</div>
+            <div class="flex flex-col items-center gap-2">
+              <div class="text-xs font-semibold text-emerald-400">После commit</div>
               <Arrow direction="down" />
               <DiagramTooltip
                 content={
                   <div>
                     <strong>OK</strong>
-                    <p className="mt-1">
+                    <p class="mt-1">
                       Offset сохранен. При перезапуске consumer продолжит со следующего сообщения.
                       Данные не потеряны.
                     </p>
@@ -156,12 +157,12 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
         className="flex-1"
         description="Транзакционный API для атомарности"
       >
-        <div className="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3">
           <DiagramTooltip
             content={
               <div>
                 <strong>Получить сообщение</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Consumer читает сообщение с isolation.level=read_committed.
                   Видны только committed транзакции.
                 </p>
@@ -179,7 +180,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             content={
               <div>
                 <strong>Begin Transaction</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Producer вызывает begin_transaction(). Все дальнейшие операции
                   выполняются в рамках одной транзакции.
                 </p>
@@ -197,7 +198,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             content={
               <div>
                 <strong>Обработать</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Трансформация данных внутри транзакционного контекста.
                   При ошибке вся транзакция будет отменена.
                 </p>
@@ -215,7 +216,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             content={
               <div>
                 <strong>Produce результат</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Producer.produce() записывает результат в output topic.
                   Запись не видна другим consumer до commit транзакции.
                 </p>
@@ -233,7 +234,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             content={
               <div>
                 <strong>Commit offset в транзакции</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   send_offsets_to_transaction() добавляет offset commit в текущую транзакцию.
                   Offset будет сохранен только при успешном commit транзакции.
                 </p>
@@ -251,7 +252,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             content={
               <div>
                 <strong>Commit Transaction</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   commit_transaction() атомарно применяет все операции: обработка + produce + offset commit.
                   Либо всё выполнилось, либо ничего.
                 </p>
@@ -269,7 +270,7 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             content={
               <div>
                 <strong>Точка сбоя</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   При crash до commit транзакции вся транзакция будет отменена.
                   После commit гарантируется exactly-once семантика.
                 </p>
@@ -281,15 +282,15 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="flex gap-6 mt-2">
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-xs font-semibold text-rose-400">До commit</div>
+          <div class="flex gap-6 mt-2">
+            <div class="flex flex-col items-center gap-2">
+              <div class="text-xs font-semibold text-rose-400">До commit</div>
               <Arrow direction="down" />
               <DiagramTooltip
                 content={
                   <div>
                     <strong>Rollback всей транзакции</strong>
-                    <p className="mt-1">
+                    <p class="mt-1">
                       Kafka автоматически отменяет незавершенную транзакцию (abort_transaction).
                       Produce и offset commit отменены. При перезапуске сообщение обработается заново.
                     </p>
@@ -307,14 +308,14 @@ export function AtLeastOnceVsExactlyOnceDiagram() {
               </DiagramTooltip>
             </div>
 
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-xs font-semibold text-emerald-400">После commit</div>
+            <div class="flex flex-col items-center gap-2">
+              <div class="text-xs font-semibold text-emerald-400">После commit</div>
               <Arrow direction="down" />
               <DiagramTooltip
                 content={
                   <div>
                     <strong>OK атомарно</strong>
-                    <p className="mt-1">
+                    <p class="mt-1">
                       Транзакция успешно завершена. Результат записан в output topic,
                       offset сохранен. Гарантируется exactly-once: нет дубликатов, нет потери данных.
                     </p>
@@ -431,9 +432,9 @@ export function RebalancingSequenceDiagram() {
         ]}
         messageSpacing={55}
       />
-      <div className="mt-4 text-xs text-[var(--ink-muted)]">
-        <div className="font-semibold text-amber-400 mb-2">Решение проблемы:</div>
-        <ul className="list-disc list-inside space-y-1">
+      <div class="mt-4 text-xs text-[var(--ink-muted)]">
+        <div class="font-semibold text-amber-400 mb-2">Решение проблемы:</div>
+        <ul class="list-disc list-inside space-y-1">
           <li>Уменьшите max.poll.records (меньше сообщений за один poll)</li>
           <li>Увеличьте max.poll.interval.ms (больше времени на обработку)</li>
           <li>Оптимизируйте обработку (уменьшите время на сообщение)</li>

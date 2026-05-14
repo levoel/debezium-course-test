@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * CDC Fundamentals Diagrams
  *
@@ -18,14 +19,14 @@ import type { SequenceActorDef, SequenceMessageDef } from '@primitives/types';
  */
 export function CdcComparisonDiagram() {
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div class="flex flex-col lg:flex-row gap-6">
       {/* Polling Approach */}
       <DiagramContainer
         title="Подход через Polling"
         color="rose"
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           {/* APP */}
           <DiagramTooltip content="Приложение периодически опрашивает базу данных для поиска изменений. Этот подход создает постоянную нагрузку на БД и может пропускать быстрые изменения между интервалами опроса.">
             <FlowNode variant="app" tabIndex={0}>
@@ -45,7 +46,7 @@ export function CdcComparisonDiagram() {
           <Arrow direction="up" label="ResultSet" />
 
           {/* Back to APP */}
-          <div className="text-xs text-[var(--ink-muted)] text-center">
+          <div class="text-xs text-[var(--ink-muted)] text-center">
             ↑ Обработка в приложении
           </div>
         </div>
@@ -57,7 +58,7 @@ export function CdcComparisonDiagram() {
         color="emerald"
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           {/* APP */}
           <DiagramTooltip content="Приложение записывает данные в базу как обычно, не зная о CDC. Все изменения автоматически попадают в Kafka через Debezium без дополнительного кода.">
             <FlowNode variant="app" tabIndex={0}>
@@ -223,7 +224,7 @@ export function CdcSequenceDiagram() {
   ];
 
   return (
-    <div className="w-full">
+    <div class="w-full">
       <SequenceDiagram
         actors={actors}
         messages={messages}

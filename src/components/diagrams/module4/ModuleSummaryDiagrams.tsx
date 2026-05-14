@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Module Summary Diagrams (Module 4)
  *
@@ -51,22 +52,22 @@ export function DiagnosticTreeDiagram() {
 
   return (
     <DiagramContainer title="Диагностика: High Lag" color="rose">
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         {/* Root */}
         <FlowNode variant="target" tabIndex={0} className="border-2 border-rose-400">
-          <span className="font-semibold">High lag?</span>
+          <span class="font-semibold">High lag?</span>
         </FlowNode>
 
         {/* Branches */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
           {branches.map((b) => (
-            <DiagramTooltip key={b.question} content={b.tooltip}>
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--line-thin)] cursor-help">
+            <DiagramTooltip content={b.tooltip}>
+              <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--line-thin)] cursor-help">
                 <FlowNode variant={variantMap[b.color]} tabIndex={0} size="sm">
                   {b.question}
                 </FlowNode>
                 <Arrow direction="right" />
-                <span className="text-xs text-[var(--ink-default)] shrink-0">{b.action}</span>
+                <span class="text-xs text-[var(--ink-default)] shrink-0">{b.action}</span>
               </div>
             </DiagramTooltip>
           ))}

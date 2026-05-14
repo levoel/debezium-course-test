@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Cloud Run Event-Driven Diagrams for Module 7 Lesson 05
  *
@@ -24,7 +25,7 @@ export function PubSubEventarcCloudRunDiagram() {
       color="emerald"
       description="Serverless event-driven обработка CDC событий"
     >
-      <div className="flex flex-col md:flex-row items-center justify-center gap-3">
+      <div class="flex flex-col md:flex-row items-center justify-center gap-3">
         <DiagramTooltip content="Debezium Server публикует CDC события в Pub/Sub topics">
           <FlowNode variant="connector" tabIndex={0}>
             Debezium<br/>Server
@@ -44,9 +45,9 @@ export function PubSubEventarcCloudRunDiagram() {
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">Eventarc Trigger</p>
-              <p className="text-sm">Связывает Pub/Sub топик с Cloud Run сервисом автоматически</p>
-              <p className="text-sm mt-1">Filter: event type, source, attributes</p>
+              <p class="font-semibold mb-1">Eventarc Trigger</p>
+              <p class="text-sm">Связывает Pub/Sub топик с Cloud Run сервисом автоматически</p>
+              <p class="text-sm mt-1">Filter: event type, source, attributes</p>
             </div>
           }
         >
@@ -60,10 +61,10 @@ export function PubSubEventarcCloudRunDiagram() {
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">Cloud Run Service</p>
-              <p className="text-sm">Serverless контейнер с auto-scaling</p>
-              <p className="text-sm mt-1">Scale to zero при отсутствии трафика</p>
-              <p className="text-sm mt-1">Concurrency: 80 requests/container</p>
+              <p class="font-semibold mb-1">Cloud Run Service</p>
+              <p class="text-sm">Serverless контейнер с auto-scaling</p>
+              <p class="text-sm mt-1">Scale to zero при отсутствии трафика</p>
+              <p class="text-sm mt-1">Concurrency: 80 requests/container</p>
             </div>
           }
         >
@@ -73,9 +74,9 @@ export function PubSubEventarcCloudRunDiagram() {
         </DiagramTooltip>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-emerald-700/70">
+      <div class="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-emerald-700/70">
         <p>Pub/Sub base64-кодирует данные в message.data — нужно декодировать → JSON</p>
-        <p className="mt-1">min-instances=0 позволяет scale to zero (cost optimization)</p>
+        <p class="mt-1">min-instances=0 позволяет scale to zero (cost optimization)</p>
       </div>
     </DiagramContainer>
   );
@@ -169,9 +170,9 @@ export function AutoScalingBehaviorSequence() {
         messageSpacing={45}
       />
 
-      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-amber-700/70">
+      <div class="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-amber-700/70">
         <p>Cloud Run масштабируется автоматически на основе:</p>
-        <ul className="mt-1 space-y-1">
+        <ul class="mt-1 space-y-1">
           <li>• Concurrency: requests на контейнер (default: 80)</li>
           <li>• CPU/Memory utilization (если указаны в конфигурации)</li>
         </ul>
@@ -305,14 +306,14 @@ export function EndToEndEventProcessingSequence() {
         messageSpacing={50}
       />
 
-      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-purple-700/70">
-        <p className="font-semibold mb-1">Latency breakdown (typical):</p>
-        <ul className="space-y-1">
+      <div class="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-purple-700/70">
+        <p class="font-semibold mb-1">Latency breakdown (typical):</p>
+        <ul class="space-y-1">
           <li>• Cloud SQL → Debezium: 100-500ms (WAL polling interval)</li>
           <li>• Debezium → Pub/Sub: 10-50ms (network latency)</li>
           <li>• Pub/Sub → Cloud Run: 50-200ms (cold start если scale from zero)</li>
           <li>• Cloud Run → External API: depends on API (50-500ms)</li>
-          <li>• <span className="font-semibold">Total: ~500-2000ms end-to-end</span></li>
+          <li>• <span class="font-semibold">Total: ~500-2000ms end-to-end</span></li>
         </ul>
       </div>
     </DiagramContainer>
@@ -333,12 +334,12 @@ export function CloudRunProjectStructureDiagram() {
 
   return (
     <DiagramContainer title="cdc-processor/" color="blue">
-      <div className="space-y-1.5">
+      <div class="space-y-1.5">
         {files.map((f) => (
-          <div key={f.name} className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--line-thin)]">
-            <span className="select-none">{f.icon}</span>
-            <span className="text-sm text-[var(--ink-default)] font-mono">{f.name}</span>
-            <span className="text-xs text-[var(--ink-subtle)] ml-auto">{f.desc}</span>
+          <div class="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--line-thin)]">
+            <span class="select-none">{f.icon}</span>
+            <span class="text-sm text-[var(--ink-default)] font-mono">{f.name}</span>
+            <span class="text-xs text-[var(--ink-subtle)] ml-auto">{f.desc}</span>
           </div>
         ))}
       </div>

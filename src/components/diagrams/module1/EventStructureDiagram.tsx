@@ -1,3 +1,5 @@
+/** @jsxImportSource solid-js */
+import type { JSX } from 'solid-js';
 /**
  * EventStructureDiagram - Operation types and event structure diagrams
  *
@@ -16,13 +18,13 @@ import { DiagramTooltip } from '@primitives/Tooltip';
  */
 export function OperationTypesDiagram() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* r - snapshot */}
       <DiagramContainer title="r (snapshot)" color="emerald" className="py-6">
         <DiagramTooltip content="Read операция при начальном snapshot. Debezium читает существующие записи при первом запуске. Поле source.snapshot='true'.">
-          <div className="flex items-center justify-center gap-3" tabIndex={0}>
+          <div class="flex items-center justify-center gap-3" tabindex={0}>
             <FlowNode variant="sink" size="sm">
-              <span className="text-[var(--ink-muted)]">null</span>
+              <span class="text-[var(--ink-muted)]">null</span>
             </FlowNode>
             <Arrow direction="right" />
             <FlowNode variant="database" size="sm">
@@ -35,9 +37,9 @@ export function OperationTypesDiagram() {
       {/* c - create */}
       <DiagramContainer title="c (create)" color="blue" className="py-6">
         <DiagramTooltip content="INSERT операция. Новая запись добавлена в таблицу. Поле before=null, данные в after.">
-          <div className="flex items-center justify-center gap-3" tabIndex={0}>
+          <div class="flex items-center justify-center gap-3" tabindex={0}>
             <FlowNode variant="sink" size="sm">
-              <span className="text-[var(--ink-muted)]">null</span>
+              <span class="text-[var(--ink-muted)]">null</span>
             </FlowNode>
             <Arrow direction="right" />
             <FlowNode variant="connector" size="sm">
@@ -50,7 +52,7 @@ export function OperationTypesDiagram() {
       {/* u - update */}
       <DiagramContainer title="u (update)" color="amber" className="py-6">
         <DiagramTooltip content="UPDATE операция. Изменение существующей записи. Оба поля before и after заполнены для сравнения.">
-          <div className="flex items-center justify-center gap-3" tabIndex={0}>
+          <div class="flex items-center justify-center gap-3" tabindex={0}>
             <FlowNode variant="cluster" size="sm">
               старое
             </FlowNode>
@@ -65,13 +67,13 @@ export function OperationTypesDiagram() {
       {/* d - delete */}
       <DiagramContainer title="d (delete)" color="rose" className="py-6">
         <DiagramTooltip content="DELETE операция. Запись удалена. Поле after=null, удаленные данные в before для аудита.">
-          <div className="flex items-center justify-center gap-3" tabIndex={0}>
+          <div class="flex items-center justify-center gap-3" tabindex={0}>
             <FlowNode variant="app" size="sm">
               данные
             </FlowNode>
             <Arrow direction="right" />
             <FlowNode variant="sink" size="sm">
-              <span className="text-[var(--ink-muted)]">null</span>
+              <span class="text-[var(--ink-muted)]">null</span>
             </FlowNode>
           </div>
         </DiagramTooltip>
@@ -85,8 +87,8 @@ export function OperationTypesDiagram() {
  */
 function TreeLine({ isLast = false }: { isLast?: boolean }) {
   return (
-    <div className="flex items-center justify-center w-6 mr-1">
-      <svg width="24" height="24" viewBox="0 0 24 24" className="text-[var(--ink-subtle)]/70">
+    <div class="flex items-center justify-center w-6 mr-1">
+      <svg width="24" height="24" viewBox="0 0 24 24" class="text-[var(--ink-subtle)]/70">
         {/* Vertical line (full height if not last, half if last) */}
         <line
           x1="12"
@@ -110,13 +112,13 @@ function TreeBranch({
   children,
   isLast = false,
 }: {
-  children: React.ReactNode;
+  children: JSX.Element;
   isLast?: boolean;
 }) {
   return (
-    <div className="flex items-start">
+    <div class="flex items-start">
       <TreeLine isLast={isLast} />
-      <div className="flex-1 py-0.5">{children}</div>
+      <div class="flex-1 py-0.5">{children}</div>
     </div>
   );
 }
@@ -124,9 +126,9 @@ function TreeBranch({
 /**
  * TreeChildren - Wrapper for nested tree items with vertical line
  */
-function TreeChildren({ children }: { children: React.ReactNode }) {
+function TreeChildren({ children }: { children: JSX.Element }) {
   return (
-    <div className="ml-3 pl-3 border-l border-[var(--line-medium)] space-y-0.5 mt-1">
+    <div class="ml-3 pl-3 border-l border-[var(--line-medium)] space-y-0.5 mt-1">
       {children}
     </div>
   );
@@ -138,7 +140,7 @@ function TreeChildren({ children }: { children: React.ReactNode }) {
 export function EventStructureDiagram() {
   return (
     <DiagramContainer title="Структура CDC Event" color="neutral" className="py-4">
-      <div className="space-y-1">
+      <div class="space-y-1">
         {/* Root node */}
         <DiagramTooltip content="Debezium envelope — стандартная обёртка для всех CDC-событий. Содержит schema (опционально) и payload с данными.">
           <FlowNode variant="cluster" size="sm" tabIndex={0}>
@@ -149,13 +151,13 @@ export function EventStructureDiagram() {
         <TreeChildren>
           {/* schema branch */}
           <TreeBranch>
-            <div className="flex items-center gap-3">
+            <div class="flex items-center gap-3">
               <DiagramTooltip content="JSON Schema описание структуры payload. Полезно для Schema Registry, но для базовой работы можно игнорировать.">
                 <FlowNode variant="sink" size="sm" tabIndex={0}>
                   schema
                 </FlowNode>
               </DiagramTooltip>
-              <span className="text-[var(--ink-subtle)] text-xs font-mono">{'{ type, fields }'}</span>
+              <span class="text-[var(--ink-subtle)] text-xs font-mono">{'{ type, fields }'}</span>
             </div>
           </TreeBranch>
 
@@ -170,46 +172,46 @@ export function EventStructureDiagram() {
 
               <TreeChildren>
                 <TreeBranch>
-                  <div className="flex items-center gap-3">
+                  <div class="flex items-center gap-3">
                     <DiagramTooltip content="Состояние строки ДО изменения. null для INSERT и snapshot, заполнен для UPDATE и DELETE.">
                       <FlowNode variant="database" size="sm" tabIndex={0}>
                         before
                       </FlowNode>
                     </DiagramTooltip>
-                    <span className="text-[var(--ink-subtle)] text-xs">состояние ДО</span>
+                    <span class="text-[var(--ink-subtle)] text-xs">состояние ДО</span>
                   </div>
                 </TreeBranch>
 
                 <TreeBranch>
-                  <div className="flex items-center gap-3">
+                  <div class="flex items-center gap-3">
                     <DiagramTooltip content="Состояние строки ПОСЛЕ изменения. null для DELETE, заполнен для INSERT, UPDATE и snapshot.">
                       <FlowNode variant="database" size="sm" tabIndex={0}>
                         after
                       </FlowNode>
                     </DiagramTooltip>
-                    <span className="text-[var(--ink-subtle)] text-xs">состояние ПОСЛЕ</span>
+                    <span class="text-[var(--ink-subtle)] text-xs">состояние ПОСЛЕ</span>
                   </div>
                 </TreeBranch>
 
                 <TreeBranch>
-                  <div className="flex items-center gap-3">
+                  <div class="flex items-center gap-3">
                     <DiagramTooltip content="Тип операции: r=snapshot, c=create, u=update, d=delete. Критично для правильной обработки события.">
                       <FlowNode variant="app" size="sm" tabIndex={0}>
                         op
                       </FlowNode>
                     </DiagramTooltip>
-                    <span className="text-[var(--ink-subtle)] text-xs font-mono">r | c | u | d</span>
+                    <span class="text-[var(--ink-subtle)] text-xs font-mono">r | c | u | d</span>
                   </div>
                 </TreeBranch>
 
                 <TreeBranch>
-                  <div className="flex items-center gap-3">
+                  <div class="flex items-center gap-3">
                     <DiagramTooltip content="Timestamp обработки события Debezium в миллисекундах. Для event time используйте source.ts_ms.">
                       <FlowNode variant="app" size="sm" tabIndex={0}>
                         ts_ms
                       </FlowNode>
                     </DiagramTooltip>
-                    <span className="text-[var(--ink-subtle)] text-xs">timestamp Debezium</span>
+                    <span class="text-[var(--ink-subtle)] text-xs">timestamp Debezium</span>
                   </div>
                 </TreeBranch>
 

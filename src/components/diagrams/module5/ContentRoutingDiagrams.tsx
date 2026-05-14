@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Content-Based Routing Diagrams
  *
@@ -22,12 +23,12 @@ export function ContentBasedRouterDiagram() {
       color="purple"
       description="Маршрутизация событий на основе содержимого полей"
     >
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         <DiagramTooltip
           content={
             <div>
               <strong>Source Table</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 PostgreSQL таблица с полем region. Каждое изменение захватывается
                 Debezium как CDC событие.
               </p>
@@ -36,7 +37,7 @@ export function ContentBasedRouterDiagram() {
         >
           <FlowNode variant="database" tabIndex={0}>
             customers
-            <span className="block text-xs text-[var(--ink-muted)] mt-1">
+            <span class="block text-xs text-[var(--ink-muted)] mt-1">
               region: 'EU' | 'US'
             </span>
           </FlowNode>
@@ -48,7 +49,7 @@ export function ContentBasedRouterDiagram() {
           content={
             <div>
               <strong>Debezium Connector</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Захватывает изменения из WAL и отправляет их в SMT pipeline
                 для трансформации.
               </p>
@@ -66,11 +67,11 @@ export function ContentBasedRouterDiagram() {
           content={
             <div>
               <strong>ContentBasedRouter SMT</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Использует Groovy expression для вычисления имени топика на основе
                 значения поля. Имеет доступ к value.after.* для чтения полей.
               </p>
-              <p className="mt-2 text-purple-700">
+              <p class="mt-2 text-purple-700">
                 topic.expression: value.after.region == 'EU' ? 'events-eu' : 'events-us'
               </p>
             </div>
@@ -82,7 +83,7 @@ export function ContentBasedRouterDiagram() {
             tabIndex={0}
           >
             ContentBasedRouter
-            <span className="block text-xs text-[var(--ink-muted)] mt-2 font-mono">
+            <span class="block text-xs text-[var(--ink-muted)] mt-2 font-mono">
               if (region == 'EU')
               <br />
               → events-eu
@@ -90,14 +91,14 @@ export function ContentBasedRouterDiagram() {
           </FlowNode>
         </DiagramTooltip>
 
-        <div className="flex gap-8 mt-2">
-          <div className="flex flex-col items-center gap-2">
+        <div class="flex gap-8 mt-2">
+          <div class="flex flex-col items-center gap-2">
             <Arrow direction="down" label="region='EU'" />
             <DiagramTooltip
               content={
                 <div>
                   <strong>EU Topic</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Топик для событий с region = 'EU'. Consumers в EU region
                     подписываются только на этот топик.
                   </p>
@@ -114,13 +115,13 @@ export function ContentBasedRouterDiagram() {
             </DiagramTooltip>
           </div>
 
-          <div className="flex flex-col items-center gap-2">
+          <div class="flex flex-col items-center gap-2">
             <Arrow direction="down" label="region='US'" />
             <DiagramTooltip
               content={
                 <div>
                   <strong>US Topic</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Топик для событий с region = 'US'. Consumers в US region
                     подписываются только на этот топик.
                   </p>
@@ -152,12 +153,12 @@ export function MultiTenantRoutingDiagram() {
       color="blue"
       description="Каждый tenant получает свой топик"
     >
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         <DiagramTooltip
           content={
             <div>
               <strong>Multi-Tenant Database</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 PostgreSQL база с колонкой tenant_id. Все tenants используют
                 одну БД, но данные логически изолированы через tenant_id.
               </p>
@@ -166,7 +167,7 @@ export function MultiTenantRoutingDiagram() {
         >
           <FlowNode variant="database" tabIndex={0}>
             orders (multi-tenant)
-            <span className="block text-xs text-[var(--ink-muted)] mt-1">
+            <span class="block text-xs text-[var(--ink-muted)] mt-1">
               tenant_id: 'acme' | 'globex'
             </span>
           </FlowNode>
@@ -178,12 +179,12 @@ export function MultiTenantRoutingDiagram() {
           content={
             <div>
               <strong>ContentBasedRouter SMT</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Маршрутизирует события в разные топики на основе tenant_id.
                 Каждый tenant получает изолированный топик для безопасности
                 и compliance.
               </p>
-              <p className="mt-2 text-blue-700">
+              <p class="mt-2 text-blue-700">
                 topic.expression: 'orders-' + value.after.tenant_id
               </p>
             </div>
@@ -195,24 +196,24 @@ export function MultiTenantRoutingDiagram() {
             tabIndex={0}
           >
             ContentBasedRouter
-            <span className="block text-xs text-[var(--ink-muted)] mt-2">
+            <span class="block text-xs text-[var(--ink-muted)] mt-2">
               Route by tenant_id
             </span>
           </FlowNode>
         </DiagramTooltip>
 
-        <div className="flex gap-8 mt-2">
-          <div className="flex flex-col items-center gap-2">
+        <div class="flex gap-8 mt-2">
+          <div class="flex flex-col items-center gap-2">
             <Arrow direction="down" label="tenant_id='acme'" />
             <DiagramTooltip
               content={
                 <div>
                   <strong>Acme Topic</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Топик для tenant Acme. Consumer подписывается только на
                     этот топик и видит только события своего tenant.
                   </p>
-                  <p className="mt-2 text-blue-700">
+                  <p class="mt-2 text-blue-700">
                     Преимущество: Изоляция данных без фильтрации в consumer
                   </p>
                 </div>
@@ -228,17 +229,17 @@ export function MultiTenantRoutingDiagram() {
             </DiagramTooltip>
           </div>
 
-          <div className="flex flex-col items-center gap-2">
+          <div class="flex flex-col items-center gap-2">
             <Arrow direction="down" label="tenant_id='globex'" />
             <DiagramTooltip
               content={
                 <div>
                   <strong>Globex Topic</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Топик для tenant Globex. Физическая изоляция на уровне Kafka
                     гарантирует безопасность данных.
                   </p>
-                  <p className="mt-2 text-purple-700">
+                  <p class="mt-2 text-purple-700">
                     Альтернатива: Один топик + фильтрация в consumer (неэффективно)
                   </p>
                 </div>
@@ -269,12 +270,12 @@ export function RegionBasedRoutingDiagram() {
       color="emerald"
       description="Маршрутизация по регионам для compliance"
     >
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         <DiagramTooltip
           content={
             <div>
               <strong>Multi-Region Source</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 База данных с полем region. GDPR требует, чтобы EU данные
                 не покидали EU region.
               </p>
@@ -283,7 +284,7 @@ export function RegionBasedRoutingDiagram() {
         >
           <FlowNode variant="database" tabIndex={0}>
             users
-            <span className="block text-xs text-[var(--ink-muted)] mt-1">
+            <span class="block text-xs text-[var(--ink-muted)] mt-1">
               region: 'EU' | 'US' | 'APAC'
             </span>
           </FlowNode>
@@ -295,11 +296,11 @@ export function RegionBasedRoutingDiagram() {
           content={
             <div>
               <strong>Region Router</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 ContentBasedRouter SMT с Groovy expression для определения
                 региона. События маршрутизируются в региональные топики.
               </p>
-              <p className="mt-2 text-emerald-700">
+              <p class="mt-2 text-emerald-700">
                 Критично для GDPR: EU данные остаются в EU Kafka cluster
               </p>
             </div>
@@ -311,24 +312,24 @@ export function RegionBasedRoutingDiagram() {
             tabIndex={0}
           >
             RegionRouter
-            <span className="block text-xs text-[var(--ink-muted)] mt-2">
+            <span class="block text-xs text-[var(--ink-muted)] mt-2">
               Route by region field
             </span>
           </FlowNode>
         </DiagramTooltip>
 
-        <div className="flex gap-4 mt-2 flex-wrap justify-center">
-          <div className="flex flex-col items-center gap-2">
+        <div class="flex gap-4 mt-2 flex-wrap justify-center">
+          <div class="flex flex-col items-center gap-2">
             <Arrow direction="down" label="EU" />
             <DiagramTooltip
               content={
                 <div>
                   <strong>EU Topic (GDPR-compliant)</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Топик для EU данных. Может находиться в EU Kafka cluster
                     для полного compliance с GDPR.
                   </p>
-                  <p className="mt-2 text-blue-700">
+                  <p class="mt-2 text-blue-700">
                     Персональные данные EU граждан не покидают EU
                   </p>
                 </div>
@@ -344,13 +345,13 @@ export function RegionBasedRoutingDiagram() {
             </DiagramTooltip>
           </div>
 
-          <div className="flex flex-col items-center gap-2">
+          <div class="flex flex-col items-center gap-2">
             <Arrow direction="down" label="US" />
             <DiagramTooltip
               content={
                 <div>
                   <strong>US Topic</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Топик для US данных. Может находиться в US Kafka cluster
                     для минимизации latency.
                   </p>
@@ -367,13 +368,13 @@ export function RegionBasedRoutingDiagram() {
             </DiagramTooltip>
           </div>
 
-          <div className="flex flex-col items-center gap-2">
+          <div class="flex flex-col items-center gap-2">
             <Arrow direction="down" label="APAC" />
             <DiagramTooltip
               content={
                 <div>
                   <strong>APAC Topic</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Топик для APAC данных. Региональная изоляция снижает latency
                     и обеспечивает data residency compliance.
                   </p>
@@ -391,9 +392,9 @@ export function RegionBasedRoutingDiagram() {
           </div>
         </div>
 
-        <div className="mt-4 text-sm text-[var(--ink-muted)] border-l-2 border-emerald-400 pl-3">
-          <strong className="text-emerald-700">Когда использовать?</strong>
-          <ul className="mt-1 list-disc list-inside">
+        <div class="mt-4 text-sm text-[var(--ink-muted)] border-l-2 border-emerald-400 pl-3">
+          <strong class="text-emerald-700">Когда использовать?</strong>
+          <ul class="mt-1 list-disc list-inside">
             <li>GDPR compliance (EU data residency)</li>
             <li>Региональная изоляция для latency optimization</li>
             <li>Multi-region Kafka clusters</li>

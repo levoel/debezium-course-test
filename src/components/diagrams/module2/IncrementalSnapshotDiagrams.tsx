@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Incremental Snapshot Lab Diagrams
  *
@@ -16,12 +17,12 @@ import { DiagramTooltip } from '@primitives/Tooltip';
  */
 export function IncrementalSnapshotLabDiagram() {
   return (
-    <div className="space-y-6">
+    <div class="space-y-6">
       {/* Main architecture */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div class="flex flex-col lg:flex-row gap-6">
         {/* PostgreSQL */}
         <DiagramContainer title="PostgreSQL" color="purple" className="flex-1">
-          <div className="flex flex-col items-center gap-4">
+          <div class="flex flex-col items-center gap-4">
             <DiagramTooltip content="debezium_signal — таблица для управления snapshot. INSERT с execute-snapshot запускает процесс. Структура: id (VARCHAR), type (VARCHAR), data (TEXT JSON).">
               <FlowNode variant="database" tabIndex={0} size="sm">
                 debezium_signal
@@ -34,7 +35,7 @@ export function IncrementalSnapshotLabDiagram() {
               <FlowNode variant="database" tabIndex={0}>
                 orders_large
                 <br />
-                <span className="text-xs text-[var(--ink-muted)]">10,000 rows</span>
+                <span class="text-xs text-[var(--ink-muted)]">10,000 rows</span>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -42,14 +43,14 @@ export function IncrementalSnapshotLabDiagram() {
 
         {/* Debezium */}
         <DiagramContainer title="Debezium" color="amber" className="flex-1">
-          <div className="flex flex-col items-center gap-4">
+          <div class="flex flex-col items-center gap-4">
             <DiagramTooltip content="Коннектор orders-incremental с snapshot.mode=never и signal.data.collection настроенной. Читает signaling table и выполняет incremental snapshot по команде.">
               <FlowNode variant="connector" tabIndex={0}>
                 orders-incremental
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-[var(--ink-muted)] text-center font-mono space-y-1">
+            <div class="text-xs text-[var(--ink-muted)] text-center font-mono space-y-1">
               <div>snapshot.mode=never</div>
               <div>chunk.size=512</div>
             </div>
@@ -58,28 +59,28 @@ export function IncrementalSnapshotLabDiagram() {
       </div>
 
       {/* Data flow */}
-      <div className="flex flex-col md:flex-row items-center justify-center gap-4">
-        <div className="text-xs text-[var(--ink-muted)]">PostgreSQL</div>
+      <div class="flex flex-col md:flex-row items-center justify-center gap-4">
+        <div class="text-xs text-[var(--ink-muted)]">PostgreSQL</div>
         <Arrow direction="right" label="chunks" />
-        <div className="text-xs text-[var(--ink-muted)]">Connector</div>
+        <div class="text-xs text-[var(--ink-muted)]">Connector</div>
         <Arrow direction="right" label="events" />
-        <div className="text-xs text-[var(--ink-muted)]">Kafka</div>
+        <div class="text-xs text-[var(--ink-muted)]">Kafka</div>
         <Arrow direction="right" label="consume" />
-        <div className="text-xs text-[var(--ink-muted)]">Python</div>
+        <div class="text-xs text-[var(--ink-muted)]">Python</div>
       </div>
 
       {/* Kafka + Python */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div class="flex flex-col lg:flex-row gap-6">
         {/* Kafka */}
         <DiagramContainer title="Kafka" color="blue" className="flex-1">
-          <div className="flex flex-col items-center gap-3">
+          <div class="flex flex-col items-center gap-3">
             <DiagramTooltip content="inventory.public.orders_large — топик с snapshot (op='r') и streaming (op='c/u/d') событиями. Consumer различает типы по полю source.snapshot.">
               <FlowNode variant="cluster" tabIndex={0}>
                 inventory.public.orders_large
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-[var(--ink-muted)] text-center">
+            <div class="text-xs text-[var(--ink-muted)] text-center">
               op='r' (snapshot) + op='c/u/d' (streaming)
             </div>
           </div>
@@ -87,14 +88,14 @@ export function IncrementalSnapshotLabDiagram() {
 
         {/* Python Monitor */}
         <DiagramContainer title="Python Monitor" color="emerald" className="flex-1">
-          <div className="flex flex-col items-center gap-3">
+          <div class="flex flex-col items-center gap-3">
             <DiagramTooltip content="Consumer на Python с confluent-kafka. Считает snapshot события, отслеживает chunk boundaries (каждые 512 записей), показывает прогресс в реальном времени.">
               <FlowNode variant="app" tabIndex={0}>
                 Snapshot Monitor
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-[var(--ink-muted)] text-center">
+            <div class="text-xs text-[var(--ink-muted)] text-center">
               Считает события, отслеживает chunks
             </div>
           </div>
@@ -103,21 +104,21 @@ export function IncrementalSnapshotLabDiagram() {
 
       {/* Signal flow explanation */}
       <DiagramContainer title="Процесс запуска snapshot" color="neutral">
-        <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-xs text-[var(--ink-default)]">
-          <div className="flex items-center gap-2">
-            <span className="bg-purple-500/20 px-2 py-1 rounded">1. INSERT signal</span>
+        <div class="flex flex-col md:flex-row items-center justify-center gap-4 text-xs text-[var(--ink-default)]">
+          <div class="flex items-center gap-2">
+            <span class="bg-purple-500/20 px-2 py-1 rounded">1. INSERT signal</span>
           </div>
           <Arrow direction="right" />
-          <div className="flex items-center gap-2">
-            <span className="bg-amber-500/20 px-2 py-1 rounded">2. Connector reads</span>
+          <div class="flex items-center gap-2">
+            <span class="bg-amber-500/20 px-2 py-1 rounded">2. Connector reads</span>
           </div>
           <Arrow direction="right" />
-          <div className="flex items-center gap-2">
-            <span className="bg-blue-500/20 px-2 py-1 rounded">3. Chunks to Kafka</span>
+          <div class="flex items-center gap-2">
+            <span class="bg-blue-500/20 px-2 py-1 rounded">3. Chunks to Kafka</span>
           </div>
           <Arrow direction="right" />
-          <div className="flex items-center gap-2">
-            <span className="bg-emerald-500/20 px-2 py-1 rounded">4. Monitor displays</span>
+          <div class="flex items-center gap-2">
+            <span class="bg-emerald-500/20 px-2 py-1 rounded">4. Monitor displays</span>
           </div>
         </div>
       </DiagramContainer>
@@ -174,13 +175,13 @@ export function LabCompletionDiagram() {
 
   return (
     <DiagramContainer title="Итоги лабораторной работы" color="emerald" recommended>
-      <div className="flex flex-col gap-3">
+      <div class="flex flex-col gap-3">
         {steps.map((step, index) => (
-          <div key={index} className="flex items-center gap-3">
+          <div class="flex items-center gap-3">
             <DiagramTooltip content={step.tooltip}>
-              <FlowNode variant="cluster" tabIndex={0} size="sm" className="flex-1">
-                <div className="flex items-center gap-3">
-                  <span className="text-emerald-400 font-bold text-xs">{index + 1}</span>
+              <FlowNode variant="cluster" tabindex={0} size="sm" className="flex-1">
+                <div class="flex items-center gap-3">
+                  <span class="text-emerald-400 font-bold text-xs">{index + 1}</span>
                   <span>{step.label}</span>
                 </div>
               </FlowNode>
@@ -189,17 +190,17 @@ export function LabCompletionDiagram() {
         ))}
 
         {/* Summary stats */}
-        <div className="mt-4 pt-4 border-t border-[var(--line-thin)] flex flex-col md:flex-row gap-4 justify-center text-xs text-[var(--ink-muted)]">
-          <div className="text-center">
-            <div className="text-emerald-400 text-lg font-bold">10,000</div>
+        <div class="mt-4 pt-4 border-t border-[var(--line-thin)] flex flex-col md:flex-row gap-4 justify-center text-xs text-[var(--ink-muted)]">
+          <div class="text-center">
+            <div class="text-emerald-400 text-lg font-bold">10,000</div>
             <div>записей в snapshot</div>
           </div>
-          <div className="text-center">
-            <div className="text-emerald-400 text-lg font-bold">~20</div>
+          <div class="text-center">
+            <div class="text-emerald-400 text-lg font-bold">~20</div>
             <div>chunks обработано</div>
           </div>
-          <div className="text-center">
-            <div className="text-emerald-400 text-lg font-bold">512</div>
+          <div class="text-center">
+            <div class="text-emerald-400 text-lg font-bold">512</div>
             <div>строк на chunk</div>
           </div>
         </div>

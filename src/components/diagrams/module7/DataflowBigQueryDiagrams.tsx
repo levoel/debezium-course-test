@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Dataflow and BigQuery Diagrams for Module 7 Lesson 04
  *
@@ -21,9 +22,9 @@ export function CdcToBigQueryDiagram() {
       color="blue"
       description="Managed Dataflow template для репликации CDC событий"
     >
-      <div className="flex flex-col gap-6">
+      <div class="flex flex-col gap-6">
         {/* Source Stage */}
-        <div className="flex items-center gap-3 justify-center">
+        <div class="flex items-center gap-3 justify-center">
           <DiagramContainer title="Source" color="purple" className="flex-shrink-0">
             <DiagramTooltip content="Cloud SQL PostgreSQL с logical decoding настроенным">
               <FlowNode variant="gcp-database" size="sm" tabIndex={0}>
@@ -54,32 +55,32 @@ export function CdcToBigQueryDiagram() {
         </div>
 
         {/* Processing Stage */}
-        <div className="flex items-center gap-3 justify-center">
+        <div class="flex items-center gap-3 justify-center">
           <DiagramContainer title="Stream Processing" color="emerald">
-            <div className="flex flex-col gap-2">
+            <div class="flex flex-col gap-2">
               <DiagramTooltip content="Managed Dataflow template: Pub/Sub CDC to BigQuery">
                 <FlowNode variant="gcp-compute" size="sm" tabIndex={0}>
                   Dataflow Job
                 </FlowNode>
               </DiagramTooltip>
-              <div className="text-xs text-emerald-700/70 text-center">
+              <div class="text-xs text-emerald-700/70 text-center">
                 MERGE каждые 60s
               </div>
             </div>
           </DiagramContainer>
 
-          <div className="flex flex-col gap-2">
+          <div class="flex flex-col gap-2">
             <Arrow direction="right" label="Raw Events" />
             <Arrow direction="right" label="MERGE" dashed />
           </div>
 
           <DiagramContainer title="Storage" color="blue">
-            <div className="flex flex-col gap-2">
+            <div class="flex flex-col gap-2">
               <DiagramTooltip content={
                 <div>
-                  <p className="font-semibold mb-1">Changelog Table</p>
-                  <p className="text-sm">Staging: полная история всех CDC операций</p>
-                  <p className="text-sm mt-1">Партиционирована по _metadata_timestamp</p>
+                  <p class="font-semibold mb-1">Changelog Table</p>
+                  <p class="text-sm">Staging: полная история всех CDC операций</p>
+                  <p class="text-sm mt-1">Партиционирована по _metadata_timestamp</p>
                 </div>
               }>
                 <FlowNode variant="gcp-storage" size="sm" tabIndex={0}>
@@ -88,9 +89,9 @@ export function CdcToBigQueryDiagram() {
               </DiagramTooltip>
               <DiagramTooltip content={
                 <div>
-                  <p className="font-semibold mb-1">Replica Table</p>
-                  <p className="text-sm">Current state: результат MERGE операций</p>
-                  <p className="text-sm mt-1">Отражает актуальное состояние источника</p>
+                  <p class="font-semibold mb-1">Replica Table</p>
+                  <p class="text-sm">Current state: результат MERGE операций</p>
+                  <p class="text-sm mt-1">Отражает актуальное состояние источника</p>
                 </div>
               }>
                 <FlowNode variant="gcp-storage" size="sm" tabIndex={0}>
@@ -102,9 +103,9 @@ export function CdcToBigQueryDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-blue-700/70">
+      <div class="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-blue-700/70">
         <p>updateFrequencySecs=60 определяет частоту MERGE (каждую минуту)</p>
-        <p className="mt-1">At-least-once достаточно для CDC: MERGE по PK идемпотентен</p>
+        <p class="mt-1">At-least-once достаточно для CDC: MERGE по PK идемпотентен</p>
       </div>
     </DiagramContainer>
   );
@@ -120,10 +121,10 @@ export function DataflowEndToEndWorkflowDiagram() {
       color="purple"
       description="Полный цикл CDC репликации с использованием Dataflow template"
     >
-      <div className="space-y-4">
+      <div class="space-y-4">
         {/* Stage 1: Database Change */}
         <DiagramContainer title="1. Database Change Event" color="blue">
-          <div className="flex items-center gap-2">
+          <div class="flex items-center gap-2">
             <FlowNode variant="gcp-database" size="sm">Cloud SQL</FlowNode>
             <Arrow direction="right" label="INSERT/UPDATE/DELETE" />
             <DiagramTooltip content="PostgreSQL пишет транзакцию в WAL">
@@ -136,7 +137,7 @@ export function DataflowEndToEndWorkflowDiagram() {
 
         {/* Stage 2: CDC Capture */}
         <DiagramContainer title="2. CDC Event Capture" color="emerald">
-          <div className="flex items-center gap-2">
+          <div class="flex items-center gap-2">
             <DiagramTooltip content="Debezium читает через replication slot">
               <FlowNode variant="connector" size="sm" tabIndex={0}>Debezium Server</FlowNode>
             </DiagramTooltip>
@@ -151,7 +152,7 @@ export function DataflowEndToEndWorkflowDiagram() {
 
         {/* Stage 3: Message Delivery */}
         <DiagramContainer title="3. Message Delivery" color="amber">
-          <div className="flex items-center gap-2">
+          <div class="flex items-center gap-2">
             <DiagramTooltip content="Pub/Sub topic: cdc.public.orders">
               <FlowNode variant="gcp-messaging" size="sm" tabIndex={0}>Pub/Sub Topic</FlowNode>
             </DiagramTooltip>
@@ -166,8 +167,8 @@ export function DataflowEndToEndWorkflowDiagram() {
 
         {/* Stage 4: Stream Processing */}
         <DiagramContainer title="4. Dataflow Processing" color="emerald">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
               <DiagramTooltip content="Windowed aggregation: micro-batch каждые 60 секунд">
                 <FlowNode variant="gcp-compute" size="sm" tabIndex={0}>Window (60s)</FlowNode>
               </DiagramTooltip>
@@ -187,27 +188,27 @@ export function DataflowEndToEndWorkflowDiagram() {
 
         {/* Stage 5: Storage */}
         <DiagramContainer title="5. BigQuery Storage" color="blue">
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col gap-2">
+          <div class="flex items-center gap-3">
+            <div class="flex flex-col gap-2">
               <DiagramTooltip content="Все события записываются для аудита">
                 <FlowNode variant="gcp-storage" size="sm" tabIndex={0}>Changelog Table</FlowNode>
               </DiagramTooltip>
-              <div className="text-xs text-blue-700/70">Append-only</div>
+              <div class="text-xs text-blue-700/70">Append-only</div>
             </div>
             <Arrow direction="right" label="MERGE" />
-            <div className="flex flex-col gap-2">
+            <div class="flex flex-col gap-2">
               <DiagramTooltip content="MERGE ON primary_key WHEN MATCHED THEN UPDATE/DELETE">
                 <FlowNode variant="gcp-storage" size="sm" tabIndex={0}>Replica Table</FlowNode>
               </DiagramTooltip>
-              <div className="text-xs text-blue-700/70">Current state</div>
+              <div class="text-xs text-blue-700/70">Current state</div>
             </div>
           </div>
         </DiagramContainer>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-purple-700/70">
-        <p className="font-semibold mb-1">Key Points:</p>
-        <ul className="space-y-1">
+      <div class="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-purple-700/70">
+        <p class="font-semibold mb-1">Key Points:</p>
+        <ul class="space-y-1">
           <li>• Latency: ~60-90 секунд от INSERT в Cloud SQL до Replica в BigQuery</li>
           <li>• Throughput: до 10,000 events/sec на 1 Dataflow worker</li>
           <li>• Auto-scaling: workers увеличиваются при росте Pub/Sub backlog</li>

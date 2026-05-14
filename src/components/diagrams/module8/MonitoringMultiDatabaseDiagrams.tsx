@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Monitoring Multi-Database Diagrams for Module 8 Lesson 05
  *
@@ -21,17 +22,17 @@ export function MonitoringMultiDatabaseDiagram() {
       color="blue"
       description="Unified observability для PostgreSQL + MySQL connectors"
     >
-      <div className="space-y-4">
+      <div class="space-y-4">
         {/* Source metrics layer */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* PostgreSQL metrics */}
           <DiagramContainer color="blue" title="PostgreSQL Metrics">
-            <div className="flex flex-col gap-2">
+            <div class="flex flex-col gap-2">
               <DiagramTooltip content={
                 <div>
-                  <p className="font-semibold mb-1">WAL Lag (bytes)</p>
-                  <p className="text-sm">pg_wal_lsn_diff между confirmed_flush_lsn и sent_lsn</p>
-                  <p className="text-sm mt-1">Измеряется в байтах WAL</p>
+                  <p class="font-semibold mb-1">WAL Lag (bytes)</p>
+                  <p class="text-sm">pg_wal_lsn_diff между confirmed_flush_lsn и sent_lsn</p>
+                  <p class="text-sm mt-1">Измеряется в байтах WAL</p>
                 </div>
               }>
                 <FlowNode variant="connector" size="sm" className="bg-blue-500/20 border-blue-400/30 text-blue-700">
@@ -40,9 +41,9 @@ export function MonitoringMultiDatabaseDiagram() {
               </DiagramTooltip>
               <DiagramTooltip content={
                 <div>
-                  <p className="font-semibold mb-1">Replication Slot Status</p>
-                  <p className="text-sm">active=true, restart_lsn прогрессирует</p>
-                  <p className="text-sm mt-1">Alert если slot inactive {'>'} 5 min</p>
+                  <p class="font-semibold mb-1">Replication Slot Status</p>
+                  <p class="text-sm">active=true, restart_lsn прогрессирует</p>
+                  <p class="text-sm mt-1">Alert если slot inactive {'>'} 5 min</p>
                 </div>
               }>
                 <FlowNode variant="connector" size="sm" className="bg-blue-500/20 border-blue-400/30 text-blue-700">
@@ -54,12 +55,12 @@ export function MonitoringMultiDatabaseDiagram() {
 
           {/* MySQL metrics */}
           <DiagramContainer color="rose" title="MySQL Metrics">
-            <div className="flex flex-col gap-2">
+            <div class="flex flex-col gap-2">
               <DiagramTooltip content={
                 <div>
-                  <p className="font-semibold mb-1">Binlog Lag (time)</p>
-                  <p className="text-sm">MilliSecondsBehindSource в миллисекундах</p>
-                  <p className="text-sm mt-1">Измеряется во ВРЕМЕНИ, не в байтах</p>
+                  <p class="font-semibold mb-1">Binlog Lag (time)</p>
+                  <p class="text-sm">MilliSecondsBehindSource в миллисекундах</p>
+                  <p class="text-sm mt-1">Измеряется во ВРЕМЕНИ, не в байтах</p>
                 </div>
               }>
                 <FlowNode variant="connector" size="sm" className="bg-red-500/20 border-red-400/30 text-red-700">
@@ -68,9 +69,9 @@ export function MonitoringMultiDatabaseDiagram() {
               </DiagramTooltip>
               <DiagramTooltip content={
                 <div>
-                  <p className="font-semibold mb-1">Binlog Position</p>
-                  <p className="text-sm">GTID executed_gtid_set прогрессирует</p>
-                  <p className="text-sm mt-1">Alert если position stuck {'>'} 5 min</p>
+                  <p class="font-semibold mb-1">Binlog Position</p>
+                  <p class="text-sm">GTID executed_gtid_set прогрессирует</p>
+                  <p class="text-sm mt-1">Alert если position stuck {'>'} 5 min</p>
                 </div>
               }>
                 <FlowNode variant="connector" size="sm" className="bg-red-500/20 border-red-400/30 text-red-700">
@@ -82,42 +83,42 @@ export function MonitoringMultiDatabaseDiagram() {
         </div>
 
         {/* Unified monitoring layer */}
-        <div className="flex flex-col items-center gap-2 pt-3 border-t border-[var(--line-thin)]">
-          <div className="text-xs text-[var(--ink-muted)]">Export JMX metrics</div>
+        <div class="flex flex-col items-center gap-2 pt-3 border-t border-[var(--line-thin)]">
+          <div class="text-xs text-[var(--ink-muted)]">Export JMX metrics</div>
           <Arrow direction="down" />
           <DiagramTooltip content={
             <div>
-              <p className="font-semibold mb-1">Prometheus</p>
-              <p className="text-sm">Скрапит metrics от обоих connectors</p>
-              <p className="text-sm mt-1">Label: connector_name (postgres_prod, mysql_prod)</p>
+              <p class="font-semibold mb-1">Prometheus</p>
+              <p class="text-sm">Скрапит metrics от обоих connectors</p>
+              <p class="text-sm mt-1">Label: connector_name (postgres_prod, mysql_prod)</p>
             </div>
           }>
             <FlowNode variant="sink">
               <div>Prometheus</div>
-              <div className="text-xs text-[var(--ink-muted)] mt-1">(unified scraping)</div>
+              <div class="text-xs text-[var(--ink-muted)] mt-1">(unified scraping)</div>
             </FlowNode>
           </DiagramTooltip>
           <Arrow direction="down" />
           <DiagramTooltip content={
             <div>
-              <p className="font-semibold mb-1">Grafana Dashboard</p>
-              <p className="text-sm">Multi-connector view с filter по connector_name</p>
-              <p className="text-sm mt-1">Normalized metrics: WAL bytes → latency estimate</p>
+              <p class="font-semibold mb-1">Grafana Dashboard</p>
+              <p class="text-sm">Multi-connector view с filter по connector_name</p>
+              <p class="text-sm mt-1">Normalized metrics: WAL bytes → latency estimate</p>
             </div>
           }>
             <FlowNode variant="connector">
               <div>Grafana Dashboard</div>
-              <div className="text-xs text-[var(--ink-muted)] mt-1">(multi-database view)</div>
+              <div class="text-xs text-[var(--ink-muted)] mt-1">(multi-database view)</div>
             </FlowNode>
           </DiagramTooltip>
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-blue-700/70">
-        <p className="font-semibold mb-1">Key Differences в metrics:</p>
-        <ul className="space-y-1">
-          <li>• <span className="text-blue-700">PostgreSQL:</span> WAL lag измеряется в байтах (pg_wal_lsn_diff)</li>
-          <li>• <span className="text-red-700">MySQL:</span> Binlog lag измеряется во времени (MilliSecondsBehindSource)</li>
+      <div class="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-blue-700/70">
+        <p class="font-semibold mb-1">Key Differences в metrics:</p>
+        <ul class="space-y-1">
+          <li>• <span class="text-blue-700">PostgreSQL:</span> WAL lag измеряется в байтах (pg_wal_lsn_diff)</li>
+          <li>• <span class="text-red-700">MySQL:</span> Binlog lag измеряется во времени (MilliSecondsBehindSource)</li>
           <li>• Unified view: normalize обе метрики к latency (ms) для сравнения</li>
           <li>• source_database column в CDC events критична для traceability</li>
         </ul>

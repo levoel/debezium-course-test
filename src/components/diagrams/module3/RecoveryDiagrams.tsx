@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Recovery Procedure Diagrams for Module 3
  *
@@ -16,15 +17,15 @@ import { DiagramTooltip } from '@primitives/Tooltip';
  */
 export function RecoveryDecisionTreeDiagram() {
   return (
-    <div className="space-y-6">
+    <div class="space-y-6">
       <DiagramContainer title="Recovery Decision Tree" color="amber">
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           {/* Root: Connector failed */}
           <DiagramTooltip content="Connector перешёл в состояние FAILED. Необходимо диагностировать причину по error message в логах.">
             <FlowNode variant="sink" tabIndex={0} className="border-2 border-rose-400">
               Connector Failed
               <br />
-              <span className="text-xs text-[var(--ink-muted)]">Status: FAILED</span>
+              <span class="text-xs text-[var(--ink-muted)]">Status: FAILED</span>
             </FlowNode>
           </DiagramTooltip>
 
@@ -37,10 +38,10 @@ export function RecoveryDecisionTreeDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="flex flex-col md:flex-row items-start gap-6 md:gap-8 w-full justify-center">
+          <div class="flex flex-col md:flex-row items-start gap-6 md:gap-8 w-full justify-center">
             {/* Scenario 1: Binlog Position Loss */}
-            <div className="flex flex-col items-center gap-3 flex-1">
-              <div className="text-xs text-amber-400 font-medium text-center">
+            <div class="flex flex-col items-center gap-3 flex-1">
+              <div class="text-xs text-amber-400 font-medium text-center">
                 "binlog file", "purged",
                 <br />
                 "file not available"
@@ -55,9 +56,9 @@ export function RecoveryDecisionTreeDiagram() {
 
               <Arrow direction="down" />
 
-              <div className="flex flex-col items-center gap-2 text-xs">
+              <div class="flex flex-col items-center gap-2 text-xs">
                 <DiagramTooltip content="SHOW BINARY LOGS покажет доступные файлы. Сравните с offset topic для определения gap.">
-                  <div className="bg-[var(--bg-sunken)] px-3 py-2 rounded text-[var(--ink-default)]">
+                  <div class="bg-[var(--bg-sunken)] px-3 py-2 rounded text-[var(--ink-default)]">
                     1. SHOW BINARY LOGS
                     <br />
                     2. Check offset topic
@@ -79,8 +80,8 @@ export function RecoveryDecisionTreeDiagram() {
             </div>
 
             {/* Scenario 2: Schema History Corruption */}
-            <div className="flex flex-col items-center gap-3 flex-1">
-              <div className="text-xs text-rose-400 font-medium text-center">
+            <div class="flex flex-col items-center gap-3 flex-1">
+              <div class="text-xs text-rose-400 font-medium text-center">
                 "db history topic",
                 <br />
                 "partially missing"
@@ -105,9 +106,9 @@ export function RecoveryDecisionTreeDiagram() {
                 </FlowNode>
               </DiagramTooltip>
 
-              <div className="flex flex-col md:flex-row items-start gap-4 mt-2">
-                <div className="flex flex-col items-center gap-2">
-                  <span className="text-xs text-emerald-400">Нет DDL</span>
+              <div class="flex flex-col md:flex-row items-start gap-4 mt-2">
+                <div class="flex flex-col items-center gap-2">
+                  <span class="text-xs text-emerald-400">Нет DDL</span>
                   <Arrow direction="down" />
                   <DiagramTooltip content="Если DDL не было, snapshot.mode=recovery безопасно. Читает current schema из DB.">
                     <FlowNode variant="cluster" tabIndex={0} size="sm" className="border-2 border-emerald-400">
@@ -116,8 +117,8 @@ export function RecoveryDecisionTreeDiagram() {
                   </DiagramTooltip>
                 </div>
 
-                <div className="flex flex-col items-center gap-2">
-                  <span className="text-xs text-rose-400">Были DDL</span>
+                <div class="flex flex-col items-center gap-2">
+                  <span class="text-xs text-rose-400">Были DDL</span>
                   <Arrow direction="down" />
                   <DiagramTooltip content="Если DDL были, нужен fresh connector с новым именем. Recovery mode небезопасен.">
                     <FlowNode variant="app" tabIndex={0} size="sm" className="border-2 border-amber-400">
@@ -126,8 +127,8 @@ export function RecoveryDecisionTreeDiagram() {
                   </DiagramTooltip>
                 </div>
 
-                <div className="flex flex-col items-center gap-2">
-                  <span className="text-xs text-blue-400">Есть backup</span>
+                <div class="flex flex-col items-center gap-2">
+                  <span class="text-xs text-blue-400">Есть backup</span>
                   <Arrow direction="down" />
                   <DiagramTooltip content="Восстановление из backup — самый быстрый путь (минуты вместо часов).">
                     <FlowNode variant="database" tabIndex={0} size="sm" className="border-2 border-blue-400">
@@ -139,8 +140,8 @@ export function RecoveryDecisionTreeDiagram() {
             </div>
 
             {/* Scenario 3: Schema Mismatch */}
-            <div className="flex flex-col items-center gap-3 flex-1">
-              <div className="text-xs text-amber-400 font-medium text-center">
+            <div class="flex flex-col items-center gap-3 flex-1">
+              <div class="text-xs text-amber-400 font-medium text-center">
                 "not found in schema",
                 <br />
                 "column mismatch"
@@ -155,7 +156,7 @@ export function RecoveryDecisionTreeDiagram() {
 
               <Arrow direction="down" />
 
-              <div className="text-xs text-[var(--ink-muted)] text-center">
+              <div class="text-xs text-[var(--ink-muted)] text-center">
                 Обычно следствие
                 <br />
                 Schema History issue
@@ -175,30 +176,30 @@ export function RecoveryDecisionTreeDiagram() {
 
       {/* Error patterns reference */}
       <DiagramContainer title="Error Message Patterns" color="neutral">
-        <div className="overflow-x-auto">
-          <table className="text-xs text-[var(--ink-default)] w-full">
+        <div class="overflow-x-auto">
+          <table class="text-xs text-[var(--ink-default)] w-full">
             <thead>
-              <tr className="border-b border-[var(--line-thin)]">
-                <th className="text-left py-2 pr-4">Error Pattern</th>
-                <th className="text-left py-2 pr-4">Scenario</th>
-                <th className="text-left py-2">Recovery Path</th>
+              <tr class="border-b border-[var(--line-thin)]">
+                <th class="text-left py-2 pr-4">Error Pattern</th>
+                <th class="text-left py-2 pr-4">Scenario</th>
+                <th class="text-left py-2">Recovery Path</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-[var(--line-thin)]">
-                <td className="py-2 pr-4 font-mono text-amber-400">binlog file not available</td>
-                <td className="py-2 pr-4">Binlog Position Loss</td>
-                <td className="py-2 text-emerald-400">when_needed / initial</td>
+              <tr class="border-b border-[var(--line-thin)]">
+                <td class="py-2 pr-4 font-mono text-amber-400">binlog file not available</td>
+                <td class="py-2 pr-4">Binlog Position Loss</td>
+                <td class="py-2 text-emerald-400">when_needed / initial</td>
               </tr>
-              <tr className="border-b border-[var(--line-thin)]">
-                <td className="py-2 pr-4 font-mono text-rose-400">history topic missing</td>
-                <td className="py-2 pr-4">Schema History Corruption</td>
-                <td className="py-2 text-amber-400">recovery / backup / fresh</td>
+              <tr class="border-b border-[var(--line-thin)]">
+                <td class="py-2 pr-4 font-mono text-rose-400">history topic missing</td>
+                <td class="py-2 pr-4">Schema History Corruption</td>
+                <td class="py-2 text-amber-400">recovery / backup / fresh</td>
               </tr>
               <tr>
-                <td className="py-2 pr-4 font-mono text-amber-400">table not found in schema</td>
-                <td className="py-2 pr-4">Schema Mismatch</td>
-                <td className="py-2 text-[var(--ink-muted)]">See Schema History</td>
+                <td class="py-2 pr-4 font-mono text-amber-400">table not found in schema</td>
+                <td class="py-2 pr-4">Schema Mismatch</td>
+                <td class="py-2 text-[var(--ink-muted)]">See Schema History</td>
               </tr>
             </tbody>
           </table>
@@ -213,16 +214,16 @@ export function RecoveryDecisionTreeDiagram() {
  */
 export function RecoveryFlowDiagram() {
   return (
-    <div className="space-y-6">
+    <div class="space-y-6">
       <DiagramContainer title="Recovery Procedure Flow" color="amber">
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           {/* Step 1: Detect */}
-          <div className="flex flex-col md:flex-row items-center gap-4 w-full justify-center">
+          <div class="flex flex-col md:flex-row items-center gap-4 w-full justify-center">
             <DiagramTooltip content="Step 1: Обнаружение проблемы. Мониторинг или ручная проверка обнаруживают FAILED connector.">
-              <FlowNode variant="sink" tabIndex={0} className="border-2 border-rose-400">
+              <FlowNode variant="sink" tabindex={0} className="border-2 border-rose-400">
                 1. Detect Issue
                 <br />
-                <span className="text-xs text-[var(--ink-muted)]">Connector: FAILED</span>
+                <span class="text-xs text-[var(--ink-muted)]">Connector: FAILED</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -232,7 +233,7 @@ export function RecoveryFlowDiagram() {
               <FlowNode variant="app" tabIndex={0} className="border-2 border-amber-400 animate-pulse">
                 2. Stop Connector
                 <br />
-                <span className="text-xs text-amber-400">CRITICAL</span>
+                <span class="text-xs text-amber-400">CRITICAL</span>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -240,12 +241,12 @@ export function RecoveryFlowDiagram() {
           <Arrow direction="down" />
 
           {/* Step 3: Diagnose */}
-          <div className="flex flex-col md:flex-row items-center gap-4 w-full justify-center">
+          <div class="flex flex-col md:flex-row items-center gap-4 w-full justify-center">
             <DiagramTooltip content="Step 3: Диагностика причины. Анализ логов, проверка binlog, schema history topic.">
-              <FlowNode variant="connector" tabIndex={0}>
+              <FlowNode variant="connector" tabindex={0}>
                 3. Diagnose Cause
                 <br />
-                <span className="text-xs text-[var(--ink-muted)]">Check logs, binlog, schema history</span>
+                <span class="text-xs text-[var(--ink-muted)]">Check logs, binlog, schema history</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -255,7 +256,7 @@ export function RecoveryFlowDiagram() {
               <FlowNode variant="cluster" tabIndex={0}>
                 4. Apply Fix
                 <br />
-                <span className="text-xs text-[var(--ink-muted)]">Based on diagnosis</span>
+                <span class="text-xs text-[var(--ink-muted)]">Based on diagnosis</span>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -263,12 +264,12 @@ export function RecoveryFlowDiagram() {
           <Arrow direction="down" />
 
           {/* Step 5: Verify */}
-          <div className="flex flex-col md:flex-row items-center gap-4 w-full justify-center">
+          <div class="flex flex-col md:flex-row items-center gap-4 w-full justify-center">
             <DiagramTooltip content="Step 5: Верификация перед resume. Проверяем connector logs, test events, consumer health.">
-              <FlowNode variant="app" tabIndex={0} className="border-2 border-blue-400">
+              <FlowNode variant="app" tabindex={0} className="border-2 border-blue-400">
                 5. Verify Fix
                 <br />
-                <span className="text-xs text-[var(--ink-muted)]">Test before resume</span>
+                <span class="text-xs text-[var(--ink-muted)]">Test before resume</span>
               </FlowNode>
             </DiagramTooltip>
 
@@ -278,7 +279,7 @@ export function RecoveryFlowDiagram() {
               <FlowNode variant="cluster" tabIndex={0} className="border-2 border-emerald-400">
                 6. Resume CDC
                 <br />
-                <span className="text-xs text-emerald-400">Monitor 1+ hour</span>
+                <span class="text-xs text-emerald-400">Monitor 1+ hour</span>
               </FlowNode>
             </DiagramTooltip>
           </div>
@@ -287,14 +288,14 @@ export function RecoveryFlowDiagram() {
 
       {/* Critical warning */}
       <DiagramContainer title="Critical: Stop Before Fix" color="rose">
-        <div className="text-sm text-[var(--ink-default)] space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-rose-400 font-bold">ПРАВИЛО:</span>
+        <div class="text-sm text-[var(--ink-default)] space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="text-rose-400 font-bold">ПРАВИЛО:</span>
             <span>Всегда останавливайте connector перед исправлением.</span>
           </div>
-          <div className="text-xs text-[var(--ink-muted)]">
+          <div class="text-xs text-[var(--ink-muted)]">
             Попытка исправить running connector может привести к:
-            <ul className="list-disc list-inside mt-1 space-y-1">
+            <ul class="list-disc list-inside mt-1 space-y-1">
               <li>Data duplication (partial snapshot + streaming)</li>
               <li>Offset corruption (race condition)</li>
               <li>Schema history conflict (concurrent writes)</li>
@@ -305,35 +306,35 @@ export function RecoveryFlowDiagram() {
 
       {/* Recovery time estimates */}
       <DiagramContainer title="Recovery Time Estimates" color="neutral">
-        <div className="overflow-x-auto">
-          <table className="text-xs text-[var(--ink-default)] w-full">
+        <div class="overflow-x-auto">
+          <table class="text-xs text-[var(--ink-default)] w-full">
             <thead>
-              <tr className="border-b border-[var(--line-thin)]">
-                <th className="text-left py-2 pr-4">Recovery Method</th>
-                <th className="text-left py-2 pr-4">Time Estimate</th>
-                <th className="text-left py-2">When to Use</th>
+              <tr class="border-b border-[var(--line-thin)]">
+                <th class="text-left py-2 pr-4">Recovery Method</th>
+                <th class="text-left py-2 pr-4">Time Estimate</th>
+                <th class="text-left py-2">When to Use</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-[var(--line-thin)]">
-                <td className="py-2 pr-4 text-emerald-400">Restore from backup</td>
-                <td className="py-2 pr-4">1-5 minutes</td>
-                <td className="py-2 text-[var(--ink-muted)]">Backup exists, schema history corruption</td>
+              <tr class="border-b border-[var(--line-thin)]">
+                <td class="py-2 pr-4 text-emerald-400">Restore from backup</td>
+                <td class="py-2 pr-4">1-5 minutes</td>
+                <td class="py-2 text-[var(--ink-muted)]">Backup exists, schema history corruption</td>
               </tr>
-              <tr className="border-b border-[var(--line-thin)]">
-                <td className="py-2 pr-4 text-blue-400">snapshot.mode=recovery</td>
-                <td className="py-2 pr-4">Seconds-minutes</td>
-                <td className="py-2 text-[var(--ink-muted)]">No DDL since last offset</td>
+              <tr class="border-b border-[var(--line-thin)]">
+                <td class="py-2 pr-4 text-blue-400">snapshot.mode=recovery</td>
+                <td class="py-2 pr-4">Seconds-minutes</td>
+                <td class="py-2 text-[var(--ink-muted)]">No DDL since last offset</td>
               </tr>
-              <tr className="border-b border-[var(--line-thin)]">
-                <td className="py-2 pr-4 text-amber-400">snapshot.mode=when_needed</td>
-                <td className="py-2 pr-4">Hours (data-dependent)</td>
-                <td className="py-2 text-[var(--ink-muted)]">Binlog position loss</td>
+              <tr class="border-b border-[var(--line-thin)]">
+                <td class="py-2 pr-4 text-amber-400">snapshot.mode=when_needed</td>
+                <td class="py-2 pr-4">Hours (data-dependent)</td>
+                <td class="py-2 text-[var(--ink-muted)]">Binlog position loss</td>
               </tr>
               <tr>
-                <td className="py-2 pr-4 text-rose-400">Fresh connector + initial</td>
-                <td className="py-2 pr-4">Hours (data-dependent)</td>
-                <td className="py-2 text-[var(--ink-muted)]">DDL happened, no other option</td>
+                <td class="py-2 pr-4 text-rose-400">Fresh connector + initial</td>
+                <td class="py-2 pr-4">Hours (data-dependent)</td>
+                <td class="py-2 text-[var(--ink-muted)]">DDL happened, no other option</td>
               </tr>
             </tbody>
           </table>

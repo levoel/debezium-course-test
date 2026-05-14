@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * PII Masking Diagrams
  *
@@ -21,17 +22,17 @@ export function MaskFieldTransformDiagram() {
       color="amber"
       description="Маскировка PII полей для GDPR compliance"
     >
-      <div className="flex items-center justify-center gap-4 flex-wrap">
+      <div class="flex items-center justify-center gap-4 flex-wrap">
         {/* Input Record */}
         <DiagramTooltip
           content={
             <div>
               <strong>Input Record</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Flat JSON record после ExtractNewRecordState unwrap.
                 Содержит чувствительные поля: email, phone, ssn.
               </p>
-              <p className="mt-2 text-xs text-rose-700">
+              <p class="mt-2 text-xs text-rose-700">
                 Требует маскировки перед публикацией в Kafka.
               </p>
             </div>
@@ -42,15 +43,15 @@ export function MaskFieldTransformDiagram() {
             className="bg-rose-500/20 border-rose-400/30 text-rose-700"
             tabIndex={0}
           >
-            <div className="text-sm font-semibold">Input Record</div>
-            <div className="text-xs text-[var(--ink-muted)] mt-2 font-mono text-left">
+            <div class="text-sm font-semibold">Input Record</div>
+            <div class="text-xs text-[var(--ink-muted)] mt-2 font-mono text-left">
               <div>id: 1</div>
               <div>name: "Alice"</div>
-              <div className="text-rose-700">email: "alice@example.com"</div>
-              <div className="text-rose-700">phone: "+1-555-0100"</div>
-              <div className="text-rose-700">ssn: "123-45-6789"</div>
+              <div class="text-rose-700">email: "alice@example.com"</div>
+              <div class="text-rose-700">phone: "+1-555-0100"</div>
+              <div class="text-rose-700">ssn: "123-45-6789"</div>
             </div>
-            <div className="text-xs text-rose-700 mt-2">
+            <div class="text-xs text-rose-700 mt-2">
               ⚠ PII fields exposed
             </div>
           </FlowNode>
@@ -63,12 +64,12 @@ export function MaskFieldTransformDiagram() {
           content={
             <div>
               <strong>MaskField SMT</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Kafka Connect SMT (не Debezium). Заменяет указанные поля на null или ***MASKED***.
               </p>
-              <div className="mt-2 text-xs">
+              <div class="mt-2 text-xs">
                 <strong>Конфигурация:</strong>
-                <pre className="mt-1 text-xs bg-[var(--bg-sunken)] p-2 rounded">
+                <pre class="mt-1 text-xs bg-[var(--bg-sunken)] p-2 rounded">
 {`"transforms.mask.type":
   "org.apache.kafka.connect
    .transforms.MaskField$Value"
@@ -76,7 +77,7 @@ export function MaskFieldTransformDiagram() {
   "email,phone,ssn"`}
                 </pre>
               </div>
-              <p className="mt-2 text-xs text-amber-700">
+              <p class="mt-2 text-xs text-amber-700">
                 Работает с flat data после unwrap.
               </p>
             </div>
@@ -88,8 +89,8 @@ export function MaskFieldTransformDiagram() {
             tabIndex={0}
           >
             <div>MaskField SMT</div>
-            <div className="text-xs text-[var(--ink-muted)] mt-2">Маскирует:</div>
-            <div className="text-xs text-[var(--ink-muted)]">email, phone, ssn</div>
+            <div class="text-xs text-[var(--ink-muted)] mt-2">Маскирует:</div>
+            <div class="text-xs text-[var(--ink-muted)]">email, phone, ssn</div>
           </FlowNode>
         </DiagramTooltip>
 
@@ -100,10 +101,10 @@ export function MaskFieldTransformDiagram() {
           content={
             <div>
               <strong>Output Record</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 PII поля замаскированы (null). Публикуется в Kafka без чувствительных данных.
               </p>
-              <p className="mt-2 text-xs text-emerald-700">
+              <p class="mt-2 text-xs text-emerald-700">
                 GDPR compliant. Консьюмеры не видят оригинальные PII.
               </p>
             </div>
@@ -114,15 +115,15 @@ export function MaskFieldTransformDiagram() {
             className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
             tabIndex={0}
           >
-            <div className="text-sm font-semibold">Output Record</div>
-            <div className="text-xs text-[var(--ink-muted)] mt-2 font-mono text-left">
+            <div class="text-sm font-semibold">Output Record</div>
+            <div class="text-xs text-[var(--ink-muted)] mt-2 font-mono text-left">
               <div>id: 1</div>
               <div>name: "Alice"</div>
-              <div className="text-emerald-700">email: null</div>
-              <div className="text-emerald-700">phone: null</div>
-              <div className="text-emerald-700">ssn: null</div>
+              <div class="text-emerald-700">email: null</div>
+              <div class="text-emerald-700">phone: null</div>
+              <div class="text-emerald-700">ssn: null</div>
             </div>
-            <div className="text-xs text-emerald-700 mt-2">
+            <div class="text-xs text-emerald-700 mt-2">
               ✓ PII masked
             </div>
           </FlowNode>
@@ -130,7 +131,7 @@ export function MaskFieldTransformDiagram() {
       </div>
 
       {/* Additional note */}
-      <div className="mt-4 text-xs text-[var(--ink-muted)] text-center">
+      <div class="mt-4 text-xs text-[var(--ink-muted)] text-center">
         <strong>Альтернатива:</strong> MaskField может использовать replacement="***MASKED***" вместо null
       </div>
     </DiagramContainer>
@@ -142,7 +143,7 @@ export function MaskFieldTransformDiagram() {
  */
 export function UnwrapComparisonDiagram() {
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div class="flex flex-col lg:flex-row gap-6">
       {/* Before unwrap */}
       <DiagramContainer
         title="Before ExtractNewRecordState"
@@ -154,49 +155,49 @@ export function UnwrapComparisonDiagram() {
           content={
             <div>
               <strong>Debezium Envelope</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Полный Debezium envelope с before, after, op, source, ts_ms.
                 Сложный формат для консьюмеров — требует парсинга вложенных полей.
               </p>
-              <p className="mt-2 text-xs text-rose-700">
+              <p class="mt-2 text-xs text-rose-700">
                 Консьюмеры должны извлекать after field и обрабатывать разные op типы.
               </p>
             </div>
           }
         >
-          <div className="text-sm font-mono space-y-2 text-left" tabIndex={0}>
-            <div className="text-[var(--ink-muted)]">
-              <span className="text-[var(--ink-subtle)]">before:</span> null
+          <div class="text-sm font-mono space-y-2 text-left" tabindex={0}>
+            <div class="text-[var(--ink-muted)]">
+              <span class="text-[var(--ink-subtle)]">before:</span> null
             </div>
-            <div className="text-emerald-400">
-              <span className="text-[var(--ink-subtle)]">after:</span> {'{'}
-              <div className="ml-4 space-y-1">
+            <div class="text-emerald-400">
+              <span class="text-[var(--ink-subtle)]">after:</span> {'{'}
+              <div class="ml-4 space-y-1">
                 <div>
-                  <span className="text-blue-400">id:</span> 1,
+                  <span class="text-blue-400">id:</span> 1,
                 </div>
                 <div>
-                  <span className="text-blue-400">name:</span> "Alice",
+                  <span class="text-blue-400">name:</span> "Alice",
                 </div>
                 <div>
-                  <span className="text-blue-400">email:</span> "alice@example.com"
+                  <span class="text-blue-400">email:</span> "alice@example.com"
                 </div>
               </div>
               {'}'}
             </div>
             <div>
-              <span className="text-[var(--ink-subtle)]">op:</span> <span className="text-purple-400">"c"</span>
+              <span class="text-[var(--ink-subtle)]">op:</span> <span class="text-purple-400">"c"</span>
             </div>
-            <div className="text-[var(--ink-subtle)]">
+            <div class="text-[var(--ink-subtle)]">
               source: {'{'} ... {'}'}
             </div>
             <div>
-              <span className="text-[var(--ink-subtle)]">ts_ms:</span>{' '}
-              <span className="text-amber-400">1706745600000</span>
+              <span class="text-[var(--ink-subtle)]">ts_ms:</span>{' '}
+              <span class="text-amber-400">1706745600000</span>
             </div>
           </div>
         </DiagramTooltip>
 
-        <div className="mt-4 text-xs text-rose-700 text-center">
+        <div class="mt-4 text-xs text-rose-700 text-center">
           ⚠ Сложный формат для консьюмеров
         </div>
       </DiagramContainer>
@@ -213,40 +214,40 @@ export function UnwrapComparisonDiagram() {
           content={
             <div>
               <strong>Flat JSON</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 ExtractNewRecordState извлек поле after и добавил metadata с prefix __.
                 Простой flat JSON для консьюмеров.
               </p>
-              <p className="mt-2 text-xs text-emerald-700">
+              <p class="mt-2 text-xs text-emerald-700">
                 Консьюмеры парсят стандартный JSON без вложенных структур.
               </p>
             </div>
           }
         >
-          <div className="text-sm font-mono space-y-2 text-left" tabIndex={0}>
+          <div class="text-sm font-mono space-y-2 text-left" tabindex={0}>
             <div>
-              <span className="text-blue-400">id:</span> 1
-            </div>
-            <div>
-              <span className="text-blue-400">name:</span> "Alice"
+              <span class="text-blue-400">id:</span> 1
             </div>
             <div>
-              <span className="text-blue-400">email:</span> "alice@example.com"
+              <span class="text-blue-400">name:</span> "Alice"
             </div>
-            <div className="text-purple-400 mt-4">
-              <span className="text-[var(--ink-subtle)]">__op:</span> "c"
+            <div>
+              <span class="text-blue-400">email:</span> "alice@example.com"
             </div>
-            <div className="text-purple-400">
-              <span className="text-[var(--ink-subtle)]">__table:</span> "customers"
+            <div class="text-purple-400 mt-4">
+              <span class="text-[var(--ink-subtle)]">__op:</span> "c"
             </div>
-            <div className="text-purple-400">
-              <span className="text-[var(--ink-subtle)]">__ts_ms:</span>{' '}
-              <span className="text-amber-400">1706745600000</span>
+            <div class="text-purple-400">
+              <span class="text-[var(--ink-subtle)]">__table:</span> "customers"
+            </div>
+            <div class="text-purple-400">
+              <span class="text-[var(--ink-subtle)]">__ts_ms:</span>{' '}
+              <span class="text-amber-400">1706745600000</span>
             </div>
           </div>
         </DiagramTooltip>
 
-        <div className="mt-4 text-xs text-emerald-700 text-center">
+        <div class="mt-4 text-xs text-emerald-700 text-center">
           ✓ Metadata добавлено с prefix __
         </div>
       </DiagramContainer>

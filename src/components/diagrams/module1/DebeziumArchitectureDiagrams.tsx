@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Debezium Architecture Diagrams
  *
@@ -19,7 +20,7 @@ import type { SequenceActorDef, SequenceMessageDef } from '@primitives/types';
  */
 export function DeploymentModesDiagram() {
   return (
-    <div className="flex flex-col xl:flex-row gap-6">
+    <div class="flex flex-col xl:flex-row gap-6">
       {/* Mode 1: Kafka Connect (recommended) */}
       <DiagramContainer
         title="Kafka Connect"
@@ -27,7 +28,7 @@ export function DeploymentModesDiagram() {
         recommended={true}
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           <DiagramTooltip content="Исходная база данных с включенной logical replication. Debezium подключается через replication slot.">
             <FlowNode variant="database" tabIndex={0}>
               PostgreSQL
@@ -66,7 +67,7 @@ export function DeploymentModesDiagram() {
         color="blue"
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           <DiagramTooltip content="Исходная база данных с включенной logical replication. Debezium подключается через replication slot.">
             <FlowNode variant="database" tabIndex={0}>
               PostgreSQL
@@ -91,7 +92,7 @@ export function DeploymentModesDiagram() {
 
           <Arrow direction="down" />
 
-          <div className="text-xs text-[var(--ink-muted)] text-center px-4">
+          <div class="text-xs text-[var(--ink-muted)] text-center px-4">
             Pub/Sub, Kinesis, Event Hubs
           </div>
         </div>
@@ -103,7 +104,7 @@ export function DeploymentModesDiagram() {
         color="rose"
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-4">
+        <div class="flex flex-col items-center gap-4">
           <DiagramTooltip content="Исходная база данных с включенной logical replication. Debezium подключается через replication slot.">
             <FlowNode variant="database" tabIndex={0}>
               PostgreSQL
@@ -116,7 +117,7 @@ export function DeploymentModesDiagram() {
             <FlowNode variant="app" tabIndex={0}>
               Java Application
               <br />
-              <span className="text-xs opacity-75">(embedded Debezium)</span>
+              <span class="text-xs opacity-75">(embedded Debezium)</span>
             </FlowNode>
           </DiagramTooltip>
 
@@ -138,9 +139,9 @@ export function DeploymentModesDiagram() {
  */
 export function KafkaConnectClusterDiagram() {
   return (
-    <div className="flex flex-col gap-6">
+    <div class="flex flex-col gap-6">
       {/* Top: REST API */}
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         <DiagramTooltip content="HTTP API на порту 8083 для создания, настройки и управления коннекторами. Основной интерфейс администрирования.">
           <FlowNode variant="app" tabIndex={0} size="sm">
             REST API :8083
@@ -151,15 +152,15 @@ export function KafkaConnectClusterDiagram() {
       </div>
 
       {/* Middle: Cluster and Topics */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div class="flex flex-col lg:flex-row gap-6">
         {/* Cluster */}
         <DiagramContainer
           title="CLUSTER"
           color="emerald"
           className="flex-1"
         >
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap justify-center gap-3">
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-wrap justify-center gap-3">
               <DiagramTooltip content="JVM процессы, выполняющие коннекторы. В distributed mode образуют кластер и автоматически распределяют tasks между собой.">
                 <FlowNode variant="connector" tabIndex={0} size="sm">
                   Worker 1
@@ -179,7 +180,7 @@ export function KafkaConnectClusterDiagram() {
               </DiagramTooltip>
             </div>
 
-            <div className="text-xs text-[var(--ink-muted)] text-center">
+            <div class="text-xs text-[var(--ink-muted)] text-center">
               ↔ Координация между workers
             </div>
           </div>
@@ -191,7 +192,7 @@ export function KafkaConnectClusterDiagram() {
           color="purple"
           className="flex-1"
         >
-          <div className="flex flex-col items-center gap-3">
+          <div class="flex flex-col items-center gap-3">
             <DiagramTooltip content="Kafka топик хранящий конфигурации всех коннекторов. Реплицируется между workers.">
               <FlowNode variant="database" tabIndex={0} size="sm">
                 connect-configs
@@ -214,7 +215,7 @@ export function KafkaConnectClusterDiagram() {
       </div>
 
       {/* Bottom: Output */}
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         <Arrow direction="down" label="Публикация" />
 
         <DiagramTooltip content="Топики с CDC-событиями. Именование: {topic.prefix}.{schema}.{table}">
@@ -364,9 +365,9 @@ export function CdcEventFlowDiagram() {
   ];
 
   return (
-    <div className="w-full">
-      <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-400/30">
-        <p className="text-xs text-blue-700">
+    <div class="w-full">
+      <div class="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-400/30">
+        <p class="text-xs text-blue-700">
           <strong>Logical Replication Protocol:</strong> PostgreSQL встроенный механизм для чтения WAL
         </p>
       </div>

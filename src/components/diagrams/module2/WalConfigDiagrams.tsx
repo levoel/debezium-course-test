@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * WAL Configuration Diagrams
  *
@@ -16,18 +17,18 @@ import { DiagramTooltip } from '@primitives/Tooltip';
  */
 export function WalLevelHierarchyDiagram() {
   return (
-    <div className="space-y-4">
+    <div class="space-y-4">
       {/* Hierarchy stack */}
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         {/* minimal */}
         <DiagramContainer title="wal_level = minimal" color="rose" className="w-full max-w-md">
-          <div className="flex flex-col items-center gap-2">
+          <div class="flex flex-col items-center gap-2">
             <DiagramTooltip content="Минимальный уровень — только для crash recovery. Не поддерживает репликацию. Наименьший объем WAL. Используется редко, в основном для standalone баз без репликации.">
               <FlowNode variant="app" tabIndex={0}>
                 minimal
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] text-center">
+            <div class="text-xs text-[var(--ink-muted)] text-center">
               Только crash recovery<br />
               Нет репликации
             </div>
@@ -38,13 +39,13 @@ export function WalLevelHierarchyDiagram() {
 
         {/* replica */}
         <DiagramContainer title="wal_level = replica" color="blue" className="w-full max-w-md">
-          <div className="flex flex-col items-center gap-2">
+          <div class="flex flex-col items-center gap-2">
             <DiagramTooltip content="Стандартный уровень для physical replication и PITR (point-in-time recovery). Добавляет информацию для воспроизведения на standby. По умолчанию в большинстве PostgreSQL установок.">
               <FlowNode variant="sink" tabIndex={0}>
                 replica
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] text-center">
+            <div class="text-xs text-[var(--ink-muted)] text-center">
               + Physical replication<br />
               + Point-in-time recovery
             </div>
@@ -55,13 +56,13 @@ export function WalLevelHierarchyDiagram() {
 
         {/* logical */}
         <DiagramContainer title="wal_level = logical" color="emerald" recommended className="w-full max-w-md">
-          <div className="flex flex-col items-center gap-2">
+          <div class="flex flex-col items-center gap-2">
             <DiagramTooltip content="Требуется для Debezium CDC. Добавляет данные для logical decoding: tuple data, relation OIDs. Позволяет преобразовать бинарный WAL в структурированные изменения.">
               <FlowNode variant="cluster" tabIndex={0}>
                 logical
               </FlowNode>
             </DiagramTooltip>
-            <div className="text-xs text-[var(--ink-muted)] text-center">
+            <div class="text-xs text-[var(--ink-muted)] text-center">
               + Logical decoding<br />
               + CDC (Debezium)
             </div>
@@ -70,7 +71,7 @@ export function WalLevelHierarchyDiagram() {
       </div>
 
       {/* Debezium ready indicator */}
-      <div className="flex justify-center mt-6">
+      <div class="flex justify-center mt-6">
         <DiagramTooltip content="При wal_level=logical PostgreSQL готов к CDC. Изменение требует перезапуска сервера. После перезапуска проверьте: SHOW wal_level; должен вернуть 'logical'.">
           <FlowNode variant="cluster" tabIndex={0} className="border-2 border-emerald-400">
             Debezium Ready
@@ -86,12 +87,12 @@ export function WalLevelHierarchyDiagram() {
  */
 export function WorkloadWalImpactDiagram() {
   return (
-    <div className="space-y-6">
+    <div class="space-y-6">
       {/* Workload types */}
-      <div className="flex flex-col md:flex-row items-stretch justify-center gap-6">
+      <div class="flex flex-col md:flex-row items-stretch justify-center gap-6">
         {/* INSERT-heavy */}
         <DiagramContainer title="INSERT-heavy" color="emerald" className="flex-1 max-w-xs">
-          <div className="flex flex-col items-center gap-4">
+          <div class="flex flex-col items-center gap-4">
             <DiagramTooltip content="Нагрузка с преобладанием INSERT. Минимальный overhead от logical decoding — логируется только новая строка. Идеально для event sourcing и append-only паттернов.">
               <FlowNode variant="cluster" tabIndex={0}>
                 INSERT
@@ -106,7 +107,7 @@ export function WorkloadWalImpactDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-[var(--ink-muted)] text-center">
+            <div class="text-xs text-[var(--ink-muted)] text-center">
               Минимальный overhead<br />
               Логируется только новая строка
             </div>
@@ -115,7 +116,7 @@ export function WorkloadWalImpactDiagram() {
 
         {/* Mixed workload */}
         <DiagramContainer title="Mixed" color="blue" className="flex-1 max-w-xs">
-          <div className="flex flex-col items-center gap-4">
+          <div class="flex flex-col items-center gap-4">
             <DiagramTooltip content="Сбалансированная нагрузка INSERT + UPDATE + DELETE. Умеренное увеличение WAL при wal_level=logical. Типичный профиль для большинства OLTP приложений.">
               <FlowNode variant="sink" tabIndex={0}>
                 INSERT + UPDATE
@@ -130,7 +131,7 @@ export function WorkloadWalImpactDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-[var(--ink-muted)] text-center">
+            <div class="text-xs text-[var(--ink-muted)] text-center">
               Умеренный overhead<br />
               Типичный OLTP профиль
             </div>
@@ -139,7 +140,7 @@ export function WorkloadWalImpactDiagram() {
 
         {/* UPDATE-heavy */}
         <DiagramContainer title="UPDATE-heavy" color="rose" className="flex-1 max-w-xs">
-          <div className="flex flex-col items-center gap-4">
+          <div class="flex flex-col items-center gap-4">
             <DiagramTooltip content="Нагрузка с преобладанием UPDATE. Максимальный overhead — особенно при REPLICA IDENTITY FULL (логируется полная строка до и после). Требует тщательного планирования емкости.">
               <FlowNode variant="app" tabIndex={0}>
                 UPDATE + DELETE
@@ -154,7 +155,7 @@ export function WorkloadWalImpactDiagram() {
               </FlowNode>
             </DiagramTooltip>
 
-            <div className="text-xs text-[var(--ink-muted)] text-center">
+            <div class="text-xs text-[var(--ink-muted)] text-center">
               Максимальный overhead<br />
               Особенно при REPLICA IDENTITY FULL
             </div>
@@ -163,16 +164,16 @@ export function WorkloadWalImpactDiagram() {
       </div>
 
       {/* Note about REPLICA IDENTITY */}
-      <div className="flex justify-center">
+      <div class="flex justify-center">
         <DiagramContainer title="Влияние REPLICA IDENTITY" color="amber" className="max-w-lg">
-          <div className="text-xs text-[var(--ink-muted)] text-center space-y-2">
+          <div class="text-xs text-[var(--ink-muted)] text-center space-y-2">
             <div>
-              <strong className="text-amber-400/80">DEFAULT:</strong> UPDATE/DELETE логирует только PK
+              <strong class="text-amber-400/80">DEFAULT:</strong> UPDATE/DELETE логирует только PK
             </div>
             <div>
-              <strong className="text-amber-400/80">FULL:</strong> UPDATE/DELETE логирует полную строку до и после
+              <strong class="text-amber-400/80">FULL:</strong> UPDATE/DELETE логирует полную строку до и после
             </div>
-            <div className="text-rose-400/80">
+            <div class="text-rose-400/80">
               FULL может увеличить WAL на 30-50% для UPDATE-heavy таблиц!
             </div>
           </div>

@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Grafana Dashboard Diagrams
  *
@@ -21,21 +22,21 @@ export function DashboardArchitectureDiagram() {
       color="blue"
       description="Структура production-ready дашборда: от общего к частному"
     >
-      <div className="space-y-4">
+      <div class="space-y-4">
         {/* Row 1: Health Overview */}
-        <div className="p-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10">
-          <div className="text-xs text-emerald-700 font-medium mb-2">
+        <div class="p-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10">
+          <div class="text-xs text-emerald-700 font-medium mb-2">
             Row 1: Health Overview
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
             <DiagramTooltip
               content={
                 <div>
                   <strong>Connector Status (Stat Panel)</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Query: debezium_metrics_Connected
                   </p>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Value mapping: 1=Connected (green), 0=Disconnected (red)
                   </p>
                 </div>
@@ -50,10 +51,10 @@ export function DashboardArchitectureDiagram() {
               content={
                 <div>
                   <strong>Current Lag (Gauge)</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Query: MilliSecondsBehindSource / 1000
                   </p>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Thresholds: green &lt;5s, yellow 5-30s, red &gt;30s
                   </p>
                 </div>
@@ -73,10 +74,10 @@ export function DashboardArchitectureDiagram() {
               content={
                 <div>
                   <strong>Events/sec (Stat with Sparkline)</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Query: rate(TotalNumberOfEventsSeen[1m])
                   </p>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Graph mode: Area для визуализации тренда
                   </p>
                 </div>
@@ -91,10 +92,10 @@ export function DashboardArchitectureDiagram() {
               content={
                 <div>
                   <strong>Queue Usage (Gauge)</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Query: 100 * (1 - Remaining/Total)
                   </p>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Thresholds: green &lt;50%, yellow 50-80%, red &gt;90%
                   </p>
                 </div>
@@ -108,16 +109,16 @@ export function DashboardArchitectureDiagram() {
         </div>
 
         {/* Row 2: Time Series */}
-        <div className="p-3 rounded-xl border border-blue-400/30 bg-blue-500/10">
-          <div className="text-xs text-blue-700 font-medium mb-2">
+        <div class="p-3 rounded-xl border border-blue-400/30 bg-blue-500/10">
+          <div class="text-xs text-blue-700 font-medium mb-2">
             Row 2: Time Series (Trends)
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
             <DiagramTooltip
               content={
                 <div>
                   <strong>Lag Trend (Time Series)</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Исторический lag для capacity planning.
                     Threshold lines на 5s и 30s для визуального контроля.
                   </p>
@@ -133,7 +134,7 @@ export function DashboardArchitectureDiagram() {
               content={
                 <div>
                   <strong>Throughput (Time Series)</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     События в секунду за время.
                     Падения указывают на проблемы источника или коннектора.
                   </p>
@@ -149,7 +150,7 @@ export function DashboardArchitectureDiagram() {
               content={
                 <div>
                   <strong>Queue Utilization (Time Series)</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Постоянное &gt;80% указывает на Kafka write bottleneck.
                     Axis: 0-100%.
                   </p>
@@ -164,16 +165,16 @@ export function DashboardArchitectureDiagram() {
         </div>
 
         {/* Row 3: Details */}
-        <div className="p-3 rounded-xl border border-purple-400/30 bg-purple-500/10">
-          <div className="text-xs text-purple-700 font-medium mb-2">
+        <div class="p-3 rounded-xl border border-purple-400/30 bg-purple-500/10">
+          <div class="text-xs text-purple-700 font-medium mb-2">
             Row 3: Details (Troubleshooting)
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
             <DiagramTooltip
               content={
                 <div>
                   <strong>Time Since Last Event</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     MilliSecondsSinceLastEvent / 1000.
                     Высокие значения на активных таблицах = проблема.
                   </p>
@@ -189,7 +190,7 @@ export function DashboardArchitectureDiagram() {
               content={
                 <div>
                   <strong>Transactions/sec</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     rate(NumberOfCommittedTransactions[1m]).
                     Скорость захвата транзакций из источника.
                   </p>
@@ -204,7 +205,7 @@ export function DashboardArchitectureDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 text-xs text-[var(--ink-muted)] text-center">
+      <div class="mt-4 text-xs text-[var(--ink-muted)] text-center">
         <strong>Принцип:</strong> Row 1 для быстрой оценки (оператор видит
         проблему за секунду), Row 2 для трендов, Row 3 для детального анализа
       </div>
@@ -222,12 +223,12 @@ export function PanelRowLayoutDiagram() {
       color="emerald"
       description="4 панели для мгновенной оценки состояния"
     >
-      <div className="flex flex-wrap justify-center gap-4">
+      <div class="flex flex-wrap justify-center gap-4">
         <DiagramTooltip
           content={
             <div>
               <strong>Status Panel</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Stat panel с value mapping.
                 Connected = зеленый, Disconnected = красный.
               </p>
@@ -235,11 +236,11 @@ export function PanelRowLayoutDiagram() {
           }
         >
           <div
-            className="w-32 h-20 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex flex-col items-center justify-center cursor-pointer hover:brightness-110"
-            tabIndex={0}
+            class="w-32 h-20 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex flex-col items-center justify-center cursor-pointer hover:brightness-110"
+            tabindex={0}
           >
-            <div className="text-xs text-[var(--ink-muted)]">Status</div>
-            <div className="text-lg font-bold text-emerald-400">Connected</div>
+            <div class="text-xs text-[var(--ink-muted)]">Status</div>
+            <div class="text-lg font-bold text-emerald-400">Connected</div>
           </div>
         </DiagramTooltip>
 
@@ -247,7 +248,7 @@ export function PanelRowLayoutDiagram() {
           content={
             <div>
               <strong>Lag Gauge</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Gauge panel, unit: seconds.
                 0.3s = здоровый pipeline.
               </p>
@@ -255,11 +256,11 @@ export function PanelRowLayoutDiagram() {
           }
         >
           <div
-            className="w-32 h-20 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex flex-col items-center justify-center cursor-pointer hover:brightness-110"
-            tabIndex={0}
+            class="w-32 h-20 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex flex-col items-center justify-center cursor-pointer hover:brightness-110"
+            tabindex={0}
           >
-            <div className="text-xs text-[var(--ink-muted)]">Current Lag</div>
-            <div className="text-lg font-bold text-emerald-400">0.3s</div>
+            <div class="text-xs text-[var(--ink-muted)]">Current Lag</div>
+            <div class="text-lg font-bold text-emerald-400">0.3s</div>
           </div>
         </DiagramTooltip>
 
@@ -267,7 +268,7 @@ export function PanelRowLayoutDiagram() {
           content={
             <div>
               <strong>Events/sec Stat</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Stat panel с sparkline (graph mode: area).
                 Показывает текущий throughput.
               </p>
@@ -275,11 +276,11 @@ export function PanelRowLayoutDiagram() {
           }
         >
           <div
-            className="w-32 h-20 rounded-lg bg-blue-500/20 border border-blue-400/30 flex flex-col items-center justify-center cursor-pointer hover:brightness-110"
-            tabIndex={0}
+            class="w-32 h-20 rounded-lg bg-blue-500/20 border border-blue-400/30 flex flex-col items-center justify-center cursor-pointer hover:brightness-110"
+            tabindex={0}
           >
-            <div className="text-xs text-[var(--ink-muted)]">Events/sec</div>
-            <div className="text-lg font-bold text-blue-400">125.4</div>
+            <div class="text-xs text-[var(--ink-muted)]">Events/sec</div>
+            <div class="text-lg font-bold text-blue-400">125.4</div>
           </div>
         </DiagramTooltip>
 
@@ -287,7 +288,7 @@ export function PanelRowLayoutDiagram() {
           content={
             <div>
               <strong>Queue Usage Gauge</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Gauge panel, unit: percent.
                 12% = очередь почти пуста, Kafka успевает.
               </p>
@@ -295,11 +296,11 @@ export function PanelRowLayoutDiagram() {
           }
         >
           <div
-            className="w-32 h-20 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex flex-col items-center justify-center cursor-pointer hover:brightness-110"
-            tabIndex={0}
+            class="w-32 h-20 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex flex-col items-center justify-center cursor-pointer hover:brightness-110"
+            tabindex={0}
           >
-            <div className="text-xs text-[var(--ink-muted)]">Queue Usage</div>
-            <div className="text-lg font-bold text-emerald-400">12%</div>
+            <div class="text-xs text-[var(--ink-muted)]">Queue Usage</div>
+            <div class="text-lg font-bold text-emerald-400">12%</div>
           </div>
         </DiagramTooltip>
       </div>
@@ -312,22 +313,22 @@ export function PanelRowLayoutDiagram() {
  */
 export function HealthStatesComparisonDiagram() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       {/* Healthy State */}
       <DiagramContainer title="Healthy" color="emerald">
-        <div className="space-y-3">
+        <div class="space-y-3">
           <DiagramTooltip
             content={
               <div>
                 <strong>Здоровый pipeline</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Все метрики в норме. Продолжайте мониторинг.
                   Такое состояние должно быть 99%+ времени.
                 </p>
               </div>
             }
           >
-            <div className="text-center mb-3" tabIndex={0}>
+            <div class="text-center mb-3" tabindex={0}>
               <FlowNode
                 variant="connector"
                 size="sm"
@@ -338,22 +339,22 @@ export function HealthStatesComparisonDiagram() {
             </div>
           </DiagramTooltip>
 
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Lag:</span>
-              <span className="text-emerald-400 font-mono">&lt;1s</span>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Lag:</span>
+              <span class="text-emerald-400 font-mono">&lt;1s</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Events/sec:</span>
-              <span className="text-emerald-400 font-mono">stable</span>
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Events/sec:</span>
+              <span class="text-emerald-400 font-mono">stable</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Queue:</span>
-              <span className="text-emerald-400 font-mono">&lt;50%</span>
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Queue:</span>
+              <span class="text-emerald-400 font-mono">&lt;50%</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Staleness:</span>
-              <span className="text-emerald-400 font-mono">&lt;30s</span>
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Staleness:</span>
+              <span class="text-emerald-400 font-mono">&lt;30s</span>
             </div>
           </div>
         </div>
@@ -361,22 +362,22 @@ export function HealthStatesComparisonDiagram() {
 
       {/* Attention State */}
       <DiagramContainer title="Attention" color="amber">
-        <div className="space-y-3">
+        <div class="space-y-3">
           <DiagramTooltip
             content={
               <div>
                 <strong>Требует внимания</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Warning состояние. Проверьте нагрузку на источник
                   и Kafka. Возможно временный spike.
                 </p>
-                <p className="mt-1 text-amber-700">
+                <p class="mt-1 text-amber-700">
                   Если сохраняется более 5 минут - расследуйте.
                 </p>
               </div>
             }
           >
-            <div className="text-center mb-3" tabIndex={0}>
+            <div class="text-center mb-3" tabindex={0}>
               <FlowNode
                 variant="connector"
                 size="sm"
@@ -387,22 +388,22 @@ export function HealthStatesComparisonDiagram() {
             </div>
           </DiagramTooltip>
 
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Lag:</span>
-              <span className="text-amber-400 font-mono">5-30s</span>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Lag:</span>
+              <span class="text-amber-400 font-mono">5-30s</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Events/sec:</span>
-              <span className="text-amber-400 font-mono">declining</span>
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Events/sec:</span>
+              <span class="text-amber-400 font-mono">declining</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Queue:</span>
-              <span className="text-amber-400 font-mono">50-80%</span>
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Queue:</span>
+              <span class="text-amber-400 font-mono">50-80%</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Staleness:</span>
-              <span className="text-amber-400 font-mono">30s-5min</span>
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Staleness:</span>
+              <span class="text-amber-400 font-mono">30s-5min</span>
             </div>
           </div>
         </div>
@@ -410,44 +411,44 @@ export function HealthStatesComparisonDiagram() {
 
       {/* Critical State */}
       <DiagramContainer title="Critical" color="rose">
-        <div className="space-y-3">
+        <div class="space-y-3">
           <DiagramTooltip
             content={
               <div>
                 <strong>Критическое состояние</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   SLO нарушен. Немедленное вмешательство требуется.
                   Проверьте: Kafka brokers, network, PostgreSQL.
                 </p>
-                <p className="mt-1 text-rose-700">
+                <p class="mt-1 text-rose-700">
                   Возможен backpressure или потеря соединения.
                 </p>
               </div>
             }
           >
-            <div className="text-center mb-3" tabIndex={0}>
+            <div class="text-center mb-3" tabindex={0}>
               <FlowNode variant="app" size="sm" className="inline-block">
                 Critical
               </FlowNode>
             </div>
           </DiagramTooltip>
 
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Lag:</span>
-              <span className="text-rose-400 font-mono">&gt;30s</span>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Lag:</span>
+              <span class="text-rose-400 font-mono">&gt;30s</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Events/sec:</span>
-              <span className="text-rose-400 font-mono">zero/dropping</span>
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Events/sec:</span>
+              <span class="text-rose-400 font-mono">zero/dropping</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Queue:</span>
-              <span className="text-rose-400 font-mono">&gt;90%</span>
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Queue:</span>
+              <span class="text-rose-400 font-mono">&gt;90%</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--ink-muted)]">Staleness:</span>
-              <span className="text-rose-400 font-mono">&gt;5min</span>
+            <div class="flex justify-between">
+              <span class="text-[var(--ink-muted)]">Staleness:</span>
+              <span class="text-rose-400 font-mono">&gt;5min</span>
             </div>
           </div>
         </div>

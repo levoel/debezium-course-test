@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * SMT Overview Diagrams
  *
@@ -24,12 +25,12 @@ export function ConsumerComplexityDiagram() {
       color="amber"
       description="Каждый консьюмер дублирует логику парсинга envelope"
     >
-      <div className="flex items-center justify-center gap-3 flex-wrap">
+      <div class="flex items-center justify-center gap-3 flex-wrap">
         <DiagramTooltip
           content={
             <div>
               <strong>PostgreSQL</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Источник CDC событий. Генерирует изменения данных через WAL.
               </p>
             </div>
@@ -46,7 +47,7 @@ export function ConsumerComplexityDiagram() {
           content={
             <div>
               <strong>Debezium Connector</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Читает WAL и конвертирует в Debezium envelope формат
                 с полями before, after, op, source, ts_ms.
               </p>
@@ -64,7 +65,7 @@ export function ConsumerComplexityDiagram() {
           content={
             <div>
               <strong>Kafka Topic</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Хранит события в Debezium envelope формате.
                 Сложный формат с before, after, op, source.
               </p>
@@ -78,12 +79,12 @@ export function ConsumerComplexityDiagram() {
 
         <Arrow direction="right" />
 
-        <div className="flex flex-col gap-2">
+        <div class="flex flex-col gap-2">
           <DiagramTooltip
             content={
               <div>
                 <strong>Consumer 1</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Должен сам парсить envelope, извлекать after field,
                   обрабатывать разные типы операций (c/u/d).
                   Дублирование логики обработки.
@@ -98,7 +99,7 @@ export function ConsumerComplexityDiagram() {
               tabIndex={0}
             >
               Consumer 1
-              <span className="block text-xs text-[var(--ink-muted)] mt-1">
+              <span class="block text-xs text-[var(--ink-muted)] mt-1">
                 Extract after field
               </span>
             </FlowNode>
@@ -108,7 +109,7 @@ export function ConsumerComplexityDiagram() {
             content={
               <div>
                 <strong>Consumer 2</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Дублирует ту же логику парсинга.
                   Изменение формата требует обновления всех консьюмеров.
                 </p>
@@ -122,7 +123,7 @@ export function ConsumerComplexityDiagram() {
               tabIndex={0}
             >
               Consumer 2
-              <span className="block text-xs text-[var(--ink-muted)] mt-1">
+              <span class="block text-xs text-[var(--ink-muted)] mt-1">
                 Extract after field
               </span>
             </FlowNode>
@@ -132,7 +133,7 @@ export function ConsumerComplexityDiagram() {
             content={
               <div>
                 <strong>Consumer 3</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Еще один консьюмер с дублированной логикой.
                   Scaling означает больше дублирования кода.
                 </p>
@@ -146,7 +147,7 @@ export function ConsumerComplexityDiagram() {
               tabIndex={0}
             >
               Consumer 3
-              <span className="block text-xs text-[var(--ink-muted)] mt-1">
+              <span class="block text-xs text-[var(--ink-muted)] mt-1">
                 Extract after field
               </span>
             </FlowNode>
@@ -168,12 +169,12 @@ export function SmtSolutionDiagram() {
       recommended
       description="SMT централизует логику обработки"
     >
-      <div className="flex items-center justify-center gap-3 flex-wrap">
+      <div class="flex items-center justify-center gap-3 flex-wrap">
         <DiagramTooltip
           content={
             <div>
               <strong>PostgreSQL</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Источник CDC событий.
               </p>
             </div>
@@ -190,7 +191,7 @@ export function SmtSolutionDiagram() {
           content={
             <div>
               <strong>Debezium Connector</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Читает WAL и передает события в SMT chain для обработки.
               </p>
             </div>
@@ -207,13 +208,13 @@ export function SmtSolutionDiagram() {
           content={
             <div>
               <strong>SMT Chain</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Трансформации выполняются централизованно до публикации в Kafka:
                 <br />1. Filter - отбрасывает ненужные события
                 <br />2. Unwrap - разворачивает envelope в flat JSON
                 <br />3. Mask - маскирует PII поля
               </p>
-              <p className="mt-2 text-xs text-purple-700">
+              <p class="mt-2 text-xs text-purple-700">
                 Централизованная логика обработки — изменение в одном месте.
               </p>
             </div>
@@ -225,9 +226,9 @@ export function SmtSolutionDiagram() {
             tabIndex={0}
           >
             <div>SMT Chain</div>
-            <div className="text-xs text-[var(--ink-muted)] mt-1">1. Filter</div>
-            <div className="text-xs text-[var(--ink-muted)]">2. Unwrap</div>
-            <div className="text-xs text-[var(--ink-muted)]">3. Mask</div>
+            <div class="text-xs text-[var(--ink-muted)] mt-1">1. Filter</div>
+            <div class="text-xs text-[var(--ink-muted)]">2. Unwrap</div>
+            <div class="text-xs text-[var(--ink-muted)]">3. Mask</div>
           </FlowNode>
         </DiagramTooltip>
 
@@ -237,7 +238,7 @@ export function SmtSolutionDiagram() {
           content={
             <div>
               <strong>Kafka Topic</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Хранит уже обработанные события в простом формате.
                 Flat JSON с замаскированными PII полями.
               </p>
@@ -251,12 +252,12 @@ export function SmtSolutionDiagram() {
 
         <Arrow direction="right" />
 
-        <div className="flex flex-col gap-2">
+        <div class="flex flex-col gap-2">
           <DiagramTooltip
             content={
               <div>
                 <strong>Consumer 1</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Получает готовый flat JSON. Не нужно парсить envelope.
                   Простой парсинг стандартного JSON.
                 </p>
@@ -270,7 +271,7 @@ export function SmtSolutionDiagram() {
               tabIndex={0}
             >
               Consumer 1
-              <span className="block text-xs text-[var(--ink-muted)] mt-1">
+              <span class="block text-xs text-[var(--ink-muted)] mt-1">
                 Simple parsing
               </span>
             </FlowNode>
@@ -280,7 +281,7 @@ export function SmtSolutionDiagram() {
             content={
               <div>
                 <strong>Consumer 2</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Также получает готовый формат. Минимальная логика обработки.
                 </p>
               </div>
@@ -293,7 +294,7 @@ export function SmtSolutionDiagram() {
               tabIndex={0}
             >
               Consumer 2
-              <span className="block text-xs text-[var(--ink-muted)] mt-1">
+              <span class="block text-xs text-[var(--ink-muted)] mt-1">
                 Simple parsing
               </span>
             </FlowNode>
@@ -303,7 +304,7 @@ export function SmtSolutionDiagram() {
             content={
               <div>
                 <strong>Consumer 3</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Еще один консьюмер с простой логикой. Scaling проще.
                 </p>
               </div>
@@ -316,7 +317,7 @@ export function SmtSolutionDiagram() {
               tabIndex={0}
             >
               Consumer 3
-              <span className="block text-xs text-[var(--ink-muted)] mt-1">
+              <span class="block text-xs text-[var(--ink-muted)] mt-1">
                 Simple parsing
               </span>
             </FlowNode>
@@ -337,18 +338,18 @@ export function SmtExecutionModelDiagram() {
       color="blue"
       description="SMT выполняется синхронно в том же потоке"
     >
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         {/* Kafka Connect Worker container */}
         <DiagramContainer
           title="Kafka Connect Worker"
           color="gray"
         >
-        <div className="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3">
           <DiagramTooltip
             content={
               <div>
                 <strong>Source Connector (Debezium)</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Читает WAL и создает SourceRecord с Debezium envelope.
                   Передает record в SMT chain.
                 </p>
@@ -357,7 +358,7 @@ export function SmtExecutionModelDiagram() {
           >
             <FlowNode variant="connector" tabIndex={0}>
               Source Connector
-              <span className="block text-xs text-[var(--ink-muted)] mt-1">
+              <span class="block text-xs text-[var(--ink-muted)] mt-1">
                 (Debezium)
               </span>
             </FlowNode>
@@ -369,7 +370,7 @@ export function SmtExecutionModelDiagram() {
             content={
               <div>
                 <strong>SMT 1: Filter</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Отбрасывает события по условию (Groovy).
                   Работает с envelope — имеет доступ к value.op, value.after.
                 </p>
@@ -391,7 +392,7 @@ export function SmtExecutionModelDiagram() {
             content={
               <div>
                 <strong>SMT 2: ExtractNewRecordState</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Разворачивает Debezium envelope, извлекая поле after.
                   Добавляет metadata как __op, __table.
                 </p>
@@ -413,7 +414,7 @@ export function SmtExecutionModelDiagram() {
             content={
               <div>
                 <strong>SMT 3: MaskField</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Заменяет чувствительные поля (email, ssn) на null или ***MASKED***.
                   Работает с flat data после unwrap.
                 </p>
@@ -435,7 +436,7 @@ export function SmtExecutionModelDiagram() {
             content={
               <div>
                 <strong>Kafka Producer</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Конвертирует record в ProducerRecord и публикует в Kafka broker.
                   Синхронная операция в том же потоке.
                 </p>
@@ -449,14 +450,14 @@ export function SmtExecutionModelDiagram() {
         </div>
         </DiagramContainer>
 
-        <div className="flex flex-col items-center gap-2">
+        <div class="flex flex-col items-center gap-2">
           <Arrow direction="down" />
 
           <DiagramTooltip
             content={
               <div>
                 <strong>Kafka Broker</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Принимает ProducerRecord и сохраняет в топик.
                   События уже обработаны всеми SMT.
                 </p>
@@ -483,17 +484,17 @@ export function SmtChainOrderDiagram() {
       color="purple"
       description="Порядок SMT имеет значение — каждый получает output предыдущего"
     >
-      <div className="flex items-center justify-center gap-3 flex-wrap">
+      <div class="flex items-center justify-center gap-3 flex-wrap">
         <DiagramTooltip
           content={
             <div>
               <strong>1. Filter SMT</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Отбрасывает события по условию (Groovy). Работает с Debezium envelope —
                 имеет доступ к value.op, value.after. Применяется раньше всего
                 для уменьшения объема данных.
               </p>
-              <p className="mt-2 text-xs text-rose-700">
+              <p class="mt-2 text-xs text-rose-700">
                 Цвет: rose (фильтрация на входе)
               </p>
             </div>
@@ -502,10 +503,10 @@ export function SmtChainOrderDiagram() {
           <FlowNode
             variant="connector"
             className="bg-rose-500/20 border-rose-400/30 text-rose-700"
-            tabIndex={0}
+            tabindex={0}
           >
             <div>1. Filter</div>
-            <span className="block text-xs text-[var(--ink-muted)] mt-1">
+            <span class="block text-xs text-[var(--ink-muted)] mt-1">
               Работает с envelope
             </span>
           </FlowNode>
@@ -517,12 +518,12 @@ export function SmtChainOrderDiagram() {
           content={
             <div>
               <strong>2. ExtractNewRecordState (Unwrap)</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Разворачивает Debezium envelope, извлекая поле after.
                 Добавляет metadata как __op, __table. После этого
                 SMT downstream работают с flat JSON.
               </p>
-              <p className="mt-2 text-xs text-blue-700">
+              <p class="mt-2 text-xs text-blue-700">
                 Цвет: blue (разворачивание структуры)
               </p>
             </div>
@@ -531,10 +532,10 @@ export function SmtChainOrderDiagram() {
           <FlowNode
             variant="connector"
             className="bg-blue-500/20 border-blue-400/30 text-blue-700"
-            tabIndex={0}
+            tabindex={0}
           >
             <div>2. Unwrap</div>
-            <span className="block text-xs text-[var(--ink-muted)] mt-1">
+            <span class="block text-xs text-[var(--ink-muted)] mt-1">
               Flatten payload
             </span>
           </FlowNode>
@@ -546,11 +547,11 @@ export function SmtChainOrderDiagram() {
           content={
             <div>
               <strong>3. Route (ByLogicalTableRouter)</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 ByLogicalTableRouter или ContentBasedRouter изменяет имя топика
                 по regex или значению поля. Работает с flat data после unwrap.
               </p>
-              <p className="mt-2 text-xs text-purple-700">
+              <p class="mt-2 text-xs text-purple-700">
                 Цвет: purple (маршрутизация)
               </p>
             </div>
@@ -559,10 +560,10 @@ export function SmtChainOrderDiagram() {
           <FlowNode
             variant="connector"
             className="bg-purple-500/20 border-purple-400/30 text-purple-700"
-            tabIndex={0}
+            tabindex={0}
           >
             <div>3. Route</div>
-            <span className="block text-xs text-[var(--ink-muted)] mt-1">
+            <span class="block text-xs text-[var(--ink-muted)] mt-1">
               Работает с flat data
             </span>
           </FlowNode>
@@ -574,11 +575,11 @@ export function SmtChainOrderDiagram() {
           content={
             <div>
               <strong>4. MaskField</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Заменяет чувствительные поля (email, ssn) на ***MASKED***
                 для GDPR compliance. Применяется в конце pipeline.
               </p>
-              <p className="mt-2 text-xs text-amber-700">
+              <p class="mt-2 text-xs text-amber-700">
                 Цвет: amber (маскировка данных)
               </p>
             </div>
@@ -587,10 +588,10 @@ export function SmtChainOrderDiagram() {
           <FlowNode
             variant="connector"
             className="bg-amber-500/20 border-amber-400/30 text-amber-700"
-            tabIndex={0}
+            tabindex={0}
           >
             <div>4. Mask</div>
-            <span className="block text-xs text-[var(--ink-muted)] mt-1">
+            <span class="block text-xs text-[var(--ink-muted)] mt-1">
               Работает с flat data
             </span>
           </FlowNode>
@@ -610,19 +611,19 @@ export function SmtDecisionFrameworkDiagram() {
       color="purple"
       description="Когда использовать SMT, а когда Kafka Streams"
     >
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         <FlowNode variant="app">
           Нужна трансформация?
         </FlowNode>
 
         <Arrow direction="down" />
 
-        <div className="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3">
           <DiagramTooltip
             content={
               <div>
                 <strong>Работает с одним сообщением?</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   SMT обрабатывает каждое сообщение независимо.
                   Если нужен join или агрегация — SMT не подходит.
                 </p>
@@ -634,38 +635,38 @@ export function SmtDecisionFrameworkDiagram() {
             </FlowNode>
           </DiagramTooltip>
 
-          <div className="flex gap-8">
+          <div class="flex gap-8">
             {/* YES path - continue checking */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-sm font-semibold text-emerald-400">ДА</div>
+            <div class="flex flex-col items-center gap-2">
+              <div class="text-sm font-semibold text-emerald-400">ДА</div>
               <Arrow direction="down" />
 
               <DiagramTooltip
                 content={
                   <div>
                     <strong>Требует состояния?</strong>
-                    <p className="mt-1">
+                    <p class="mt-1">
                       SMT stateless. Если нужен счетчик или хранение данных между сообщениями — используйте Kafka Streams.
                     </p>
                   </div>
                 }
               >
-                <FlowNode variant="connector" size="sm" tabIndex={0}>
+                <FlowNode variant="connector" size="sm" tabindex={0}>
                   Требует состояния?
                 </FlowNode>
               </DiagramTooltip>
 
-              <div className="flex gap-6">
+              <div class="flex gap-6">
                 {/* NO path - continue */}
-                <div className="flex flex-col items-center gap-2">
-                  <div className="text-xs font-semibold text-emerald-400">НЕТ</div>
+                <div class="flex flex-col items-center gap-2">
+                  <div class="text-xs font-semibold text-emerald-400">НЕТ</div>
                   <Arrow direction="down" />
 
                   <DiagramTooltip
                     content={
                       <div>
                         <strong>Требует external call?</strong>
-                        <p className="mt-1">
+                        <p class="mt-1">
                           SMT синхронные. External call блокирует поток — throughput падает. Используйте Kafka Streams с async lookup.
                         </p>
                       </div>
@@ -676,17 +677,17 @@ export function SmtDecisionFrameworkDiagram() {
                     </FlowNode>
                   </DiagramTooltip>
 
-                  <div className="flex gap-4">
+                  <div class="flex gap-4">
                     {/* NO path - final check */}
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="text-xs font-semibold text-emerald-400">НЕТ</div>
+                    <div class="flex flex-col items-center gap-2">
+                      <div class="text-xs font-semibold text-emerald-400">НЕТ</div>
                       <Arrow direction="down" />
 
                       <DiagramTooltip
                         content={
                           <div>
                             <strong>Overhead менее 10ms?</strong>
-                            <p className="mt-1">
+                            <p class="mt-1">
                               SMT выполняются синхронно. Если обработка занимает более 10ms на сообщение — lag вырастет. Используйте Kafka Streams.
                             </p>
                           </div>
@@ -697,15 +698,15 @@ export function SmtDecisionFrameworkDiagram() {
                         </FlowNode>
                       </DiagramTooltip>
 
-                      <div className="flex gap-4">
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="text-xs font-semibold text-emerald-400">ДА</div>
+                      <div class="flex gap-4">
+                        <div class="flex flex-col items-center gap-2">
+                          <div class="text-xs font-semibold text-emerald-400">ДА</div>
                           <Arrow direction="down" />
                           <DiagramTooltip
                             content={
                               <div>
                                 <strong>SMT подходит</strong>
-                                <p className="mt-1">
+                                <p class="mt-1">
                                   Трансформация простая, быстрая, stateless, без external calls.
                                   Используйте SMT для inline обработки.
                                 </p>
@@ -716,21 +717,21 @@ export function SmtDecisionFrameworkDiagram() {
                               variant="app"
                               size="sm"
                               className="bg-emerald-500/20 border-emerald-400/30 text-emerald-700"
-                              tabIndex={0}
+                              tabindex={0}
                             >
                               SMT подходит
                             </FlowNode>
                           </DiagramTooltip>
                         </div>
 
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="text-xs font-semibold text-purple-400">НЕТ</div>
+                        <div class="flex flex-col items-center gap-2">
+                          <div class="text-xs font-semibold text-purple-400">НЕТ</div>
                           <Arrow direction="down" />
                           <DiagramTooltip
                             content={
                               <div>
                                 <strong>Kafka Streams</strong>
-                                <p className="mt-1">
+                                <p class="mt-1">
                                   Overhead более 10ms — используйте Kafka Streams для асинхронной обработки без блокировки CDC потока.
                                 </p>
                               </div>
@@ -740,7 +741,7 @@ export function SmtDecisionFrameworkDiagram() {
                               variant="app"
                               size="sm"
                               className="bg-purple-500/20 border-purple-400/30 text-purple-700"
-                              tabIndex={0}
+                              tabindex={0}
                             >
                               Kafka Streams
                             </FlowNode>
@@ -750,14 +751,14 @@ export function SmtDecisionFrameworkDiagram() {
                     </div>
 
                     {/* YES path - external call */}
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="text-xs font-semibold text-purple-400">ДА</div>
+                    <div class="flex flex-col items-center gap-2">
+                      <div class="text-xs font-semibold text-purple-400">ДА</div>
                       <Arrow direction="down" />
                       <DiagramTooltip
                         content={
                           <div>
                             <strong>Kafka Streams</strong>
-                            <p className="mt-1">
+                            <p class="mt-1">
                               External service calls блокируют SMT. Используйте Kafka Streams с async lookup или downstream service.
                             </p>
                           </div>
@@ -767,7 +768,7 @@ export function SmtDecisionFrameworkDiagram() {
                           variant="app"
                           size="sm"
                           className="bg-purple-500/20 border-purple-400/30 text-purple-700"
-                          tabIndex={0}
+                          tabindex={0}
                         >
                           Kafka Streams
                         </FlowNode>
@@ -777,14 +778,14 @@ export function SmtDecisionFrameworkDiagram() {
                 </div>
 
                 {/* YES path - requires state */}
-                <div className="flex flex-col items-center gap-2">
-                  <div className="text-xs font-semibold text-purple-400">ДА</div>
+                <div class="flex flex-col items-center gap-2">
+                  <div class="text-xs font-semibold text-purple-400">ДА</div>
                   <Arrow direction="down" />
                   <DiagramTooltip
                     content={
                       <div>
                         <strong>Kafka Streams</strong>
-                        <p className="mt-1">
+                        <p class="mt-1">
                           Требуется состояние между сообщениями. Используйте Kafka Streams с KTable или state store.
                         </p>
                       </div>
@@ -794,7 +795,7 @@ export function SmtDecisionFrameworkDiagram() {
                       variant="app"
                       size="sm"
                       className="bg-purple-500/20 border-purple-400/30 text-purple-700"
-                      tabIndex={0}
+                      tabindex={0}
                     >
                       Kafka Streams
                     </FlowNode>
@@ -804,14 +805,14 @@ export function SmtDecisionFrameworkDiagram() {
             </div>
 
             {/* NO path - single message */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-sm font-semibold text-purple-400">НЕТ</div>
+            <div class="flex flex-col items-center gap-2">
+              <div class="text-sm font-semibold text-purple-400">НЕТ</div>
               <Arrow direction="down" />
               <DiagramTooltip
                 content={
                   <div>
                     <strong>Kafka Streams</strong>
-                    <p className="mt-1">
+                    <p class="mt-1">
                       Требуется обработка нескольких сообщений (join, агрегация). Используйте Kafka Streams или ksqlDB.
                     </p>
                   </div>
@@ -820,7 +821,7 @@ export function SmtDecisionFrameworkDiagram() {
                 <FlowNode
                   variant="app"
                   className="bg-purple-500/20 border-purple-400/30 text-purple-700"
-                  tabIndex={0}
+                  tabindex={0}
                 >
                   Kafka Streams
                 </FlowNode>

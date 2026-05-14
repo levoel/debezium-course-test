@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Prometheus Collection Diagrams
  *
@@ -20,18 +21,18 @@ export function PrometheusScrapingDiagram() {
       color="blue"
       description="Pull-модель сбора метрик от Kafka Connect до визуализации"
     >
-      <div className="flex flex-col lg:flex-row items-center justify-center gap-4">
+      <div class="flex flex-col lg:flex-row items-center justify-center gap-4">
         {/* Kafka Connect Container */}
-        <div className="p-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10">
-          <div className="text-xs text-emerald-700 font-medium mb-3 text-center">
+        <div class="p-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10">
+          <div class="text-xs text-emerald-700 font-medium mb-3 text-center">
             Kafka Connect Container
           </div>
-          <div className="flex flex-col items-center gap-2">
+          <div class="flex flex-col items-center gap-2">
             <DiagramTooltip
               content={
                 <div>
                   <strong>Debezium JVM</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Java Virtual Machine с Debezium connector.
                     Регистрирует метрики в JMX MBeans автоматически.
                     ObjectName: debezium.postgres:type=connector-metrics,...
@@ -50,7 +51,7 @@ export function PrometheusScrapingDiagram() {
               content={
                 <div>
                   <strong>JMX MBeans</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Стандартный Java-механизм для экспорта метрик.
                     Доступен внутри JVM через JMX API.
                     Не доступен напрямую по HTTP.
@@ -69,12 +70,12 @@ export function PrometheusScrapingDiagram() {
               content={
                 <div>
                   <strong>JMX Exporter Agent</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Java agent, встроенный в Debezium Connect образ.
                     Читает JMX MBeans и экспортирует в Prometheus формат.
                     HTTP endpoint на порту 9404.
                   </p>
-                  <p className="mt-1 text-amber-700">
+                  <p class="mt-1 text-amber-700">
                     JMXPORT=9404 в docker-compose.yml
                   </p>
                 </div>
@@ -86,9 +87,9 @@ export function PrometheusScrapingDiagram() {
                 className="bg-amber-500/20 border-amber-400/30 text-amber-700"
                 tabIndex={0}
               >
-                <div className="text-center">
+                <div class="text-center">
                   <div>JMX Exporter</div>
-                  <div className="text-xs text-[var(--ink-muted)]">:9404</div>
+                  <div class="text-xs text-[var(--ink-muted)]">:9404</div>
                 </div>
               </FlowNode>
             </DiagramTooltip>
@@ -98,30 +99,30 @@ export function PrometheusScrapingDiagram() {
         <Arrow direction="right" label="GET /metrics" />
 
         {/* Prometheus Container */}
-        <div className="p-4 rounded-xl border border-rose-400/30 bg-rose-500/10">
-          <div className="text-xs text-rose-700 font-medium mb-3 text-center">
+        <div class="p-4 rounded-xl border border-rose-400/30 bg-rose-500/10">
+          <div class="text-xs text-rose-700 font-medium mb-3 text-center">
             Prometheus Container
           </div>
-          <div className="flex flex-col items-center gap-2">
+          <div class="flex flex-col items-center gap-2">
             <DiagramTooltip
               content={
                 <div>
                   <strong>Scraper</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Pull-модель: Prometheus инициирует запросы.
                     scrape_interval: 15s - оптимальный баланс.
                     job_name: kafka-connect в prometheus.yml.
                   </p>
-                  <p className="mt-1 text-blue-700">
+                  <p class="mt-1 text-blue-700">
                     Targets: connect:9404 (Docker service name)
                   </p>
                 </div>
               }
             >
               <FlowNode variant="app" size="sm" tabIndex={0}>
-                <div className="text-center">
+                <div class="text-center">
                   <div>Scraper</div>
-                  <div className="text-xs text-[var(--ink-muted)]">каждые 15s</div>
+                  <div class="text-xs text-[var(--ink-muted)]">каждые 15s</div>
                 </div>
               </FlowNode>
             </DiagramTooltip>
@@ -132,12 +133,12 @@ export function PrometheusScrapingDiagram() {
               content={
                 <div>
                   <strong>Time Series DB</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     TSDB хранит все метрики с timestamps.
                     Retention по умолчанию 15 дней.
                     Поддерживает PromQL для запросов.
                   </p>
-                  <p className="mt-1 text-purple-700">
+                  <p class="mt-1 text-purple-700">
                     metric_relabel_configs фильтрует ненужные метрики
                   </p>
                 </div>
@@ -153,16 +154,16 @@ export function PrometheusScrapingDiagram() {
         <Arrow direction="right" label="PromQL" />
 
         {/* Clients */}
-        <div className="p-4 rounded-xl border border-purple-400/30 bg-purple-500/10">
-          <div className="text-xs text-purple-700 font-medium mb-3 text-center">
+        <div class="p-4 rounded-xl border border-purple-400/30 bg-purple-500/10">
+          <div class="text-xs text-purple-700 font-medium mb-3 text-center">
             Потребители
           </div>
-          <div className="flex flex-col items-center gap-3">
+          <div class="flex flex-col items-center gap-3">
             <DiagramTooltip
               content={
                 <div>
                   <strong>Grafana</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Визуализация метрик через dashboards.
                     Datasource: Prometheus (по умолчанию localhost:9090).
                     Auto-refresh: 15s (соответствует scrape_interval).
@@ -179,7 +180,7 @@ export function PrometheusScrapingDiagram() {
               content={
                 <div>
                   <strong>Alertmanager</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Маршрутизация алертов по severity.
                     Интеграция с email, Slack, PagerDuty.
                     Группировка и дедупликация уведомлений.
@@ -196,8 +197,8 @@ export function PrometheusScrapingDiagram() {
       </div>
 
       {/* Key points */}
-      <div className="mt-4 text-xs text-[var(--ink-muted)] text-center px-4 py-2 bg-[var(--bg-sunken)] rounded-lg">
-        <strong className="text-[var(--ink-default)]">Pull vs Push:</strong> Prometheus
+      <div class="mt-4 text-xs text-[var(--ink-muted)] text-center px-4 py-2 bg-[var(--bg-sunken)] rounded-lg">
+        <strong class="text-[var(--ink-default)]">Pull vs Push:</strong> Prometheus
         инициирует запросы (pull) - проще firewall правила, нет потери данных
         при недоступности Prometheus
       </div>

@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * PyFlink Connector Diagrams
  *
@@ -16,7 +17,7 @@ import { DiagramTooltip } from '@primitives/Tooltip';
  */
 export function PandasVsPyflinkComparisonDiagram() {
   return (
-    <div className="flex flex-col md:flex-row gap-4">
+    <div class="flex flex-col md:flex-row gap-4">
       {/* Pandas (Batch) */}
       <DiagramContainer
         title="Pandas (Batch)"
@@ -24,12 +25,12 @@ export function PandasVsPyflinkComparisonDiagram() {
         description="Batch-обработка: накопить → обработать → записать"
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3">
           <DiagramTooltip
             content={
               <div>
                 <strong>Накопить события</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Ждём накопления batch'а событий (например, за последний час).
                   Batch interval определяет latency.
                 </p>
@@ -47,7 +48,7 @@ export function PandasVsPyflinkComparisonDiagram() {
             content={
               <div>
                 <strong>Загрузить в DataFrame</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Загружаем batch в память как Pandas DataFrame. Ограничено
                   объёмом памяти single machine.
                 </p>
@@ -65,7 +66,7 @@ export function PandasVsPyflinkComparisonDiagram() {
             content={
               <div>
                 <strong>Обработать batch</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Выполняем агрегации, трансформации на всём batch'е сразу.
                   Ephemeral state — после обработки DataFrame удаляется.
                 </p>
@@ -83,7 +84,7 @@ export function PandasVsPyflinkComparisonDiagram() {
             content={
               <div>
                 <strong>Записать результат</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Результаты пишутся в БД или файл. Затем цикл повторяется для
                   следующего batch'а.
                 </p>
@@ -96,9 +97,9 @@ export function PandasVsPyflinkComparisonDiagram() {
           </DiagramTooltip>
 
           <Arrow direction="down" dashed />
-          <span className="text-xs text-[var(--ink-muted)]">Цикл повторяется</span>
+          <span class="text-xs text-[var(--ink-muted)]">Цикл повторяется</span>
 
-          <div className="mt-2 text-sm text-amber-700 font-semibold">
+          <div class="mt-2 text-sm text-amber-700 font-semibold">
             Latency: минуты/часы
           </div>
         </div>
@@ -112,12 +113,12 @@ export function PandasVsPyflinkComparisonDiagram() {
         recommended
         className="flex-1"
       >
-        <div className="flex flex-col items-center gap-3">
+        <div class="flex flex-col items-center gap-3">
           <DiagramTooltip
             content={
               <div>
                 <strong>Непрерывный поток</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   События читаются из Kafka непрерывно, без batch intervals.
                   Unbounded stream processing.
                 </p>
@@ -135,7 +136,7 @@ export function PandasVsPyflinkComparisonDiagram() {
             content={
               <div>
                 <strong>Event-by-event обработка</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Каждое событие обрабатывается сразу после прибытия.
                   Real-time processing.
                 </p>
@@ -153,7 +154,7 @@ export function PandasVsPyflinkComparisonDiagram() {
             content={
               <div>
                 <strong>Stateful агрегации</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Flink хранит managed state для агрегаций. State сохраняется
                   между событиями с checkpoint'ами для fault tolerance.
                 </p>
@@ -176,7 +177,7 @@ export function PandasVsPyflinkComparisonDiagram() {
             content={
               <div>
                 <strong>Непрерывный вывод</strong>
-                <p className="mt-1">
+                <p class="mt-1">
                   Результаты выдаются непрерывно по мере обработки событий.
                   Латентность в миллисекундах/секундах.
                 </p>
@@ -189,9 +190,9 @@ export function PandasVsPyflinkComparisonDiagram() {
           </DiagramTooltip>
 
           <Arrow direction="down" dashed />
-          <span className="text-xs text-[var(--ink-muted)]">Поток продолжается</span>
+          <span class="text-xs text-[var(--ink-muted)]">Поток продолжается</span>
 
-          <div className="mt-2 text-sm text-emerald-700 font-semibold">
+          <div class="mt-2 text-sm text-emerald-700 font-semibold">
             Latency: миллисекунды/секунды
           </div>
         </div>
@@ -210,19 +211,19 @@ export function PyflinkCdcArchitectureDiagram() {
       color="purple"
       description="От PostgreSQL до sink через Debezium, Kafka и PyFlink"
     >
-      <div className="flex flex-col gap-4">
+      <div class="flex flex-col gap-4">
         {/* Source Layer */}
         <DiagramContainer
           title="Source Layer"
           color="blue"
           className="bg-blue-500/10"
         >
-          <div className="flex justify-center">
+          <div class="flex justify-center">
             <DiagramTooltip
               content={
                 <div>
                   <strong>PostgreSQL Source</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Источник CDC событий. Генерирует изменения через
                     Write-Ahead Log (WAL). Logical replication slot читается
                     Debezium.
@@ -232,7 +233,7 @@ export function PyflinkCdcArchitectureDiagram() {
             >
               <FlowNode variant="database" tabIndex={0}>
                 PostgreSQL
-                <span className="block text-xs text-[var(--ink-muted)] mt-1">
+                <span class="block text-xs text-[var(--ink-muted)] mt-1">
                   orders table
                 </span>
               </FlowNode>
@@ -248,12 +249,12 @@ export function PyflinkCdcArchitectureDiagram() {
           color="emerald"
           className="bg-emerald-500/10"
         >
-          <div className="flex items-center gap-3 justify-center flex-wrap">
+          <div class="flex items-center gap-3 justify-center flex-wrap">
             <DiagramTooltip
               content={
                 <div>
                   <strong>Debezium Connector</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Читает PostgreSQL WAL через logical replication slot.
                     Публикует изменения в Kafka в Debezium envelope формате
                     (before/after/op/ts_ms/source).
@@ -272,7 +273,7 @@ export function PyflinkCdcArchitectureDiagram() {
               content={
                 <div>
                   <strong>Kafka Topic</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     CDC события в формате Debezium envelope. Topic name:
                     dbserver1.public.orders. Каждая таблица = отдельный топик.
                   </p>
@@ -286,7 +287,7 @@ export function PyflinkCdcArchitectureDiagram() {
                 className="bg-blue-500/20 border-blue-400/30 text-blue-700"
               >
                 Kafka Topic
-                <span className="block text-xs text-[var(--ink-muted)] mt-1">
+                <span class="block text-xs text-[var(--ink-muted)] mt-1">
                   dbserver1.public.orders
                 </span>
               </FlowNode>
@@ -302,12 +303,12 @@ export function PyflinkCdcArchitectureDiagram() {
           color="purple"
           className="bg-purple-500/10"
         >
-          <div className="flex items-center gap-3 justify-center flex-wrap">
+          <div class="flex items-center gap-3 justify-center flex-wrap">
             <DiagramTooltip
               content={
                 <div>
                   <strong>Kafka Connector</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     PyFlink Table API Kafka connector. SQL DDL: CREATE TABLE
                     orders_cdc WITH ('connector' = 'kafka', ...). Читает
                     события из Kafka.
@@ -326,7 +327,7 @@ export function PyflinkCdcArchitectureDiagram() {
               content={
                 <div>
                   <strong>VIEW orders_current</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     SQL VIEW для извлечения after state: SELECT
                     payload.after.* FROM orders_cdc WHERE payload.op IN ('c',
                     'u', 'r'). Фильтрует deletes.
@@ -350,7 +351,7 @@ export function PyflinkCdcArchitectureDiagram() {
               content={
                 <div>
                   <strong>SQL Query</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     PyFlink SQL для агрегаций: tumbling/sliding windows,
                     GROUP BY, temporal joins. Stateful processing с managed
                     state.
@@ -378,15 +379,15 @@ export function PyflinkCdcArchitectureDiagram() {
           color="amber"
           className="bg-amber-500/10"
         >
-          <div className="flex justify-center">
+          <div class="flex justify-center">
             <DiagramTooltip
               content={
                 <div>
                   <strong>Sink Options</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Результаты пишутся в sink в зависимости от use case:
                   </p>
-                  <ul className="mt-1 list-disc list-inside text-sm">
+                  <ul class="mt-1 list-disc list-inside text-sm">
                     <li>Kafka topic: Real-time dashboard</li>
                     <li>Database: Materialized view для queries</li>
                     <li>File (Parquet): Batch analytics в DWH</li>
@@ -394,16 +395,16 @@ export function PyflinkCdcArchitectureDiagram() {
                 </div>
               }
             >
-              <FlowNode variant="sink" tabIndex={0}>
+              <FlowNode variant="sink" tabindex={0}>
                 Kafka topic / Database / File
               </FlowNode>
             </DiagramTooltip>
           </div>
         </DiagramContainer>
 
-        <div className="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
+        <div class="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
           <strong>Ключевое преимущество PyFlink:</strong>
-          <p className="mt-1 text-[var(--ink-default)]">
+          <p class="mt-1 text-[var(--ink-default)]">
             Distributed stream processing с stateful operations. Масштабируется
             горизонтально (кластер из N TaskManagers). Fault tolerance через
             checkpoints и state recovery.

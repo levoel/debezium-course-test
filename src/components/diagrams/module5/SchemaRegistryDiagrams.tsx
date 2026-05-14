@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Schema Registry Diagrams
  *
@@ -20,13 +21,13 @@ export function SchemaRegistryIntegrationDiagram() {
       color="purple"
       description="Centralized schema management для producer и consumer"
     >
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         {/* PostgreSQL source */}
         <DiagramTooltip
           content={
             <div>
               <strong>PostgreSQL Database</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Источник CDC событий. Изменения фиксируются в WAL и читаются
                 Debezium connector.
               </p>
@@ -45,11 +46,11 @@ export function SchemaRegistryIntegrationDiagram() {
           content={
             <div>
               <strong>Debezium + Avro Serializer</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Debezium connector конвертирует CDC события в Avro формат.
                 Avro Converter использует Schema Registry для регистрации схем.
               </p>
-              <p className="mt-2 text-purple-700">
+              <p class="mt-2 text-purple-700">
                 value.converter=io.confluent.connect.avro.AvroConverter
               </p>
             </div>
@@ -67,19 +68,19 @@ export function SchemaRegistryIntegrationDiagram() {
           content={
             <div>
               <strong>Schema Registry</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Centralized schema storage. Хранит все версии схем с
                 compatibility проверками. Выдает schema ID для каждой схемы.
               </p>
-              <p className="mt-2 text-sm">
+              <p class="mt-2 text-sm">
                 <strong>Producer регистрирует схему:</strong>
                 <br />POST /subjects/&lt;topic&gt;-value/versions
               </p>
-              <p className="mt-2 text-sm">
+              <p class="mt-2 text-sm">
                 <strong>Consumer запрашивает схему:</strong>
                 <br />GET /schemas/ids/&lt;schema-id&gt;
               </p>
-              <p className="mt-2 text-purple-700">
+              <p class="mt-2 text-purple-700">
                 Schema Registry предотвращает несовместимые изменения
               </p>
             </div>
@@ -91,30 +92,30 @@ export function SchemaRegistryIntegrationDiagram() {
             tabIndex={0}
           >
             Schema Registry
-            <span className="block text-xs text-[var(--ink-muted)] mt-1">
+            <span class="block text-xs text-[var(--ink-muted)] mt-1">
               Confluent / Apicurio
             </span>
           </FlowNode>
         </DiagramTooltip>
 
-        <div className="flex items-center gap-8 mt-2">
+        <div class="flex items-center gap-8 mt-2">
           {/* Producer flow (left) */}
-          <div className="flex flex-col items-center gap-2">
+          <div class="flex flex-col items-center gap-2">
             <Arrow direction="down" label="Schema ID: 123" />
 
             <DiagramTooltip
               content={
                 <div>
                   <strong>Avro Message Format</strong>
-                  <p className="mt-1">
+                  <p class="mt-1">
                     Сообщение содержит только schema ID (4 bytes) + binary data.
                     Полная схема НЕ включается в каждое сообщение — это экономит
                     ~300 bytes на сообщение.
                   </p>
-                  <p className="mt-2 text-sm font-mono text-purple-700">
+                  <p class="mt-2 text-sm font-mono text-purple-700">
                     [magic_byte] [schema_id] [binary_data]
                   </p>
-                  <p className="mt-1 text-xs">
+                  <p class="mt-1 text-xs">
                     magic_byte = 0x00, schema_id = 4 bytes (BigEndian)
                   </p>
                 </div>
@@ -126,7 +127,7 @@ export function SchemaRegistryIntegrationDiagram() {
                 className="bg-purple-500/20 border-purple-400/30 text-purple-700"
                 tabIndex={0}
               >
-                <div className="text-xs font-mono">
+                <div class="text-xs font-mono">
                   [0x00][123][binary data]
                 </div>
               </FlowNode>
@@ -141,7 +142,7 @@ export function SchemaRegistryIntegrationDiagram() {
           content={
             <div>
               <strong>Kafka Topic</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Хранит Avro-encoded сообщения. Размер сообщений на ~50% меньше
                 по сравнению с JSON.
               </p>
@@ -160,11 +161,11 @@ export function SchemaRegistryIntegrationDiagram() {
           content={
             <div>
               <strong>Consumer + Avro Deserializer</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Consumer читает сообщение, извлекает schema ID из первых 5 bytes.
                 Запрашивает схему из Schema Registry по ID.
               </p>
-              <p className="mt-2 text-emerald-700">
+              <p class="mt-2 text-emerald-700">
                 Schema caching: после первого запроса schema кэшируется локально
               </p>
             </div>
@@ -182,11 +183,11 @@ export function SchemaRegistryIntegrationDiagram() {
           content={
             <div>
               <strong>Schema Registry Lookup</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Consumer запрашивает схему по ID: GET /schemas/ids/123.
                 Schema Registry возвращает полную Avro schema.
               </p>
-              <p className="mt-2 text-xs text-[var(--ink-muted)]">
+              <p class="mt-2 text-xs text-[var(--ink-muted)]">
                 Если schema уже в кэше — запрос не выполняется (caching)
               </p>
             </div>
@@ -209,7 +210,7 @@ export function SchemaRegistryIntegrationDiagram() {
           content={
             <div>
               <strong>Deserialized Data</strong>
-              <p className="mt-1">
+              <p class="mt-1">
                 Consumer десериализует binary data в Java/Python объект
                 используя полученную схему. Compatibility mode гарантирует
                 безопасность десериализации.
@@ -227,9 +228,9 @@ export function SchemaRegistryIntegrationDiagram() {
           </FlowNode>
         </DiagramTooltip>
 
-        <div className="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
+        <div class="mt-4 text-sm text-purple-400 border-l-2 border-purple-400 pl-3">
           <strong>Ключевое преимущество:</strong>
-          <p className="mt-1 text-[var(--ink-default)]">
+          <p class="mt-1 text-[var(--ink-default)]">
             Schema хранится один раз в Schema Registry. Сообщения содержат только
             4-byte schema ID. Экономия: ~300 bytes на сообщение, что критично для
             CDC pipeline с миллионами событий.

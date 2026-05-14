@@ -1,3 +1,4 @@
+/** @jsxImportSource solid-js */
 /**
  * Debezium Server Diagrams for Module 7 Lesson 02
  *
@@ -22,12 +23,12 @@ export function TraditionalKafkaArchitectureDiagram() {
       color="amber"
       description="Kafka Connect с Kafka кластером"
     >
-      <div className="flex flex-col items-center gap-3">
+      <div class="flex flex-col items-center gap-3">
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">PostgreSQL Source</p>
-              <p className="text-sm">
+              <p class="font-semibold mb-1">PostgreSQL Source</p>
+              <p class="text-sm">
                 Source database с transactional data. Logical decoding захватывает изменения.
               </p>
             </div>
@@ -43,8 +44,8 @@ export function TraditionalKafkaArchitectureDiagram() {
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">Debezium Connector</p>
-              <p className="text-sm">
+              <p class="font-semibold mb-1">Debezium Connector</p>
+              <p class="text-sm">
                 PostgreSQL connector плагин для Kafka Connect. Читает WAL через logical replication.
               </p>
             </div>
@@ -60,8 +61,8 @@ export function TraditionalKafkaArchitectureDiagram() {
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">Kafka Connect</p>
-              <p className="text-sm">
+              <p class="font-semibold mb-1">Kafka Connect</p>
+              <p class="text-sm">
                 Distributed runtime для коннекторов. Требует развертывания Connect workers.
               </p>
             </div>
@@ -77,11 +78,11 @@ export function TraditionalKafkaArchitectureDiagram() {
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">Kafka Cluster</p>
-              <p className="text-sm text-rose-700">
+              <p class="font-semibold mb-1">Kafka Cluster</p>
+              <p class="text-sm text-rose-700">
                 Требует развертывания и поддержки Zookeeper + brokers + Connect workers.
               </p>
-              <p className="text-sm mt-2">
+              <p class="text-sm mt-2">
                 Высокая операционная сложность для простых CDC пайплайнов.
               </p>
             </div>
@@ -94,12 +95,12 @@ export function TraditionalKafkaArchitectureDiagram() {
 
         <Arrow direction="down" />
 
-        <div className="flex gap-2">
+        <div class="flex gap-2">
           <DiagramTooltip
             content={
               <div>
-                <p className="font-semibold mb-1">Consumer 1</p>
-                <p className="text-sm">Application consumer читает CDC события из Kafka.</p>
+                <p class="font-semibold mb-1">Consumer 1</p>
+                <p class="text-sm">Application consumer читает CDC события из Kafka.</p>
               </div>
             }
           >
@@ -111,8 +112,8 @@ export function TraditionalKafkaArchitectureDiagram() {
           <DiagramTooltip
             content={
               <div>
-                <p className="font-semibold mb-1">Consumer 2</p>
-                <p className="text-sm">Application consumer читает CDC события из Kafka.</p>
+                <p class="font-semibold mb-1">Consumer 2</p>
+                <p class="text-sm">Application consumer читает CDC события из Kafka.</p>
               </div>
             }
           >
@@ -124,8 +125,8 @@ export function TraditionalKafkaArchitectureDiagram() {
           <DiagramTooltip
             content={
               <div>
-                <p className="font-semibold mb-1">Kafka Streams</p>
-                <p className="text-sm">Stream processing приложение для real-time обработки.</p>
+                <p class="font-semibold mb-1">Kafka Streams</p>
+                <p class="text-sm">Stream processing приложение для real-time обработки.</p>
               </div>
             }
           >
@@ -136,7 +137,7 @@ export function TraditionalKafkaArchitectureDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-amber-700/70">
+      <div class="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-amber-700/70">
         <p>Высокая операционная сложность: Kafka + Zookeeper/KRaft + Connect</p>
       </div>
     </DiagramContainer>
@@ -153,12 +154,12 @@ export function KafkalessArchitectureDiagram() {
       color="emerald"
       description="Debezium Server + Pub/Sub (упрощенная инфраструктура)"
     >
-      <div className="flex flex-col items-center gap-3">
+      <div class="flex flex-col items-center gap-3">
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">Cloud SQL PostgreSQL</p>
-              <p className="text-sm">
+              <p class="font-semibold mb-1">Cloud SQL PostgreSQL</p>
+              <p class="text-sm">
                 Managed PostgreSQL с logical decoding. Автоматические бэкапы и HA.
               </p>
             </div>
@@ -174,11 +175,11 @@ export function KafkalessArchitectureDiagram() {
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">Debezium Server</p>
-              <p className="text-sm text-emerald-700">
+              <p class="font-semibold mb-1">Debezium Server</p>
+              <p class="text-sm text-emerald-700">
                 Standalone Quarkus приложение — один контейнер вместо Kafka cluster.
               </p>
-              <p className="text-sm mt-2">
+              <p class="text-sm mt-2">
                 Source connector + sink adapter в одном процессе. Простота развертывания.
               </p>
             </div>
@@ -194,11 +195,11 @@ export function KafkalessArchitectureDiagram() {
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">Google Pub/Sub</p>
-              <p className="text-sm text-emerald-700">
+              <p class="font-semibold mb-1">Google Pub/Sub</p>
+              <p class="text-sm text-emerald-700">
                 Pub/Sub автоматическое масштабирование заменяет Kafka партиции.
               </p>
-              <p className="text-sm mt-2">
+              <p class="text-sm mt-2">
                 Managed service — нет операционных затрат на поддержку брокеров.
               </p>
             </div>
@@ -211,12 +212,12 @@ export function KafkalessArchitectureDiagram() {
 
         <Arrow direction="down" />
 
-        <div className="flex gap-2">
+        <div class="flex gap-2">
           <DiagramTooltip
             content={
               <div>
-                <p className="font-semibold mb-1">Cloud Run</p>
-                <p className="text-sm">
+                <p class="font-semibold mb-1">Cloud Run</p>
+                <p class="text-sm">
                   Serverless container platform. Автоматическое масштабирование от 0 до N.
                 </p>
               </div>
@@ -230,8 +231,8 @@ export function KafkalessArchitectureDiagram() {
           <DiagramTooltip
             content={
               <div>
-                <p className="font-semibold mb-1">Dataflow</p>
-                <p className="text-sm">
+                <p class="font-semibold mb-1">Dataflow</p>
+                <p class="text-sm">
                   Managed Apache Beam для stream и batch processing.
                 </p>
               </div>
@@ -245,8 +246,8 @@ export function KafkalessArchitectureDiagram() {
           <DiagramTooltip
             content={
               <div>
-                <p className="font-semibold mb-1">BigQuery</p>
-                <p className="text-sm">
+                <p class="font-semibold mb-1">BigQuery</p>
+                <p class="text-sm">
                   Data warehouse с Pub/Sub subscription для real-time ingestion.
                 </p>
               </div>
@@ -259,7 +260,7 @@ export function KafkalessArchitectureDiagram() {
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-emerald-700/70">
+      <div class="mt-4 pt-3 border-t border-[var(--line-thin)] text-xs text-emerald-700/70">
         <p>Простая инфраструктура, serverless, низкие операционные затраты</p>
       </div>
     </DiagramContainer>
@@ -276,13 +277,13 @@ export function DebeziumServerInternalDiagram() {
       color="purple"
       description="Standalone Quarkus приложение с source connector + sink adapter"
     >
-      <div className="flex flex-col items-center gap-4">
+      <div class="flex flex-col items-center gap-4">
         {/* External source */}
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">Cloud SQL PostgreSQL</p>
-              <p className="text-sm">
+              <p class="font-semibold mb-1">Cloud SQL PostgreSQL</p>
+              <p class="text-sm">
                 External source database. Logical replication захватывает изменения в real-time.
               </p>
             </div>
@@ -301,15 +302,15 @@ export function DebeziumServerInternalDiagram() {
           color="blue"
           className="w-full"
         >
-          <div className="flex flex-col items-center gap-3">
+          <div class="flex flex-col items-center gap-3">
             <DiagramTooltip
               content={
                 <div>
-                  <p className="font-semibold mb-1">PostgreSQL Connector</p>
-                  <p className="text-sm">
+                  <p class="font-semibold mb-1">PostgreSQL Connector</p>
+                  <p class="text-sm">
                     Source connector читает WAL через logical decoding. Создает replication slot.
                   </p>
-                  <p className="text-sm mt-2">
+                  <p class="text-sm mt-2">
                     Преобразует WAL events в Debezium CDC события.
                   </p>
                 </div>
@@ -325,17 +326,17 @@ export function DebeziumServerInternalDiagram() {
             <DiagramTooltip
               content={
                 <div>
-                  <p className="font-semibold mb-1">Event Buffer</p>
-                  <p className="text-sm">
+                  <p class="font-semibold mb-1">Event Buffer</p>
+                  <p class="text-sm">
                     Внутренний буфер для batch обработки событий. Снижает количество API calls к Pub/Sub.
                   </p>
-                  <p className="text-sm mt-2">
+                  <p class="text-sm mt-2">
                     Настраивается через max.batch.size и poll.interval.ms.
                   </p>
                 </div>
               }
             >
-              <FlowNode variant="app" size="sm" tabIndex={0}>
+              <FlowNode variant="app" size="sm" tabindex={0}>
                 Event Buffer
               </FlowNode>
             </DiagramTooltip>
@@ -345,17 +346,17 @@ export function DebeziumServerInternalDiagram() {
             <DiagramTooltip
               content={
                 <div>
-                  <p className="font-semibold mb-1">Pub/Sub Sink Adapter</p>
-                  <p className="text-sm">
+                  <p class="font-semibold mb-1">Pub/Sub Sink Adapter</p>
+                  <p class="text-sm">
                     Sink adapter публикует события в Pub/Sub topics. Ordering key для сохранения порядка.
                   </p>
-                  <p className="text-sm mt-2">
+                  <p class="text-sm mt-2">
                     Retry logic для устойчивости к сбоям Pub/Sub API.
                   </p>
                 </div>
               }
             >
-              <FlowNode variant="gcp-messaging" size="sm" tabIndex={0}>
+              <FlowNode variant="gcp-messaging" size="sm" tabindex={0}>
                 Pub/Sub Sink Adapter
               </FlowNode>
             </DiagramTooltip>
@@ -367,32 +368,32 @@ export function DebeziumServerInternalDiagram() {
         <DiagramTooltip
           content={
             <div>
-              <p className="font-semibold mb-1">Google Pub/Sub</p>
-              <p className="text-sm">
+              <p class="font-semibold mb-1">Google Pub/Sub</p>
+              <p class="text-sm">
                 External message broker. Автоматическое масштабирование и HA out-of-the-box.
               </p>
             </div>
           }
         >
-          <FlowNode variant="gcp-messaging" tabIndex={0}>
+          <FlowNode variant="gcp-messaging" tabindex={0}>
             Google Pub/Sub
           </FlowNode>
         </DiagramTooltip>
 
         {/* Offset storage options */}
-        <div className="mt-4 pt-4 border-t border-[var(--line-thin)] w-full">
-          <h3 className="text-sm font-semibold text-purple-700 mb-2 text-center">
+        <div class="mt-4 pt-4 border-t border-[var(--line-thin)] w-full">
+          <h3 class="text-sm font-semibold text-purple-700 mb-2 text-center">
             Offset Storage
           </h3>
-          <div className="flex justify-center gap-3">
+          <div class="flex justify-center gap-3">
             <DiagramTooltip
               content={
                 <div>
-                  <p className="font-semibold mb-1">File Storage</p>
-                  <p className="text-sm">
+                  <p class="font-semibold mb-1">File Storage</p>
+                  <p class="text-sm">
                     Offset хранится в файле offsets.dat. Подходит для single instance deployment.
                   </p>
-                  <p className="text-sm mt-2 text-amber-700">
+                  <p class="text-sm mt-2 text-amber-700">
                     Требует PersistentVolume в Kubernetes для сохранения при restart.
                   </p>
                 </div>
@@ -402,7 +403,7 @@ export function DebeziumServerInternalDiagram() {
                 variant="app"
                 size="sm"
                 className="border-amber-400/50"
-                tabIndex={0}
+                tabindex={0}
               >
                 File Storage
               </FlowNode>
@@ -411,11 +412,11 @@ export function DebeziumServerInternalDiagram() {
             <DiagramTooltip
               content={
                 <div>
-                  <p className="font-semibold mb-1">Redis Storage</p>
-                  <p className="text-sm">
+                  <p class="font-semibold mb-1">Redis Storage</p>
+                  <p class="text-sm">
                     Offset хранится в Redis. Подходит для HA deployment с несколькими репликами.
                   </p>
-                  <p className="text-sm mt-2 text-emerald-700">
+                  <p class="text-sm mt-2 text-emerald-700">
                     Автоматическая репликация offset через Redis — быстрое восстановление при failover.
                   </p>
                 </div>
@@ -425,13 +426,13 @@ export function DebeziumServerInternalDiagram() {
                 variant="sink"
                 size="sm"
                 className="border-emerald-400/50"
-                tabIndex={0}
+                tabindex={0}
               >
                 Redis Storage
               </FlowNode>
             </DiagramTooltip>
           </div>
-          <p className="text-xs text-purple-700/70 mt-3 text-center">
+          <p class="text-xs text-purple-700/70 mt-3 text-center">
             Offset storage критичен: без persistent storage при перезапуске pod потеряет позицию
           </p>
         </div>
